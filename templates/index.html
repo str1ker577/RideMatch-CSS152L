@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>RideMatch</title>
+
+  <!-- Link to Boxicons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@latest/css/boxicons.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+  <!-- Link to CSS -->
+  <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='style.css')}}">
+
+</head>
+<body>
+
+    <!-- Popup Containers -->
+    <div id="login-popup" class="popup">
+      <div class="popup-content">
+          <span class="close-btn" onclick="togglePopup('login-popup')">&times;</span>
+          <h1>Login</h1>
+          <form action="/login" method="POST" onsubmit="return handleLogin(event);">
+
+              <input type="email" name="email" placeholder="Email" required>
+              <input type="password" name="password" placeholder="Password" required>
+              <button type="submit">Login</button>
+          </form>
+          <p class="success-message"></p>
+          <p class="error-message"></p> <!-- Error message element -->
+          <p>Don't have an account? <a href="javascript:void(0)" onclick="togglePopup('signup-popup'); togglePopup('login-popup')">Sign Up</a></p>
+      </div>
+    </div>
+  
+    <div id="signup-popup" class="popup">
+      <div class="popup-content">
+          <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+          <h1>Sign Up</h1>
+          <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+              <input type="email" name="email_signup" placeholder="Email" required>
+              <input type="password" name="password_signup" placeholder="Password" required>
+              <button type="submit">Sign Up</button>
+          </form>
+          <p class="success-message"></p>
+          <p class="error-message12"></p> <!-- Error message element -->
+
+          <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+      </div>
+    </div>
+
+  <!-- Navbar -->
+  <header>
+    <!-- Centered Logo -->
+    <a href="{{url_for('home')}}" class="Logo">
+      <img src="{{url_for('static', filename='resources/Logo2.png')}}" alt="RideMatch">
+    </a>
+
+    <!-- Side Menu Pop-out-->
+    <div class="Quick-Tools"></div>
+
+    <!-- Side-Menu -->
+    <div class="Side-Menu">
+      <i class='bx bx-menu' id='menu-button' style='color:#b49b66'></i>
+    </div>
+
+    <div class="SideBar" id="sidebar">
+      <i class='bx bx-arrow-from-right' id="close-button" style='color:#b49b66'></i>
+      <ul>
+        <div class="SideBar-Icons">
+          <i class='bx bx-user' id='user-icon' style='color:#b49b66' onclick="togglePopup('login-popup')"></i>
+          <a href="{{url_for('favourites')}}"><i class='bx bx-heart' style='color:#b49b66'></i></a>
+          <a href="{{url_for('compare')}}"><i class="fa-solid fa-scale-balanced" style='color:#b49b66'></i></a>
+        </div>
+        <hr>
+        <!-- Updated nav items -->
+        <li><a href="{{url_for('home')}}">Home</a></li>
+        <li><a href="{{url_for('about')}}">About Us</a></li>
+        <li><a href="{{url_for('contacts')}}">Contacts</a></li>
+        <li><a href="{{url_for('testimonials')}}">Testimonials</a></li>
+      </ul>
+    </div>
+
+    <div class="liked"><a href="#"></a></div>
+    <p class="welcome-title"></p>
+  </header>
+  <!-- Outer Frame (with border and shadow) -->
+  <div class="outer-frame" style="margin-top:10rem;">
+    <h2 class="filter-title">Filter</h2>
+    <!-- Inner Frame (contains all the filter options) -->
+    <div class="inner-frame">
+      <!-- Left Section: Brand, Model, etc. -->
+      <div class="filter-left">
+        <label for="brand">Brand:</label>
+        <select id="brand" name="brand" onchange="populateModels()">
+
+          <option value="" selected disabled>Select Brand</option>
+          <option value="Toyota">Toyota</option>
+          <option value="Honda">Honda</option>
+          <option value="Mitsubishi">Mitsubishi</option>
+          <option value="Mazda">Mazda</option>
+          <option value="Ford">Ford</option>
+          <option value="Hyundai">Hyundai</option>
+          <option value="Suzuki">Suzuki</option>
+        </select>
+
+        <!-- Input for Model -->
+        <label for="model">Select Model:</label>
+          <select id="model" name="model" onchange="populateVariants()">
+            <option value="">Select Model</option>
+            <!-- Populate with car models based on selected brand -->
+          </select>
+
+        <!-- Body Type Drop down box -->
+        <label for="body-type">Body Type:</label>
+        <select id="body-type" name="body_type">
+          <option value="" selected disabled>Choose Body Type</option>
+          <option value="">All Body Types</option>
+          <option value="Sedan">Sedan</option>
+          <option value="SUV">SUV</option>
+          <option value="MPV">MPV</option>
+          <option value="Hatchback">Hatchback</option>
+          <option value="Van">Van</option>
+          <option value="Truck">Truck</option>
+          <option value="Convertible">Convertible</option>
+          <option value="Coupe">Coupe</option>
+        </select>
+        
+        <!-- Drive Train Drop down box -->
+        <label for="drive-train">Drive Train:</label>
+        <select id="drive-train" name="drive_train">
+          <option value="" selected disabled>Choose drive train...</option>
+          <option value="">All Drive Train Options</option>
+          <option value="FWD">Front-Wheel Drive (FWD)</option>
+          <option value="RWD">Rear-Wheel Drive (RWD)</option>
+          <option value="AWD">All-Wheel Drive (AWD)</option>
+          <option value="2WD">Two-Wheel Drive (2WD)</option>
+          <option value="4WD">Four-Wheel Drive (4WD)</option>
+        </select>
+
+        <!-- Transmission Drop down box -->
+        <label for="transmission">Transmission:</label>
+        <select id="transmission" name="transmission">
+          <option value="" selected disabled>Choose Transmission...</option>
+          <option value="">Any Transmission Options</option>
+          <option value="Automatic">Automatic</option>
+          <option value="Manual">Manual</option>
+          <option value="CVT">CVT</option>
+          <option value="E-CVT">E-CVT</option>
+        </select>
+
+        <!-- Fuel Type Drop down box -->
+        <label for="fuel-type">Fuel Type:</label>
+        <select id="fuel-type" name="fuel_type">
+          <option value="">Any Fuel Type</option>
+          <option value="Gasoline">Gasoline</option>
+          <option value="Diesel">Diesel</option>
+          <option value="Hybrid">Hybrid</option>
+        </select>
+      </div>
+
+      <!-- Vertical Divider -->
+      <div class="vertical-divider"></div>
+
+            <!-- Right Section: Sliders and Submit Button -->
+            <div class="filter-right">
+
+                <!--Horse Power Slider-->
+                <label for="horsepower">Horsepower (Hp):</label>
+                <input type="range" id="horsepower" name="horsepower" min="50" max="300" step="10" value="100" oninput="updateSliderValue('horsepower', 'HP', false)">
+                <span id="horsepower-value">50 HP</span>
+
+                <!--Cargo Space Slider-->
+                <label for="cargo-space">Cargo Space (L):</label>
+                <input type="range" id="cargo-space" name="cargo-space" min="100" max="1500" step="5" value="100" oninput="updateSliderValue('cargo-space', 'L')">
+                <span id="cargo-space-value">150L</span>
+
+                <!--Ground Clearance Slider-->
+                <label for="ground-clearance">Ground Clearance (cm):</label>
+                <input type="range" id="ground-clearance" name="ground-clearance" min="13.3" max="27.9" step="0.1" value="13.3" oninput="updateSliderValue('ground-clearance', 'cm')">
+                <span id="ground-clearance-value">13.3 cm</span>
+
+                <!--Seating Slider-->
+                <label for="seating">Seating Capacity:</label>
+                <input type="range" id="seating" name="seating" min="0" max="15" step="1" value="0" oninput="updateSliderValue('seating')">
+                <span id="seating-value">Seats</span>
+
+                <!--Price Slider-->
+                <label for="price">Price (₱):</label>
+                <input type="range" id="price" name="price" min="500000" max="3000000" step="1000" oninput="updateSliderValue('price','₱', true)">
+                <span id="price-value">₱500,000</span>
+                
+                <button id="filter-btn" class="filter-btn" onclick="applyFilters()">Apply Filters</button>
+
+            </div>
+        </div>
+    </div>
+
+<!-- Results Frame (Initially Hidden) -->
+<div id="results-frame">
+  <div class="scrollable-table">
+      <div class="results-outer-frame">
+
+          <!-- Title Above Table -->
+          <h2 class="results-title">Your personalized vehicle list is ready!</h2>
+
+          <!-- Table Container -->
+          <div class="table-container">
+              <table class="results-table">
+                  <thead>
+                      <tr>
+                          <th>Brand</th>
+                          <th>Model</th>
+                          <th>Body Type</th>
+                          <th>Variant</th>
+                          <th>Drive Train</th>
+                          <th>Engine</th>
+                          <th>Horsepower</th>
+                          <th>Transmission</th>
+                          <th>Fuel Type</th>
+                          <th>Ground Clearance</th>
+                          <th>Cargo Space</th>
+                          <th>Seating Capacity</th>
+                          <th>Price</th>
+                          <th></th>
+                      </tr>
+                  </thead>
+                  <tbody id="car-specs">
+                      <!-- Filtered car data will be inserted here -->
+                  </tbody>
+              </table>
+          </div>
+
+      </div>
+  </div>
+</div>
+
+
+    <footer>
+        <div class="footer-container">
+            <div class="footer-section">
+                <h3>About Us</h3>
+                <p>RideMatch helps you find the perfect car with ease. Explore our collection and filter cars based on your preferences.</p>
+            </div>
+            <div class="footer-section">
+                <h3>Quick Links</h3>
+                <ul>
+                    <li><a href="{{url_for('home')}}">Home</a></li>
+                    <li><a href="{{url_for('about')}}">About Us</a></li>
+                    <li><a href="{{url_for('testimonials')}}">Client Testimonials</a></li>
+                    <li><a href="{{url_for('contacts')}}">Contact Us</a></li>
+                </ul>
+            </div>
+            <div class="footer-section">
+                <h3>Contact Us</h3>
+                <p>Email: <a href="mailto:ridematchhelp@gmail.com">ridematchhelp@gmail.com</a></p>
+                <p>Phone: +63 961 993 7494</p>
+            </div>
+            <div class="footer-section">
+                <h3>Follow Us</h3>
+                <div class="social-icons">
+                  <a href="https://www.facebook.com/profile.php?id=61573973933095&mibextid=LQQJ4d&rdid=URdqqHEOsH0kR36P&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F18gKTe9eNT%2F%3Fmibextid%3DLQQJ4d" 
+                  target="_blank" 
+                  rel="noopener noreferrer">
+                  <i class='bx bxl-facebook'></i>
+                  </a>
+                  <a href="https://x.com/ridematch_help" target="_blank" rel="noopener noreferrer">
+                    <i class='bx bxl-twitter'></i>
+                  </a>
+                  <a href="https://www.instagram.com/ridematch_support/" target="_blank" rel="noopener noreferrer">
+                    <i class='bx bxl-instagram'></i>
+                  </a>
+                </div>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2025 RideMatch. All Rights Reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+      function updateSliderValue(id, unit, isPrice = false) {
+          let value = document.getElementById(id).value;
+
+          // Format price with commas and place the unit on the left
+          if (isPrice) {
+              value = "₱" + parseInt(value).toLocaleString();
+          } else {
+              value = parseInt(value).toLocaleString() + " " + unit;
+          }
+
+          document.getElementById(id + "-value").textContent = value;
+      }
+
+      // Ensure all sliders display correct formatting when the page loads
+      document.addEventListener("DOMContentLoaded", function() {
+          updateSliderValue('price', '₱', true);
+          updateSliderValue('horsepower', 'HP', false);
+      });
+      </script>
+ 
+    <!-- Link to Main.java -->
+    <script src="{{url_for('static', filename='main.js')}}"></script>
+
+    
+</body>
+</html>

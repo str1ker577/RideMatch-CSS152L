@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Compare | RideMatch</title>
+
+  <!-- Link to Boxicons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/boxicons@latest/css/boxicons.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+
+  <!-- Link to CSS -->
+  <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='style.css')}}">
+
+  <!-- Optional inline style for the sidebar slide animation -->
+  <style>
+    .SideBar {
+      position: fixed;
+      top: 0;
+      left: -100%;
+      width: 500px;
+      height: 100%;
+      background-color: #fff;
+      transition: left 0.5s ease-in-out;
+      z-index: 1000;
+    }
+    .SideBar.open {
+      left: 0;
+    }
+  </style>
+</head>
+<body>
+    <!-- Popup Containers -->
+    <div id="login-popup" class="popup">
+      <div class="popup-content">
+          <span class="close-btn" onclick="togglePopup('login-popup')">&times;</span>
+          <h1>Login</h1>
+          <form action="/login" method="POST" onsubmit="return handleLogin(event);">
+
+              <input type="email" name="email" placeholder="Email" required>
+              <input type="password" name="password" placeholder="Password" required>
+              <button type="submit">Login</button>
+          </form>
+          <p class="success-message"></p>
+          <p class="error-message"></p> <!-- Error message element -->
+          <p>Don't have an account? <a href="javascript:void(0)" onclick="togglePopup('signup-popup'); togglePopup('login-popup')">Sign Up</a></p>
+      </div>
+    </div>
+  
+    <div id="signup-popup" class="popup">
+      <div class="popup-content">
+          <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+          <h1>Sign Up</h1>
+          <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+              <input type="email" name="email_signup" placeholder="Email" required>
+              <input type="password" name="password_signup" placeholder="Password" required>
+              <button type="submit">Sign Up</button>
+          </form>
+          <p class="success-message"></p>
+          <p class="error-message12"></p> <!-- Error message element -->
+
+          <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+      </div>
+    </div>
+
+  <!-- Navbar -->
+  <header>
+    <!-- Centered Logo -->
+    <a href="{{url_for('home')}}" class="Logo">
+      <img src="{{url_for('static', filename='resources/Logo2.png')}}" alt="RideMatch">
+    </a>
+
+    <!-- Side Menu Pop-out-->
+    <div class="Quick-Tools"></div>
+
+    <!-- Side-Menu -->
+    <div class="Side-Menu">
+      <i class='bx bx-menu' id='menu-button' style='color:#b49b66'></i>
+    </div>
+
+    <div class="SideBar" id="sidebar">
+      <i class='bx bx-arrow-from-right' id="close-button" style='color:#b49b66'></i>
+      <ul>
+        <div class="SideBar-Icons">
+          <i class='bx bx-user' id='user-icon' style='color:#b49b66' onclick="togglePopup('login-popup')"></i>
+          <a href="{{url_for('favourites')}}"><i class='bx bx-heart' style='color:#b49b66'></i></a>
+          <a href="{{url_for('compare')}}"><i class="fa-solid fa-scale-balanced" style='color:#b49b66'></i></a>
+        </div>
+        <hr>
+        <!-- Updated nav items -->
+        <li><a href="{{url_for('home')}}">Home</a></li>
+        <li><a href="{{url_for('about')}}">About Us</a></li>
+        <li><a href="{{url_for('contacts')}}">Contacts</a></li>
+        <li><a href="{{url_for('testimonials')}}">Testimonials</a></li>
+      </ul>
+    </div>
+
+    <div class="liked"><a href="#"></a></div>
+    <p class="welcome-title"></p>
+  </header>
+
+    <!-- Side Menu Pop-out-->
+    <div class="Quick-Tools"></div>
+
+    <!-- Side-Menu -->
+    <div class="Side-Menu">
+      <i class='bx bx-menu' id='menu-button' style='color:#b49b66'></i>
+    </div>
+
+    <div class="SideBar" id="sidebar">
+      <i class='bx bx-arrow-from-right' id="close-button" style='color:#b49b66'></i>
+      <ul>
+        <div class="SideBar-Icons">
+          <i class='bx bx-user' id='user-icon' style='color:#b49b66' onclick="togglePopup('login-popup')"></i>
+          <a href="{{url_for('favourites')}}"><i class='bx bx-heart' style='color:#b49b66'></i></a>
+          <a href="{{url_for('compare')}}"><i class="fa-solid fa-scale-balanced" style='color:#b49b66'></i></a>
+        </div>
+        <hr>
+        <!-- Updated nav items -->
+        <li><a href="{{url_for('home')}}">Home</a></li>
+        <li><a href="{{url_for('about')}}">About Us</a></li>
+        <li><a href="{{url_for('contacts')}}">Contacts</a></li>
+        <li><a href="{{url_for('testimonials')}}">Testimonials</a></li>
+      </ul>
+    </div>
+
+    <div class="liked"><a href="#"></a></div>
+  </header>
+
+  <div class="outer-frame" style="margin-top:10rem;">
+    <h2 class="filter-title">Compare Cars</h2>
+    <div class="inner-frame">
+      <div class="filter-left">
+        <form id="compare-form">
+          <label for="brand">Select Brand:</label>
+          <select id="brand" name="brand" onchange="populateModels()">
+
+            <option value="" selected disabled>Select Brand</option>
+            <option value="Toyota">Toyota</option>
+            <option value="Honda">Honda</option>
+            <option value="Mitsubishi">Mitsubishi</option>
+            <option value="Mazda">Mazda</option>
+            <option value="Ford">Ford</option>
+            <option value="Hyundai">Hyundai</option>
+            <option value="Suzuki">Suzuki</option>
+          </select>
+
+          <label for="model">Select Model:</label>
+          <select id="model" name="model" onchange="populateVariants()">
+            <option value="">Select Model</option>
+            <!-- Populate with car models based on selected brand -->
+          </select>
+
+          <label for="variant">Select Variant:</label>
+          <select id="variant" name="variant">
+            <option value="">Select Variant</option>
+            <!-- Populate with car variants based on selected model -->
+          </select>
+
+          <button class="compare_btn" type="button" onclick="compareCars()">Compare Cars</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="wrapper">
+    <div class="comp_table_frame">
+      <div class="comp_table_content">
+        <div id="comparison-container">
+          <!-- CAR SPECS HERE -->
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Footer -->
+  <footer>
+    <div class="footer-container">
+      <div class="footer-section">
+        <h3>About Us</h3>
+        <p>RideMatch helps you find the perfect car with ease. Explore our collection and filter cars based on your preferences.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Quick Links</h3>
+        <ul>
+          <li><a href="{{url_for('home')}}">Home</a></li>
+          <li><a href="{{url_for('about')}}">About Us</a></li>
+          <li><a href="{{url_for('testimonials')}}">Client Testimonials</a></li>
+          <li><a href="{{url_for('contacts')}}">Contact Us</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Contact Us</h3>
+        <p>Email: <a href="mailto:ridematchhelp@gmail.com">ridematchhelp@gmail.com</a></p>
+        <p>Phone: +63 961 993 7494</p>
+      </div>
+      <div class="footer-section">
+        <h3>Follow Us</h3>
+        <div class="social-icons">
+          <a href="https://www.facebook.com/profile.php?id=61573973933095&mibextid=LQQJ4d&rdid=URdqqHEOsH0kR36P&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F18gKTe9eNT%2F%3Fmibextid%3DLQQJ4d" 
+          target="_blank" 
+          rel="noopener noreferrer">
+          <i class='bx bxl-facebook'></i>
+          </a>
+          <a href="https://x.com/ridematch_help" target="_blank" rel="noopener noreferrer">
+            <i class='bx bxl-twitter'></i>
+          </a>
+          <a href="https://www.instagram.com/ridematch_support/" target="_blank" rel="noopener noreferrer">
+            <i class='bx bxl-instagram'></i>
+          </a>
+        </div>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2025 RideMatch. All Rights Reserved.</p>
+    </div>
+  </footer>
+  
+  <!-- Link to Main.js -->
+  <script src="{{url_for('static', filename='main.js')}}"></script>
+</body>
+</html>

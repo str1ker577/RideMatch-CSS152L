@@ -1,0 +1,1363 @@
+@import url('https://fonts.googleapis.com/css2?family=Lora:ital,wght@0,400..700;1,400..700&display=swap');
+
+*{
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+    font-family: "Lora", serif;
+    text-decoration: none;
+    list-style: none;
+    scroll-behavior: smooth;
+    scroll-padding-top: 2rem;
+}
+
+body{
+    background-image: url('resources/BG.png'); 
+    background-size: cover; 
+    background-position: center center;
+    background-repeat: no-repeat; 
+    background-attachment: fixed;
+}
+
+body, html{
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Variables */ 
+:root{
+    --main-color: #161f48;
+    --second-color: #b49b66;
+    --highlight-color: #9e8a56;
+    --background-color: #fff;
+    --text-color: #02171d;
+    --text-background-color: #ebeff2;
+    --box-shadow: 2px 2px 10px 4px rgb(14 55 54 / 15%);
+}
+
+/* Scroll Bar */
+html::-webkit-scrollbar{
+    width: 0.5rem;
+}
+
+html::-webkit-scrollbar-thumb{
+    background: transparent;
+}
+
+html::-webkit-scrollbar-track{
+    background: var(--background-color);
+    border-radius: 5rem;
+}
+
+img {
+    width: 100%;
+}
+
+section {
+    padding: 50px 100px;
+}
+
+header{
+    position: fixed;
+    width: 100%;
+    top: 0;
+    right: 0;
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 100px;
+    transition: 0.5s linear;
+    background-color: #161f48;
+    border-bottom: 3px solid var(--second-color);
+    box-shadow: var(--box-shadow);
+    left: 0;
+    min-height: 90px;
+    max-height: 90px;
+}
+
+.Logo{
+    width: 320px;
+    display: flex;
+    align-items: center;
+    font-size: 2.7rem;
+    font-weight: 400;
+    column-gap: 0.2rem;
+    color: var(--second-color);
+    position: absolute;  
+    left: 50%;  
+    transform: translateX(-50%);  
+}
+
+/***********/
+/*Side Menu*/
+/***********/
+
+#menu-button {
+    font-size: 3rem;
+    cursor: pointer;
+    transition: all .55s ease;
+}
+
+#close-button{
+    font-size: 3rem;
+    padding: 2px 2px;
+    cursor: pointer;
+    transition: all .55s ease;
+    width: 50px;
+    position: absolute;          
+    right: 1rem;  
+    margin-bottom: 4rem;
+}
+
+#menu-button:hover, #close-button:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--box-shadow);
+    border-radius: 1rem;
+}
+
+.SideBar{
+    position: fixed;
+    top: 0;
+    left: -100%;
+    height: 100%;
+    width: 500px;
+    background-color: var(--background-color);
+    color: #b49b66;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 2rem 1rem;
+    transition: left 0.8s ease;
+    z-index: 1000;
+    border-right: 2px solid var(--second-color);
+    box-shadow: var(--box-shadow);
+}
+
+.SideBar hr{
+    align-items: center;
+    height: 3px;
+    background-color: var(--second-color);
+    margin-bottom: 2.5rem;
+    width: 80%; 
+    border: none; 
+    margin-left: auto; 
+    margin-right: auto; 
+}
+
+.SideBar-Icons {
+    display: flex;
+    justify-content: center; 
+    align-items: center;      
+    flex-direction: row;  
+    gap: 1rem;    
+    margin-top: 4rem; 
+}
+
+.SideBar-Icons i{
+    padding: 1.25rem 1rem;
+    margin-bottom: 1rem;
+    margin: 1rem 1rem;
+    font-size: 2rem;
+    cursor: pointer;
+    transition: all .55s ease;
+
+}
+
+.SideBar-Icons i:hover{
+    transform: translateY(-5px);
+    box-shadow: var(--box-shadow);
+    border-radius: 1rem ;
+}
+
+.SideBar li{
+    margin-left: 1rem;
+    margin-bottom: 1rem;
+    top: 0rem;
+    padding: 1rem 1rem;
+    transition: all .25s ease;
+}
+
+.SideBar li:hover{
+    top: -5px;
+    transform: translateY(-5px);
+    box-shadow: var(--box-shadow);
+    border-radius: 0.5rem ;
+    border-right: 2px solid var(--second-color);
+    border-bottom: 2px solid var(--second-color);
+}
+
+.SideBar li a{
+    font-size: 1.8rem;
+    color: var(--second-color);
+    display: flex;
+    column-gap: 2.4rem;
+}
+
+.SideBar.open{
+    left: 0;
+}
+
+/******************/
+/* Side Bar Scale */
+/******************/
+
+@media (max-width: 768px) {
+    .Sidebar {
+        width: 220px; 
+    }
+
+    .Sidebar li a {
+        font-size: 1rem; 
+    }
+}
+
+@media (max-width: 480px) {
+    .Sidebar {
+        width: 150px;
+    }
+
+    .Sidebar li a {
+        font-size: 0.9rem;
+    }
+}
+
+/******************/
+/*Side Menu Button*/
+/******************/
+
+.Quick-Tools {
+    position: absolute; 
+    right: 1rem;  
+}
+
+.Quick-Tools i{
+    font-size: 1.8rem;
+    padding: 1rem 1rem;
+    cursor: pointer;
+    transition: all .55s ease;
+}
+
+.Quick-Tools i:hover{
+    transform: translateY(-5px);
+}
+
+/* Popup Styles */
+.popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 1001;
+}
+
+.popup.active {
+    visibility: visible;
+    opacity: 1;
+}
+
+.popup-content {
+    background: var(--background-color);
+    padding: 2rem;
+    border-radius: 0.5rem;
+    box-shadow: var(--box-shadow);
+    max-width: 400px;
+    width: 90%;
+    position: relative;
+}
+
+.close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--second-color);
+}
+
+.popup-content h1 {
+    color: var(--second-color);
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.popup-content form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.popup-content input {
+    padding: 0.8rem;
+    border: 1px solid #ccc;
+    border-radius: 0.3rem;
+}
+
+.popup-content button {
+    background: var(--second-color);
+    color: white;
+    padding: 0.8rem;
+    border: none;
+    border-radius: 0.3rem;
+    cursor: pointer;
+}
+
+.popup-content p {
+    text-align: center;
+    margin-top: 1rem;
+}
+
+.popup-content a {
+    color: var(--second-color);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/*****************/
+/* Welcome Title */
+/****************/
+
+.welcome-title {
+    text-align: right;
+    margin-bottom: 20px;
+    color: #b49b66;
+    font-size: 18px;
+}
+.error-message {
+    display: block; /* Ensure the welcome message is displayed */
+    text-align: center;
+    color: red;
+    font-size: 16px;
+    position: relative;
+
+}
+
+.error-message12 {
+    display: block; /* Ensure the welcome message is displayed */
+    text-align: center;
+    color: red;
+    font-size: 16px;
+    position: relative;
+
+}
+
+.success-message {
+    display: block; /* Ensure the welcome message is displayed */
+    text-align: center;
+    color: green;
+    font-size: 16px;
+    position: relative;
+
+}
+
+/***********************/
+/* Filter System Frame */
+/***********************/
+
+/* Outer Frame Styling */
+.outer-frame {
+    width: 70%; /* Adjust the width as necessary */
+    margin: 50px auto;
+    margin-top: 10%;
+    padding: 20px;
+    border: 2px solid #b49b66;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(18px);
+}
+
+/* Title Styling */
+.filter-title {
+    text-align: center;
+    margin-bottom: 20px;
+    color: #b49b66;
+    font-size: 24px;
+}
+
+/* Inner Frame Styling */
+.inner-frame {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+/* Left Section (Brand, Model, Drive Train, Transmission) */
+.filter-left {
+    width: 35%;
+    display: flex;
+    flex-direction: column;
+    padding-left: 50px;
+}
+
+/* Right Section (Sliders and Submit Button) */
+.filter-right {
+    width: 35%;
+    display: flex;
+    margin-right: 50px;
+    flex-direction: column;
+    justify-content: space-between; 
+}
+
+/* Vertical Divider */
+.vertical-divider {
+    width: 2px;
+    background-color: #b49b66;
+    height: 100%;
+    margin: 0 20px;
+}
+
+/* Submit Button Styling */
+.filter-btn {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: #b49b66;
+    color: white;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+    align-self: center; /* Centers the button */
+}
+
+.filter-btn:hover {
+    background-color: #9e8a56;
+}
+
+/* Input and Slider Styling */
+.filter-left input, .filter-left select, .filter-right input {
+    margin: 10px 0;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+}
+
+.filter-left input[type="text"], .filter-left select {
+    width: 100%;
+}
+
+.filter-right input[type="range"] {
+    width: 100%;
+    appearance: none;
+    -webkit-appearance: none; /* For Safari, Chrome */
+    -moz-appearance: none; /* For Firefox */
+    background-color: #dcdcdc;
+    height: 6px;
+    border-radius: 5px;
+}
+
+.filter-right input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    background-color: #b49b66;
+    border: none;
+    height: 20px;
+    width: 20px;
+    border-radius: 50%;
+}
+
+/* Slider Values Styling */
+#horsepower-value, #cargo-space-value, #seating-value, #price-value, #ground-clearance-value  {
+    text-align: center;
+    margin-top: 5px;
+    font-size: 14px;
+    color: #b49b66;
+}
+
+/* Display Units for Sliders */
+#horsepower-value {
+    color: #b49b66;
+}
+
+#cargo-space-value {
+    color: #b49b66;
+}
+
+#seating-value{
+    color:#b49b66;
+}
+
+#price-value {
+    color: #b49b66;
+}
+
+.outer-frame {
+    flex: 1;
+}
+
+
+/*************************/
+/* Results Frame Styling */
+/*************************/
+
+/* OUTER FRAME - Wraps the entire results section */
+.results-outer-frame {
+    width: 90%;
+    margin: 50px auto;
+    margin-top: 5%; /* Reduced margin to avoid large gaps */
+    padding: 20px;
+    border: 2px solid #b49b66;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(18px);
+    overflow: hidden;
+}
+
+/* ✅ Ensures table layout consistency */
+table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+
+/* ✅ Scrollable Table Wrapper */
+.scrollable-table {
+    overflow-x: auto;
+    width: 100%;
+    max-width: 100%;
+}
+
+/* ✅ Table Container - Handles scrolling */
+.table-container {
+    max-height: 600px; /* Increased height for better visibility */
+    overflow-y: auto;
+    overflow-x: auto;
+    border-radius: 10px;
+    display: block;
+}
+
+/* ✅ Header - Stays Fixed at the Top */
+.table-header {
+    position: sticky;
+    top: 0; /* Ensures it sticks properly */
+    z-index: 100;
+    background: rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(10px);
+}
+
+/* ✅ Ensure table header and body stay aligned */
+.table-header table,
+.results-table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+
+/* ✅ Styling for Table Header */
+.table-header th,
+.results-table td {
+    padding: 12px;
+    text-align: center;
+    font-size: 16px;
+    height: 50px;
+    white-space: nowrap; /* Prevents text from wrapping */
+    overflow: hidden;
+    text-overflow: ellipsis; /* Adds "..." if text is too long */
+}
+
+/* ✅ Keep table header visible */
+.results-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--second-color);
+    color: white;
+    font-weight: bold;
+    border-bottom: 2px solid var(--second-color);
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+/* ✅ Ensure header cells match body width */
+.results-table thead th {
+    padding: 12px;
+    text-align: center;
+    font-size: 16px;
+    height: 50px;
+    background: var(--second-color);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+}
+
+/* ✅ Table Body Styling */
+.results-table tbody {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(18px);
+}
+
+/* ✅ Column Adjustments */
+.results-table th,
+.results-table td {
+    white-space: nowrap; /* Prevents text wrapping */
+    padding: 10px;
+    text-align: center;
+}
+
+/* ✅ Adjust Key Column Widths to Prevent Overlap */
+.results-table th:nth-child(4), /* Variant */
+.results-table td:nth-child(4),
+.results-table th:nth-child(6), /* Engine */
+.results-table td:nth-child(6),
+.results-table th:nth-child(8), /* Transmission */
+.results-table td:nth-child(8) {
+    min-width: 150px; /* Ensures enough space */
+}
+
+/* ✅ Reduce width of last column (Like button) */
+.results-table th:last-child,
+.results-table td:last-child {
+    width: 50px; /* Makes it smaller */
+}
+
+/* ✅ Minimal Scrollbar Styling */
+.results-inner-frame::-webkit-scrollbar,
+.table-header::-webkit-scrollbar {
+    height: 6px;
+}
+
+.results-inner-frame::-webkit-scrollbar-thumb,
+.table-header::-webkit-scrollbar-thumb {
+    background: #b49b66;
+    border-radius: 3px;
+}
+
+.results-inner-frame::-webkit-scrollbar-track,
+.table-header::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+/* ✅ Ensure Responsiveness */
+@media (max-width: 768px) {
+    .results-inner-frame {
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    table {
+        min-width: 1000px;
+    }
+}
+
+/* ✅ Title Styling */
+.results-title {
+    text-align: center;
+    font-size: 24px;
+    font-weight: bold;
+    padding: 15px;
+    color: #b49b66;
+    border-bottom: 2px solid #b49b66;
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(18px);
+    position: sticky;
+    top: 0;
+    z-index: 50;
+}
+
+/* CAR CARD STYLING */
+.car-card {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1);
+    padding: 15px;
+    margin: 15px 0;
+    width: 100%;
+    max-width: 400px;
+    transition: transform 0.2s ease-in-out;
+}
+
+.car-card:hover {
+    transform: scale(1.02);
+}
+
+.car-card h3 {
+    margin-bottom: 8px;
+    font-size: 1.2rem;
+    font-weight: bold;
+}
+
+.car-card p {
+    font-size: 0.95rem;
+    color: #333;
+    margin: 5px 0;
+}
+
+
+/****************/
+/*Footer Styling*/
+/****************/
+
+footer {
+    width: 100%;
+    background: #161f48;
+    color: #fff;
+    padding: 30px 0;
+    text-align: center;
+    border-top: 3px solid var(--second-color);
+    box-shadow: var(--box-shadow);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    position: relative;
+    bottom: 0;
+    left: 0;
+    margin-top: 8%;
+}
+
+.footer-container {
+    width: 90%;
+    max-width: 1200px;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: stretch;
+    padding-bottom: 20px;
+}
+
+.footer-section {
+    flex: 1;
+    min-width: 250px;
+    padding: 15px;
+    text-align: left;
+}
+
+.footer-section h3 {
+    color: var(--second-color);
+    margin-bottom: 10px;
+}
+
+.footer-section ul {
+    list-style: none;
+    padding: 0;
+}
+.footer-section a {
+    color: #fff;
+}
+
+.footer-section a:hover {
+    cursor: pointer;
+    color: var(--second-color);
+}
+
+.footer-section ul li a {
+    color: #fff;
+    text-decoration: none;
+    transition: color 0.3s;
+}
+
+.footer-section ul li a:hover {
+    color: var(--second-color);
+}
+
+.social-icons {
+    display: flex;
+    justify-content: start;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.social-icons a {
+    color: #fff;
+    font-size: 20px;
+    transition: transform 0.3s ease, color 0.3s ease;
+}
+
+.social-icons a:hover {
+    color: var(--second-color);
+    transform: translateY(-5px);
+}
+
+.footer-bottom {
+    width: 100%;
+    text-align: center;
+    padding: 15px 0;
+    border-top: 1px solid #fff;
+    background: main;
+    color: #fff;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .footer-container {
+        flex-direction: column;
+        text-align: center;
+    }
+    .footer-section {
+        text-align: center;
+    }
+    .social-icons {
+        justify-content: center;
+    }
+}
+
+/* Popup Styles */
+.popup {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 1001;
+}
+
+.popup.active {
+    display:flex;
+    visibility: visible;
+    opacity: 1;
+}
+
+.popup-content {
+    background: var(--background-color);
+    padding: 2rem;
+    border-radius: 0.5rem;
+    box-shadow: var(--box-shadow);
+    max-width: 400px;
+    width: 90%;
+    position: relative;
+}
+
+.close-btn {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--second-color);
+}
+
+.popup-content h1 {
+    color: var(--second-color);
+    margin-bottom: 1.5rem;
+    text-align: center;
+}
+
+.popup-content form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.popup-content input {
+    padding: 0.8rem;
+    border: 1px solid #ccc;
+    border-radius: 0.3rem;
+}
+
+.popup-content button {
+    background: var(--second-color);
+    color: white;
+    padding: 0.8rem;
+    border: none;
+    border-radius: 0.3rem;
+    cursor: pointer;
+}
+
+.popup-content p {
+    text-align: center;
+    margin-top: 1rem;
+}
+
+.popup-content a {
+    color: var(--second-color);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+.wrapper {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+#brand, #model, #variant {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    width: 100%;
+}
+
+/**********************/
+/* Compare Page Styling */
+/**********************/
+
+/* Main Container for Comparison */
+.comp_table_frame {
+    width: 95%;
+    margin: 50px auto;
+    margin-top: 10%;
+    padding: 20px;
+    border: 2px solid #b49b66;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(18px);
+    overflow-x: auto; /* Allows horizontal scrolling */
+    display: flex;
+    position: relative;
+    white-space: nowrap; /* Keeps everything in one row */
+}
+
+/* Car Column Styling */
+.car-column {
+    min-width: 350px; /* Prevent shrinking below this width */
+    max-width: 350px; /* Prevent growing above this width */
+    width: 250px; /* Set a fixed width */
+    border: 2px solid #b49b66;
+    border-radius: 10px;
+    padding: 15px;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Title Styling */
+.car-title {
+    font-size: 20px;
+    font-weight: bold;
+    color: #b49b66;
+    text-align: center;
+}
+
+/* Image Styling */
+.car-image-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    overflow: hidden;
+    border-radius: 8px;
+    height: 150px; /* Keeps the height consistent */
+    width: 100%;
+}
+
+.car-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover; /* Ensure image fits the container properly */
+}
+
+/* Spec Label (Gold & Bold) */
+.spec-label {
+    font-weight: bold;
+    color: #b49b66;
+}
+
+/* Spec Value Styling */
+.spec-value {
+    font-size: 16px;
+    color: black;
+    padding: 5px;
+    word-wrap: break-word;
+}
+
+.spec-value:not(:last-child) {
+    border-bottom: 2px solid #b49b66;
+    padding-bottom: 5px;
+    margin-bottom: 5px;
+}
+
+/* Remove Button */
+.remove-btn {
+    margin-top: 10px;
+    padding: 8px;
+    background-color: #b49b66;
+    color: white;
+    font-weight: bold;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: 0.3s;
+}
+
+.remove-btn:hover {
+    background-color: #9e844d;
+}
+
+/* Compare Button Styling */
+.compare_btn {
+    margin-top: 10px;
+    padding: 8px 12px;
+    font-size: 16px;
+    border: none;
+    background: var(--second-color);
+    color: white;
+    cursor: pointer;
+    border-radius: 5px;
+}
+
+.compare_btn:hover {
+    background: #9e8a56;
+}
+
+/* Container for Multiple Car Columns */
+#comparison-container {
+    display: flex;
+    gap: 10px;
+    overflow-x: auto; /* Allows scrolling if too many cars */
+    padding: 15px;
+    flex-wrap: nowrap; /* Prevents wrapping; keeps everything horizontal */
+    height: 100%; /* Maintain consistent height */
+}
+
+/* Responsive Adjustments */
+@media (max-width: 900px) {
+    .car-column {
+        min-width: 250px;
+        max-width: 250px;
+    }
+}
+
+@media (max-width: 600px) {
+    #comparison-container {
+        flex-direction: column; /* Stack cars on smaller screens */
+        align-items: center;
+    }
+
+    .car-column {
+        width: 100%;
+        max-width: 100%;
+    }
+
+    /* Adjust button width for smaller screens */
+    .compare_btn {
+        width: 100%;
+        padding: 12px;
+    }
+}
+
+/* For preventing text overlap */
+.spec-value {
+    white-space: normal; /* Ensure the text doesn't overflow */
+    word-wrap: break-word;
+}
+
+
+
+/*******************/
+/* FAVORITES CARDS */
+/*******************/
+#card-container{
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.card {
+    width: 250px;
+    margin: 10px auto;
+    background: white;
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    cursor: pointer;
+    text-align: center;
+}
+
+.card:hover {
+    transform: scale(1.05);
+    box-shadow: 0px 8px 15px rgba(0, 0, 0, 0.2);
+}
+
+.card img {
+    width: 100%;
+    height: 150px;
+    object-fit: cover;
+}
+
+.card .name {
+    padding: 15px;
+    font-size: 18px;
+    font-weight: bold;
+    color: #333;
+}
+.testimonials-content {
+    width: 90%;
+    margin: 10rem auto 2rem;
+    text-align: center;
+}
+
+.testimonials-content h2 {
+    color: #b49b66;
+    margin-bottom: 20px;
+}
+
+.testimonials-content p {
+    font-size: 1.2rem;
+    line-height: 1.6;
+    color: #333;
+}
+
+.testimonial-card {
+    background: rgba(255, 255, 255, 0.8);
+    border: 1px solid #b49b66;
+    border-radius: 10px;
+    padding: 20px;
+    margin: 20px 0;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.testimonial-card h3 {
+    color: #b49b66;
+    margin-bottom: 10px;
+}
+
+.testimonial-images {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+
+.testimonial-images img {
+    width: 45%;
+    border-radius: 10px;
+    border: 2px solid #b49b66;
+}
+
+@media (max-width: 768px) {
+.testimonials-content {
+    margin-top: 8rem;
+}
+
+.testimonial-images {
+    flex-direction: column;
+}
+
+.testimonial-images img {
+    width: 100%;
+}
+}
+
+@media print {
+    body * {
+        visibility: hidden; /* Hide everything by default */
+    }
+    #printable-popup, #printable-popup * {
+        visibility: visible; /* Show only popup content */
+    }
+    #printable-popup {
+        position: absolute;
+        left: 0;
+        top: 0;
+        width: 100%;
+        background: white;
+    }
+    .close-btn, .print-btn {
+        display: none; /* Hide buttons during print */
+    }
+}
+
+/* Outer Frame (Main Container) */
+#card-popup .popup{
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 60%;
+    margin: 0 auto;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    z-index: 1001;
+}
+
+#card-popup .popup-content {
+    background: var(--background-color);
+    padding: 2rem;
+    border-radius: 0.5rem;
+    box-shadow: var(--box-shadow);
+    max-width: 100%;
+    max-height: 100%;
+    width: 80%;
+    height: 90%;
+    position: relative;
+}
+
+.outer-fave-frame {
+    width: 100%;
+    margin: 25px auto;
+    padding: 0;
+    border: 2px solid #b49b66;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(18px);
+}
+
+/* Title & Printer Icon Row */
+.header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+/* Car Title */
+.car-title {
+    text-align: center;
+    color: #b49b66;
+    font-size: 24px;
+    flex-grow: 1;
+}
+
+/* Printer Icon */
+.header-row i {
+    font-size: 1.8rem;
+    color: #b49b66 !important;
+    cursor: pointer;
+    transition: all .55s ease;
+}
+
+.header-row i:hover {
+    transform: translateY(-3px);
+}
+
+/* Horizontal Line Under Title */
+.header-divider {
+    width: 100%;
+    height: 2px;
+    background-color: #b49b66;
+    margin-bottom: 15px;
+}
+
+/* Inner Frame: Image + Specs */
+.inner-fave-frame {
+    margin-left: 5px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+/* Image Container */
+.img-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 60%;
+}
+
+/* Image Frame */
+.img-fave-frame {
+    border: 2px solid #b49b66;
+    border-radius: 10px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Image Styling (Fixes Gap Issue) */
+.img-fave-frame img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Dropdown Below Image (Centered) */
+.bottom-options {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    margin-top: 10px;
+    margin-bottom: 5px;
+}
+
+/* Dropdown Styling */
+.variant-dropdown {
+    padding: 10px;
+    border: 2px solid #b49b66;
+    border-radius: 5px;
+    font-size: 16px;
+    background: rgba(255, 255, 255, 0.2);
+    color: #b49b66;
+    width: 50%;
+    max-width: 200px;
+    text-align: center;
+}
+
+/* Right Side: Specs */
+.spec-fave-frame {
+    width: 50%;
+    padding-left: 20px;
+    padding-right: 5px;
+    padding-bottom: 5px;
+}
+
+/* Spec Card Container */
+.spec-card-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+/* Individual Spec Card */
+.spec-card {
+    background: rgba(255, 255, 255, 0.3);
+    border: 2px solid #b49b66;
+    color: var(--second-color);
+    border-radius: 5px;
+    padding: 10px;
+    text-align: center;
+    min-width: 120px;
+    flex: 1 1 calc(33.33% - 10px);
+}
+
+.spec-card br + span {
+    color: black; /* Toyota text color */
+}
+
+/* Responsive Design */
+@media (max-width: 900px) {
+    .inner-fave-frame {
+        flex-direction: column;
+        align-items: center;
+    }
+
+    .img-container {
+        width: 100%;
+    }
+
+    .spec-fave-frame {
+        width: 100%;
+        padding-left: 0;
+        margin-top: 20px;
+    }
+
+    .spec-card {
+        flex: 1 1 calc(50% - 10px);
+    }
+}
+
+@media (max-width: 600px) {
+    .spec-card {
+        flex: 1 1 100%;
+    }
+
+    .variant-dropdown {
+        width: 80%;
+    }
+}
