@@ -129,8 +129,8 @@ def login():
 
 @app.route('/logout', methods=['POST'])
 def logout():
-    session.pop('user', None)  
-    return redirect('/login')  
+    session.clear()  # Clear server-side session
+    return jsonify({"status": "success", "message": "Logged out successfully"}), 200
 
 with open('firebaseConfig.json') as f:
     firebase_config = json.load(f)
