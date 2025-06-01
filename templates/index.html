@@ -84,43 +84,38 @@
         <li><a href="{{url_for('testimonials')}}">Testimonials</a></li>
         <li><a href="{{url_for('forum')}}">Forum</a></li>
         <li><a href="{{url_for('patches')}}">What's New</a></li>
-        <li><a href="{{url_for('profile')}}">Profile</a></li>
       </ul>
     </div>
 
     <div class="liked"><a href="#"></a></div>
-  <!-- Updated Welcome Section -->
-  <div class="welcome-section">
-    <span class="welcome-text" id="welcome-text">Welcome!</span>
-    <button class="login-button" id="login-button" onclick="togglePopup('login-popup')" style="display: block;">Login</button>
-    <div class="profile-container" id="profile-container" style="display: none;">
-      <img src="{{url_for('static', filename='resources/default-avatar.png')}}" 
-           alt="Profile" class="profile-pic" id="profile-pic" onclick="toggleLogoutDropdown()">
-      <div class="logout-dropdown" id="logout-dropdown">
-        <a href="#" onclick="handleLogout()">Sign Out</a>
-      </div>
-    </div>
-  </div>
 
+<!-- Updated Welcome Section -->
+<div class="welcome-section">
+  <span class="welcome-text" id="welcome-text">Welcome!</span>
+  <button class="login-button" id="login-button" onclick="togglePopup('login-popup')" style="display: block;">Login</button>
+  
+  <!-- Single unified profile container -->
   <div class="profile-container" id="profile-container" style="display: none;">
-    <!-- Default icon if no profile picture -->
-    <i class='bx bxs-user-circle bx-rotate-90 bx-flip-horizontal' 
-      id="profile-icon"
-      style="font-size: 36px; color:#b49b66; cursor: pointer;"
-      onclick="toggleLogoutDropdown()"></i>
+    
+    <!-- Default icon shown when no profile picture is available -->
+    <i class='bx bxs-user-circle bx-rotate-90 bx-flip-horizontal'
+       id="profile-icon"
+       style="font-size: 36px; color:#b49b66; cursor: pointer;"
+       onclick="toggleLogoutDropdown()"></i>
 
-    <!-- Profile picture if user uploaded one -->
+    <!-- Profile picture, hidden by default -->
     <img src="" alt="Profile Picture"
-        id="profile-pic"
-        class="profile-pic"
-        style="display: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;"
-        onclick="toggleLogoutDropdown()">
+         id="profile-pic"
+         class="profile-pic"
+         style="display: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;"
+         onclick="toggleLogoutDropdown()">
 
-    <!-- Logout dropdown -->
+    <!-- Dropdown for logout -->
     <div class="logout-dropdown" id="logout-dropdown">
       <a href="#" onclick="handleLogout()">Sign Out</a>
     </div>
   </div>
+</div>
 
   </header>
   <!-- Outer Frame (with border and shadow) -->

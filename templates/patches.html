@@ -72,7 +72,7 @@
       <i class='bx bx-arrow-from-right' id="close-button" style='color:#b49b66'></i>
       <ul>
         <div class="SideBar-Icons">
-          <i class='bx bx-user' id='user-icon' style='color:#b49b66' onclick="togglePopup('login-popup')"></i>
+          <i class='bx bx-user' id='user-icon' style='color:#b49b66' onclick="handleUserIconClick()"></i>
           <a href="{{url_for('favourites')}}"><i class='bx bx-heart' style='color:#b49b66'></i></a>
           <a href="{{url_for('compare')}}"><i class="fa-solid fa-scale-balanced" style='color:#b49b66'></i></a>
         </div>
@@ -82,11 +82,40 @@
         <li><a href="{{url_for('about')}}">About Us</a></li>
         <li><a href="{{url_for('contacts')}}">Contacts</a></li>
         <li><a href="{{url_for('testimonials')}}">Testimonials</a></li>
+        <li><a href="{{url_for('forum')}}">Forum</a></li>
+        <li><a href="{{url_for('patches')}}">What's New</a></li>
       </ul>
     </div>
 
     <div class="liked"><a href="#"></a></div>
-    <p class="welcome-title"></p>
+
+<!-- Updated Welcome Section -->
+<div class="welcome-section">
+  <span class="welcome-text" id="welcome-text">Welcome!</span>
+  <button class="login-button" id="login-button" onclick="togglePopup('login-popup')" style="display: block;">Login</button>
+  
+  <!-- Single unified profile container -->
+  <div class="profile-container" id="profile-container" style="display: none;">
+    
+    <!-- Default icon shown when no profile picture is available -->
+    <i class='bx bxs-user-circle bx-rotate-90 bx-flip-horizontal'
+       id="profile-icon"
+       style="font-size: 36px; color:#b49b66; cursor: pointer;"
+       onclick="toggleLogoutDropdown()"></i>
+
+    <!-- Profile picture, hidden by default -->
+    <img src="" alt="Profile Picture"
+         id="profile-pic"
+         class="profile-pic"
+         style="display: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;"
+         onclick="toggleLogoutDropdown()">
+
+    <!-- Dropdown for logout -->
+    <div class="logout-dropdown" id="logout-dropdown">
+      <a href="#" onclick="handleLogout()">Sign Out</a>
+    </div>
+  </div>
+</div>
   </header>
   
 
