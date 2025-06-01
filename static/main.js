@@ -41,6 +41,10 @@ function togglePopup(popupId) {
 
 // Close popup when clicking outside
 document.addEventListener('click', function(event) {
+    if (!event.target.closest('.profile-container')) {
+        const dropdown = document.getElementById('logout-dropdown');
+        if (dropdown) dropdown.style.display = 'none';
+    }
     // Don't handle clicks on menu button or sidebar
     if (
         event.target.closest('#menu-button') || 
@@ -72,20 +76,52 @@ async function initializeFirebase() {
         // Monitor authentication state
         auth.onAuthStateChanged((user) => {
             if (user) {
-                // User is signed in
                 userName = user.email;
-                const welcomeMessageElement = document.querySelector('.welcome-title');
-                if (welcomeMessageElement) {
-                    welcomeMessageElement.textContent = `Welcome, ${userName}!`;
+
+                // Update welcome message
+                const welcomeText = document.getElementById('welcome-text');
+                if (welcomeText) welcomeText.textContent = `Welcome, ${userName}`;
+
+                // Hide login button, show profile pic/icon container
+                const loginBtn = document.getElementById('login-button');
+                const profileContainer = document.getElementById('profile-container');
+                if (loginBtn) loginBtn.style.display = 'none';
+                if (profileContainer) profileContainer.style.display = 'block';
+
+                // 🌟 Begin: Profile image vs icon logic
+                const profilePic = document.getElementById('profile-pic');      // <img>
+                const profileIcon = document.getElementById('profile-icon');    // <i>
+
+                if (user.photoURL) {
+                    // User has uploaded a real photo
+                    if (profileIcon) profileIcon.style.display = 'none';
+                    if (profilePic) {
+                    profilePic.src = user.photoURL;
+                    profilePic.style.display = 'block';
+                    }
+                    else {
+                        profilePic.src = user.photoURL;
+                        profilePic.style.display = 'block';
+                    }
+                } else {
+                    // No profile photo uploaded – show default icon
+                    if (profileIcon) profileIcon.style.display = 'inline-block';
+                    if (profilePic) profilePic.style.display = 'none';
                 }
+                // 🌟 End: Profile image vs icon logic
+
                 console.log('User is signed in:', user.email);
             } else {
-                // User is signed out
                 userName = null;
-                const welcomeMessageElement = document.querySelector('.welcome-title');
-                if (welcomeMessageElement) {
-                    welcomeMessageElement.textContent = 'Welcome!';
-                }
+
+                const welcomeText = document.getElementById('welcome-text');
+                if (welcomeText) welcomeText.textContent = 'Welcome!';
+
+                const loginBtn = document.getElementById('login-button');
+                const profileContainer = document.getElementById('profile-container');
+                if (loginBtn) loginBtn.style.display = 'block';
+                if (profileContainer) profileContainer.style.display = 'none';
+
                 console.log('User is signed out');
             }
         });
@@ -95,6 +131,39 @@ async function initializeFirebase() {
         console.error('Firebase initialization failed:', error);
     }
 }
+
+function handleUserIconClick() {
+    if (userName) {
+        window.location.href = '/profile';
+    } else {
+        togglePopup('login-popup');
+    }
+}
+
+function toggleLogoutDropdown() {
+    const dropdown = document.getElementById('logout-dropdown');
+    if (dropdown) {
+        dropdown.style.display = dropdown.style.display === 'block' ? 'none' : 'block';
+    }
+}
+
+function handleLogout() {
+    if (auth) {
+        auth.signOut().then(() => {
+            console.log('User signed out from Firebase');
+
+            // Tell the backend to remove session cookie
+            fetch('/logout', { method: 'POST' })
+                .then(() => {
+                    const dropdown = document.getElementById('logout-dropdown');
+                    if (dropdown) dropdown.style.display = 'none';
+                    location.reload(); // Refresh UI
+                })
+                .catch(error => console.error('Logout error:', error));
+        });
+    }
+}
+
 
 // REPLACE your existing handleSignup function with this:
 function handleSignup(event) {
