@@ -158,6 +158,26 @@ def favourites():
 def testimonials():
     return render_template('testimonials.html')
 
+#Added new links for the new pages
+@app.route('/patches')
+def patches():
+    return render_template('patches.html')
+
+@app.route('/forum')
+def forum():
+    return render_template('forum.html')
+
+@app.route('/profile', methods=['GET', 'POST'])
+def profile():
+    if 'user' not in session:
+        return redirect(url_for('home'))  # or show login popup
+    
+    if request.method == 'POST':
+        # Handle profile picture upload in the future
+        pass
+    
+    return render_template('profile.html')
+
 
 # Ensure all relevant columns are strings before extraction
 df["Cargo_space"] = df["Cargo_space"].astype(str).str.extract("(\d+)", expand=False).astype(float)
