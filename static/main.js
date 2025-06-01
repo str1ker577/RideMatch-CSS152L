@@ -5,7 +5,9 @@
 
 const baseUrl = `http://127.0.0.1:5000`; // Base URL for API requests
 
-let userName='';
+// Firebase initialization - ADD THIS AT THE TOP OF YOUR main.js
+let auth; // Global auth object
+let userName = null; // Keep your existing userName variable
 //const baseUrl = "https://a7cbb3da-2928-4d18-ba75-ea41ce8ad0c5-00-g8eiilou0duk.sisko.replit.dev"; // Base URL for API requests
 
 // Get elements for toggling sidebar and menu button
@@ -26,7 +28,6 @@ closeButton.addEventListener('click', () => {
     menuButton.style.display = 'block'; 
     closeButton.style.display = 'none';
 });
-
 
 
 // Popup functionality
@@ -57,91 +58,149 @@ document.addEventListener('click', function(event) {
     });
 });
 
-function handleLogin(event) {
-    event.preventDefault(); // Prevent the default form submission
-    const email = document.querySelector('input[name="email"]').value;
-    const password = document.querySelector('input[name="password"]').value;
-
-    // Perform AJAX request to login
-    fetch('/login', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-            'email': email,
-            'password': password
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        console.log(data)
-        if (!data.status) {
-            document.querySelector('.success-message').textContent = '';
-            document.querySelector('.error-message').textContent = data.message;
-        } else {
-            userName = data.email;
-            const welcomeMessageElement = document.querySelector('.welcome-title');
-            welcomeMessageElement.textContent = `Welcome, ${userName}!`;
-            document.querySelector('.error-message12').textContent = '';
-            togglePopup('login-popup'); // Close login popup
-            sidebar.classList.remove('open');
-            menuButton.style.display = 'block'; 
-            closeButton.style.display = 'none';
-
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
+// Initialize Firebase when the page loads
+async function initializeFirebase() {
+    try {
+        // Get Firebase config from your Python backend
+        const response = await fetch('/firebase-config');
+        const firebaseConfig = await response.json();
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        auth = firebase.auth();
+        
+        // Monitor authentication state
+        auth.onAuthStateChanged((user) => {
+            if (user) {
+                // User is signed in
+                userName = user.email;
+                const welcomeMessageElement = document.querySelector('.welcome-title');
+                if (welcomeMessageElement) {
+                    welcomeMessageElement.textContent = `Welcome, ${userName}!`;
+                }
+                console.log('User is signed in:', user.email);
+            } else {
+                // User is signed out
+                userName = null;
+                const welcomeMessageElement = document.querySelector('.welcome-title');
+                if (welcomeMessageElement) {
+                    welcomeMessageElement.textContent = 'Welcome!';
+                }
+                console.log('User is signed out');
+            }
+        });
+        
+        console.log('Firebase initialized successfully');
+    } catch (error) {
+        console.error('Firebase initialization failed:', error);
+    }
 }
-//update on each page
-document.addEventListener('DOMContentLoaded', function () {
-    const welcomeMessageElement = document.querySelector('.welcome-title');
-    if (userName) {
-        console.log(userName)
-        welcomeMessageElement.textContent = `Welcome, ${userName}!`;
-      }
 
-    populateModels();
-});
-
+// REPLACE your existing handleSignup function with this:
 function handleSignup(event) {
-    event.preventDefault(); // Prevent the default form submission
+    event.preventDefault();
     const email = document.querySelector('input[name="email_signup"]').value;
     const password = document.querySelector('input[name="password_signup"]').value;
     
-    // Perform AJAX request to signup
-    fetch('/signup', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: new URLSearchParams({
-            'email': email,
-            'password': password
+    if (!auth) {
+        console.error('Firebase not initialized');
+        return;
+    }
+    
+    // Use Firebase client-side authentication
+    auth.createUserWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+            // User signed up successfully
+            const user = userCredential.user;
+            console.log('User signed up:', user.email);
+            
+            // Display success message
+            document.querySelector('.success-message').textContent = "Signup successful! Please log in.";
+            document.querySelector('.error-message12').textContent = '';
+            document.querySelector('.error-message').textContent = '';
+            
+            // Close signup popup and show login (keep your existing UI logic)
+            togglePopup('signup-popup');
+            togglePopup('login-popup');
         })
-    })
-    .then(response => {
-      if (!response.ok) {
-            return response.json().then(data => {
-                // Display error message
-                console.log(data);
-                document.querySelector('.success-message').textContent = '';
-                document.querySelector('.error-message12').textContent = data.message;
-            });
-        }
-        // Handle successful signup
-        document.querySelector('.success-message').textContent = "Signup successful! Please log in.";
-        document.querySelector('.error-message12').textContent = '';
-        document.querySelector('.error-message').textContent = '';
-        togglePopup('login-popup'); // Close signup popup and open login popup
-        togglePopup('signup-popup'); // Close signup popup
+        .catch((error) => {
+            console.error('Signup error:', error);
+            document.querySelector('.success-message').textContent = '';
+            document.querySelector('.error-message12').textContent = getFirebaseErrorMessage(error.code);
+        });
+}
 
-    })
-    .catch(error => {
-        console.error('Error:', error);
-    });
+// REPLACE your existing handleLogin function with this:
+function handleLogin(event) {
+    event.preventDefault();
+    const email = document.querySelector('input[name="email"]').value;
+    const password = document.querySelector('input[name="password"]').value;
+    
+    if (!auth) {
+        console.error('Firebase not initialized');
+        return;
+    }
+    
+    // Use Firebase client-side authentication
+    auth.signInWithEmailAndPassword(email, password)
+        .then((userCredential) => {
+            // User logged in successfully
+            const user = userCredential.user;
+            console.log('User logged in:', user.email);
+            
+            // Get the ID token and send to your backend for session creation
+            user.getIdToken().then((idToken) => {
+                return fetch('/verify-token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        idToken: idToken,
+                        email: user.email
+                    })
+                });
+            }).then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    // Update UI (keep your existing UI logic)
+                    userName = user.email;
+                    const welcomeMessageElement = document.querySelector('.welcome-title');
+                    welcomeMessageElement.textContent = `Welcome, ${userName}!`;
+                    document.querySelector('.error-message12').textContent = '';
+                    document.querySelector('.error-message').textContent = '';
+                    togglePopup('login-popup');
+                    sidebar.classList.remove('open');
+                    menuButton.style.display = 'block'; 
+                    closeButton.style.display = 'none';
+                }
+            });
+        })
+        .catch((error) => {
+            console.error('Login error:', error);
+            document.querySelector('.success-message').textContent = '';
+            document.querySelector('.error-message').textContent = getFirebaseErrorMessage(error.code);
+        });
+}
+
+// Helper function for user-friendly error messages
+function getFirebaseErrorMessage(errorCode) {
+    switch (errorCode) {
+        case 'auth/user-not-found':
+            return 'No account found with this email address.';
+        case 'auth/wrong-password':
+            return 'Incorrect password.';
+        case 'auth/email-already-in-use':
+            return 'Email address already in use.';
+        case 'auth/weak-password':
+            return 'Password should be at least 6 characters.';
+        case 'auth/invalid-email':
+            return 'Invalid email address.';
+        case 'auth/too-many-requests':
+            return 'Too many failed attempts. Please try again later.';
+        default:
+            return 'Authentication failed. Please try again.';
+    }
 }
 
 function parseCSV(data) {
@@ -338,6 +397,8 @@ function displayFilteredCars(data) {
 
 document.addEventListener("DOMContentLoaded", function () {
     loadFavorites(); // Call loadFavorites to populate favorites on page load
+
+    initializeFirebase();
 
     const filterButton = document.getElementById("filter-btn"); 
     const resultsFrame = document.querySelector(".results-frame");

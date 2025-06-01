@@ -33,7 +33,48 @@ def home():
 def serve_resources(filename):
     return send_from_directory(os.path.join(app.root_path, 'resources'), filename)
 
-@app.route('/signup', methods=['POST'])  # Signup route
+@app.route('/firebase-config')
+def get_firebase_config():
+    client_config = {
+        'apiKey': firebase_config.get('apiKey'),
+        'authDomain': firebase_config.get('authDomain'), 
+        'projectId': firebase_config.get('projectId'),
+        'storageBucket': firebase_config.get('storageBucket'),
+        'messagingSenderId': firebase_config.get('messagingSenderId'),
+        'appId': firebase_config.get('appId'),
+        'measurementId': firebase_config.get('measurementId')
+    }
+    return jsonify(client_config)
+
+@app.route('/verify-token', methods=['POST'])
+def verify_token():
+    try:
+        # Get the ID token from the request
+        data = request.get_json()
+        id_token = data.get('idToken')
+        email = data.get('email')
+        
+        if not id_token:
+            return jsonify({"status": "error", "message": "No token provided"}), 400
+        
+        # Verify the ID token with Firebase Admin SDK
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        
+        # Create session
+        session['user'] = uid
+        session['email'] = email
+        session['idToken'] = id_token
+        
+        app.logger.info(f"✅ User {email} logged in successfully.")
+        return jsonify({"status": "success", "message": "Authentication successful"}), 200
+        
+    except firebase_admin.auth.InvalidIdTokenError:
+        return jsonify({"status": "error", "message": "Invalid token"}), 401
+    except Exception as e:
+        app.logger.error(f"Token verification failed: {str(e)}")
+        return jsonify({"status": "error", "message": "Authentication failed"}), 500
+
 def signup():
     if request.method == 'POST':
         email = request.form.get('email')
@@ -62,7 +103,6 @@ def signup():
             return jsonify({"status": "error", "message": f"Signup failed: {str(e)}"}), 400
 
 
-@app.route('/login', methods=['POST'])  # Login route
 def login():
    if request.method == 'POST':
         email = request.form.get('email')
@@ -89,8 +129,8 @@ def login():
 
 @app.route('/logout', methods=['POST'])
 def logout():
-    session.pop('user', None)  
-    return redirect('/login')  
+    session.clear()  # Clear server-side session
+    return jsonify({"status": "success", "message": "Logged out successfully"}), 200
 
 with open('firebaseConfig.json') as f:
     firebase_config = json.load(f)
