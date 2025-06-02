@@ -1403,6 +1403,115 @@ footer {
     color: black; /* Toyota text color */
 }
 
+/*******************/
+/*   Patches Page  */
+/*******************/
+.patches-frame {
+    max-width: 75%;
+    margin: 40px auto;
+    margin-top: 10%;
+    padding: 30px;
+    border: 2px solid #b49b66;
+    border-radius: 10px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(18px);
+}
+
+.patches-frame .patches-title {
+    color: #333;
+    text-align: center;
+    margin-bottom: 10px;
+    font-size: 2rem;
+    position: relative;
+}
+
+.patches-frame .patches-title::after {
+    content: '';
+    display: block;
+    width: 30%;
+    height: 3px;
+    background-color: #b49b66;
+    margin: 10px auto 0 auto;
+    border-radius: 3px;
+}
+
+.patch-description {
+    max-width: 75%;
+    text-align: center;
+    margin: 0 auto;
+    font-size: 1.05rem;
+    margin-top: 20px;
+}
+
+.patches-frame .patches-container {
+    max-width: 100%;
+    margin: 0 auto 30px auto;
+    text-align: center;
+    font-size: 1.05rem;
+    color: #444;
+}
+
+.patches-frame .patches-container {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.patches-frame .patch-item {
+    padding: 20px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.2);
+    border: 2px solid #b49b66;
+    backdrop-filter: blur(18px);
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.08);
+    text-align: left;
+}
+
+.patches-frame .patch-item h3 {
+    position: relative;
+    margin-bottom: 15px;
+    padding-left: 0; /* make sure no extra padding */
+    text-align: left; /* ensure text is left aligned */
+}
+
+.patches-frame .patch-item h3::after {
+    content: '';
+    display: block;
+    width: 37%; /* length of underline */
+    height: 3px;
+    background-color: #b49b66;
+    margin: 8px 0 0 0; /* no auto centering, margin-top only */
+    border-radius: 3px;
+    /* align left by default as block spans full width */
+}
+
+.patches-frame .patch-item p {
+    color: #333;
+    line-height: 1.5;
+    margin-bottom: 10px;
+}
+
+.patches-frame .patch-item small {
+    font-size: 0.85rem;
+    color: #777;
+}
+
+.patch-subpoints {
+  line-height: 1.5; /* match your normal p line height */
+  margin-top: 0;
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+.patch-subpoints li {
+  margin-bottom: 0.5rem; /* smaller gap */
+}
+
+.patch-subpoints li:last-child {
+  margin-bottom: 0; /* no extra space after last item */
+}
+
 /* Responsive Design */
 @media (max-width: 900px) {
     .inner-fave-frame {
