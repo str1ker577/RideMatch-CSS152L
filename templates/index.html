@@ -75,6 +75,7 @@
           <i class='bx bx-user' id='user-icon' style='color:#b49b66' onclick="handleUserIconClick()"></i>
           <a href="{{url_for('favourites')}}"><i class='bx bx-heart' style='color:#b49b66'></i></a>
           <a href="{{url_for('compare')}}"><i class="fa-solid fa-scale-balanced" style='color:#b49b66'></i></a>
+          <a href="{{url_for('calculator')}}"><i class="fa-solid fa-calculator" style='color:#b49b66'></i></i></a>
         </div>
         <hr>
         <!-- Updated nav items -->
@@ -135,7 +136,17 @@
           <option value="Mazda">Mazda</option>
           <option value="Ford">Ford</option>
           <option value="Hyundai">Hyundai</option>
-          <option value="Suzuki">Suzuki</option>
+          <option value="Porsche">Porsche</option>
+          <option value="Audi">Audi</option>
+          <option value="Volvo">Volvo</option>
+          <option value="Volkswagon">Volkswagon</option>
+          <option value="Kia">Kia</option>
+          <option value="Mercedes">Mercedes</option>
+          <option value="Geely">Geely</option>
+          <option value="Tesla">Tesla</option>
+          <option value="Lucid">Lucid</option>
+          <option value="BYD">BYD</option>
+          <option value="Baojun">Baojun</option>
         </select>
 
         <!-- Input for Model -->
@@ -190,6 +201,7 @@
           <option value="Gasoline">Gasoline</option>
           <option value="Diesel">Diesel</option>
           <option value="Hybrid">Hybrid</option>
+          <option value="Electric">Electric</option>
         </select>
       </div>
 
@@ -201,7 +213,7 @@
 
                 <!--Horse Power Slider-->
                 <label for="horsepower">Horsepower (Hp):</label>
-                <input type="range" id="horsepower" name="horsepower" min="50" max="300" step="10" value="100" oninput="updateSliderValue('horsepower', 'HP', false)">
+                <input type="range" id="horsepower" name="horsepower" min="50" max="1000" step="10" value="100" oninput="updateSliderValue('horsepower', 'HP', false)">
                 <span id="horsepower-value">50 HP</span>
 
                 <!--Cargo Space Slider-->
@@ -221,7 +233,7 @@
 
                 <!--Price Slider-->
                 <label for="price">Price (₱):</label>
-                <input type="range" id="price" name="price" min="500000" max="3000000" step="1000" oninput="updateSliderValue('price','₱', true)">
+                <input type="range" id="price" name="price" min="500000" max="9000000" step="1000" oninput="updateSliderValue('price','₱', true)">
                 <span id="price-value">₱500,000</span>
                 
                 <button id="filter-btn" class="filter-btn" onclick="applyFilters()">Apply Filters</button>

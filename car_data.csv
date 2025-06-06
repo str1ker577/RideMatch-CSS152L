@@ -118,3 +118,21 @@ Car_ID,Brand,Model,Body_Type,Variant,Drive_Train,Engine,Horsepower,Transmission,
 117,Mazda,CX-5,Crossover,2.5L AWD Sport,AWD,2.5L; In-line 4 Cylinder,187,6-Speed; Automatic,Gasoline,19.3,872,5,2050000
 118,Mazda,CX-5,Crossover,2.5L AWD Turbo,AWD,2.5L; In-line 4 Cylinder,250,6-Speed; Automatic,Gasoline,19.3,872,5,2430000
 119,Mazda,CX-30,SUV,2.0L M Hybrid,FWD,2.0L; In-line 4 Cylinder,152,6-Speed; Automatic,Hybrid; Gasoline,18,430,5,1995000
+120,Audi,Q8 e-tron,SUV,55 quattro,AWD,Dual Electric,402,1-speed Auto,Electric,172,569,5,4136638
+121,Audi,RS E-tron GT,Sedan,RS Performance,AWD,Dual Electric,845,2-speed Auto,Electric,130,405,4,5559997
+122,Baojun,Yep Premium,Hatchback,Premium,RWD,Electric Motor,68,Automatic,Electric,150,715,4,1290000
+123,BMW,iX,SUV,xDrive50,AWD,Single Electric,516,1-speed Auto,Electric,145,500,5,4837197
+124,BYD,Atto 3,SUV,Premium,FWD,Electric Motor,201,Automatic,Electric,175,440,5,1798000
+125,Ford,Mustang Mach-E,SUV,Premium AWD Extended,AWD,Dual Electric,346,1-speed Auto,Electric,145,822,5,3056608
+126,Geely,Panda Knight,Hatchback,Standard,RWD,Electric Motor,30,Automatic,Electric,175,800,4,845000
+127,Geely,Geometry E Firefly,SUV,Firefly,FWD,Electric Motor,60,Automatic,Electric,165,1000,5,1300000
+128,Hyundai,Ioniq 5,SUV,Long Range AWD,AWD,Dual Electric,320,1-speed Auto,Electric,160,531,5,2613198
+129,Kia,EV6,SUV,GT-Line AWD,AWD,Dual Electric,320,1-speed Auto,Electric,178,480,5,2707718
+130,Lucid,Air,Sedan,Touring AWD,AWD,Dual Electric,620,1-speed Auto,Electric,140,456,5,4864997
+131,Mercedes,EQE SUV,SUV,500 4MATIC,AWD,Dual Electric,402,1-speed Auto,Electric,181,520,5,4331237
+132,Nissan,Ariya,SUV,e-4ORCE Platinum+ AWD,AWD,Dual Electric,389,1-speed Auto,Electric,170,466,5,3346562
+133,Porsche,Taycan,Sedan,Performance Plus,AWD,Dual Electric,616,2-speed Auto,Electric,128,407,4,5637559
+134,Tesla,Model Y,SUV,Long Range AWD,AWD,Dual Electric,514,1-speed Auto,Electric,167,2158,5,2301282
+135,Tesla,Model Y,SUV,Long Range AWD,AWD,Dual Electric,514,1-speed Auto,Electric,167,2158,7,2301282
+136,Volkswagen,ID.6,SUV,Long Range Pro,RWD,Electric Motor,204,Automatic,Electric,180,651,7,2690000
+137,Volvo,EX30,SUV,Twin Motor Performance,AWD,Dual Electric,422,1-speed Auto,Electric,165,318,5,2557598
