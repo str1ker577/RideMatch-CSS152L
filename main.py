@@ -163,6 +163,10 @@ def testimonials():
 def patches():
     return render_template('patches.html')
 
+@app.route('/calculator')
+def calculator():
+    return render_template('calculator.html')
+
 @app.route('/forum')
 def forum():
     return render_template('forum.html')
