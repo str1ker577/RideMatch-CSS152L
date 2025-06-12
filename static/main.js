@@ -546,6 +546,40 @@ function sortBy(type) {
             });
             break;
         
+        // NEW: Cargo Space sorting options
+        case 'cargo-asc':
+            sortedData.sort((a, b) => {
+                const cargoA = parseFloat(a.Cargo_space) || 0;
+                const cargoB = parseFloat(b.Cargo_space) || 0;
+                return cargoA - cargoB;
+            });
+            break;
+        
+        case 'cargo-desc':
+            sortedData.sort((a, b) => {
+                const cargoA = parseFloat(a.Cargo_space) || 0;
+                const cargoB = parseFloat(b.Cargo_space) || 0;
+                return cargoB - cargoA;
+            });
+            break;
+        
+        // NEW: Seating Capacity sorting options
+        case 'seating-asc':
+            sortedData.sort((a, b) => {
+                const seatingA = parseInt(a.Seating_Capacity) || 0;
+                const seatingB = parseInt(b.Seating_Capacity) || 0;
+                return seatingA - seatingB;
+            });
+            break;
+        
+        case 'seating-desc':
+            sortedData.sort((a, b) => {
+                const seatingA = parseInt(a.Seating_Capacity) || 0;
+                const seatingB = parseInt(b.Seating_Capacity) || 0;
+                return seatingB - seatingA;
+            });
+            break;
+        
         default:
             console.warn("Unknown sort type:", type);
             return;
@@ -557,7 +591,7 @@ function sortBy(type) {
     // Close the dropdown after sorting
     const dropdown = document.getElementById("sortDropdown");
     dropdown.classList.remove("open");
-}
+} 
 
 
 //////////////////////
