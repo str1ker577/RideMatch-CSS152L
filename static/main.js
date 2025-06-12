@@ -9,6 +9,7 @@ const baseUrl = isLocalhost ? 'http://127.0.0.1:8000' : window.location.origin;
 // Firebase initialization 
 let auth; // Global auth object
 let userName = null; // Keep your existing userName variable
+let currentCarData = []; // Global variable to store current car data for sorting
 //const baseUrl = "https://a7cbb3da-2928-4d18-ba75-ea41ce8ad0c5-00-g8eiilou0duk.sisko.replit.dev"; // Base URL for API requests
 
 // Get elements for toggling sidebar and menu button
@@ -402,12 +403,13 @@ async function applyFilters() {
 }
 
 function displayFilteredCars(data) {
-    console.log("📊 Displaying cars data:", data); // Debugging log
+    console.log("📊 Displaying cars data:", data);
 
+    // ✅ NEW: Store the data globally for sorting
+    currentCarData = data;
 
     const resultsFrame = document.getElementById("results-frame");
     const resultsBody = document.getElementById("car-specs");
-
 
     // ✅ Check if elements exist
     if (!resultsFrame || !resultsBody) {
@@ -416,8 +418,7 @@ function displayFilteredCars(data) {
     }
 
     // ✅ Ensure the results frame is visible
-    resultsFrame.style.display = "block"; // Make results frame visible
-
+    resultsFrame.style.display = "block";
     resultsFrame.classList.add("active");
 
     // ✅ Clear the table body before inserting new data
@@ -425,13 +426,12 @@ function displayFilteredCars(data) {
 
     // ✅ Handle case when no results match
     if (data.length === 0) {
-        resultsBody.innerHTML = `<tr><td colspan="12" style="text-align: center;">No matching cars found.</td></tr>`;
+        resultsBody.innerHTML = `<tr><td colspan="14" style="text-align: center;">No matching cars found.</td></tr>`;
         console.warn("⚠️ No cars found for given filters.");
         return;
     }
 
     data.forEach(car => {
-
         const row = document.createElement("tr");
         row.innerHTML = `
         <td>${car.Brand || "Unknown"}</td>
@@ -455,7 +455,6 @@ function displayFilteredCars(data) {
     `;
         resultsBody.appendChild(row);
     });
-
 
     console.log("✅ Table updated successfully!");
 }
@@ -489,31 +488,75 @@ document.addEventListener("DOMContentLoaded", function () {
 
 });
 
-document.querySelectorAll(".dropdown-menu button").forEach(btn => {
-  btn.addEventListener("click", () => {
-    const sortType = btn.getAttribute("data-sort");
-    console.log("Sorting by:", sortType);
-    // Add your sorting logic here based on sortType
-  });
-});
-
-
 function toggleDropdown() {
-  const dropdown = document.getElementById("sortDropdown");
-  dropdown.classList.toggle("open");
+    const dropdown = document.getElementById("sortDropdown");
+    dropdown.classList.toggle("open");
 }
 
 // Optional: close if clicking outside
 window.addEventListener("click", function (e) {
-  const dropdown = document.getElementById("sortDropdown");
-  if (!dropdown.contains(e.target)) {
-    dropdown.classList.remove("open");
-  }
+    const dropdown = document.getElementById("sortDropdown");
+    
+    // Close dropdown if clicking outside of it
+    if (dropdown && !dropdown.contains(e.target)) {
+        dropdown.classList.remove("open");
+    }
 });
 
 function sortBy(type) {
-  console.log("Sorting by:", type);
-  // Add your sorting logic here
+    console.log("Sorting by:", type);
+    
+    if (currentCarData.length === 0) {
+        console.warn("No data to sort");
+        return;
+    }
+
+    let sortedData = [...currentCarData]; // Create a copy to avoid mutating original data
+
+    switch (type) {
+        case 'price-asc':
+            sortedData.sort((a, b) => {
+                const priceA = parseFloat(a.Price) || 0;
+                const priceB = parseFloat(b.Price) || 0;
+                return priceA - priceB;
+            });
+            break;
+        
+        case 'price-desc':
+            sortedData.sort((a, b) => {
+                const priceA = parseFloat(a.Price) || 0;
+                const priceB = parseFloat(b.Price) || 0;
+                return priceB - priceA;
+            });
+            break;
+        
+        case 'horsepower-asc':
+            sortedData.sort((a, b) => {
+                const hpA = parseFloat(a.Horsepower) || 0;
+                const hpB = parseFloat(b.Horsepower) || 0;
+                return hpA - hpB;
+            });
+            break;
+        
+        case 'horsepower-desc':
+            sortedData.sort((a, b) => {
+                const hpA = parseFloat(a.Horsepower) || 0;
+                const hpB = parseFloat(b.Horsepower) || 0;
+                return hpB - hpA;
+            });
+            break;
+        
+        default:
+            console.warn("Unknown sort type:", type);
+            return;
+    }
+
+    // Update the display with sorted data
+    displayFilteredCars(sortedData);
+    
+    // Close the dropdown after sorting
+    const dropdown = document.getElementById("sortDropdown");
+    dropdown.classList.remove("open");
 }
 
 
