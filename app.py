@@ -132,9 +132,24 @@ def logout():
     session.clear()  # Clear server-side session
     return jsonify({"status": "success", "message": "Logged out successfully"}), 200
 
-with open('firebaseConfig.json') as f:
+
+#with open('firebaseConfig.json') as f:
     firebase_config = json.load(f)
     api_key = firebase_config.get('apiKey')  # Extract API key if available
+    
+# Load firebaseConfig.json
+if 'FIREBASE_CONFIG_JSON' in os.environ:
+    firebase_config = json.loads(os.environ['FIREBASE_CONFIG_JSON'])
+else:
+    with open('firebaseConfig.json') as f:
+        firebase_config = json.load(f)
+
+# Load serviceAccountKey.json
+if 'SERVICE_ACCOUNT_KEY_JSON' in os.environ:
+    service_account = json.loads(os.environ['SERVICE_ACCOUNT_KEY_JSON'])
+else:
+    with open('serviceAccountKey.json') as f:
+        service_account = json.load(f)
 
 @app.route('/about')
 def about():
