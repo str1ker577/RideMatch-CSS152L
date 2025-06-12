@@ -78,10 +78,10 @@ try:
     else:
         df = pd.read_csv(csv_path, encoding='utf-8')
         
-        # Ensure all relevant columns are strings before extraction
-        df["Cargo_space"] = df["Cargo_space"].astype(str).str.extract("(\d+)", expand=False).astype(float)
-        df["Ground_Clearance"] = df["Ground_Clearance"].astype(str).str.extract("([\d.]+)", expand=False).astype(float)
-        df["Horsepower"] = df["Horsepower"].astype(str).str.extract("(\d+)", expand=False).astype(float)
+        # Ensure all relevant columns are strings before extraction (FIXED REGEX PATTERNS)
+        df["Cargo_space"] = df["Cargo_space"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
+        df["Ground_Clearance"] = df["Ground_Clearance"].astype(str).str.extract(r"([\d.]+)", expand=False).astype(float)
+        df["Horsepower"] = df["Horsepower"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
         df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
         
         app.logger.info(f"✅ CSV data loaded successfully - {len(df)} records")
