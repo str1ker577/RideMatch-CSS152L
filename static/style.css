@@ -792,14 +792,15 @@ table {
   left: 50%;
   transform: translateX(-50%);
   margin-top: 8px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(18px);
+  background: rgba(255, 255, 255, 0.4); /* Frosted white */
+  backdrop-filter: blur(12px);
   border: 2px solid #b49b66;
   border-radius: 10px;
-  min-width: 160px;
-  padding: 5px 0;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  z-index: 1;
+  min-width: 180px;
+  padding: 8px 0;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  z-index: 10;
+  flex-direction: column;
 }
 
 .dropdown-menu button {
@@ -811,16 +812,18 @@ table {
   cursor: pointer;
   color: black;
   font-weight: 500;
+  display: block;
 }
 
 .dropdown-menu button:hover {
   background-color: rgba(180, 155, 102, 0.2);
+  color: #333;
 }
 
-.dropdown:hover .dropdown-menu {
-  display: block;
+/* Use JS class toggle instead of hover */
+.dropdown.open .dropdown-menu {
+  display: flex;
 }
-
 
 /****************/
 /*Footer Styling*/

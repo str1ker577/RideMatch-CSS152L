@@ -498,6 +498,25 @@ document.querySelectorAll(".dropdown-menu button").forEach(btn => {
 });
 
 
+function toggleDropdown() {
+  const dropdown = document.getElementById("sortDropdown");
+  dropdown.classList.toggle("open");
+}
+
+// Optional: close if clicking outside
+window.addEventListener("click", function (e) {
+  const dropdown = document.getElementById("sortDropdown");
+  if (!dropdown.contains(e.target)) {
+    dropdown.classList.remove("open");
+  }
+});
+
+function sortBy(type) {
+  console.log("Sorting by:", type);
+  // Add your sorting logic here
+}
+
+
 //////////////////////
 // COMPARE Function //
 //////////////////////
