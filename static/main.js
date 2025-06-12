@@ -3,9 +3,10 @@
 //////////////////////
 
 
-const baseUrl = `http://127.0.0.1:5000`; // Base URL for API requests
+const baseUrl = window.location.origin; // Base URL for API requests
+//const baseUrl = `http://127.0.0.1:5000`; // Base URL for API requests
 
-// Firebase initialization - ADD THIS AT THE TOP OF YOUR main.js
+// Firebase initialization 
 let auth; // Global auth object
 let userName = null; // Keep your existing userName variable
 //const baseUrl = "https://a7cbb3da-2928-4d18-ba75-ea41ce8ad0c5-00-g8eiilou0duk.sisko.replit.dev"; // Base URL for API requests
