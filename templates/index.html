@@ -255,30 +255,43 @@
               <table class="results-table">
                   <thead>
                       <tr>
-                      <th>
-                        <div class="dropdown" id="sortDropdown">
-                          <button class="dropdown-toggle" onclick="toggleDropdown()">
-                            <i class="fa-solid fa-filter" style="color: #ffffff;"></i>
-                          </button>
-                          <div class="dropdown-menu">
-                            <!-- Price Sorting -->
-                            <button onclick="sortBy('price-asc')">Price: Low to High</button>
-                            <button onclick="sortBy('price-desc')">Price: High to Low</button>
-                            
-                            <!-- Horsepower Sorting -->
-                            <button onclick="sortBy('horsepower-desc')">Horsepower: High to Low</button>
-                            <button onclick="sortBy('horsepower-asc')">Horsepower: Low to High</button>
-                            
-                            <!-- NEW: Cargo Space Sorting -->
-                            <button onclick="sortBy('cargo-asc')">Cargo Space: Low to High</button>
-                            <button onclick="sortBy('cargo-desc')">Cargo Space: High to Low</button>
-                            
-                            <!-- NEW: Seating Capacity Sorting -->
-                            <button onclick="sortBy('seating-asc')">Seating: Low to High</button>
-                            <button onclick="sortBy('seating-desc')">Seating: High to Low</button>
-                          </div>
-                        </div>
-                      </th>
+                          <th>Brand</th>
+                          <th>Model</th>
+                          <th>Body Type</th>
+                          <th>Variant</th>
+                          <th>Drive Train</th>
+                          <th>Engine</th>
+                          <th>Horsepower</th>
+                          <th>Transmission</th>
+                          <th>Fuel Type</th>
+                          <th>Ground Clearance</th>
+                          <th>Cargo Space</th>
+                          <th>Seating Capacity</th>
+                          <th>Price</th>
+                          <th>
+                            <div class="dropdown" id="sortDropdown">
+                              <button class="dropdown-toggle" onclick="toggleDropdown()">
+                                <i class="fa-solid fa-filter" style="color: #ffffff;"></i>
+                              </button>
+                              <div class="dropdown-menu">
+                                <!-- Price Sorting -->
+                                <button onclick="sortBy('price-asc')">Price: Low to High</button>
+                                <button onclick="sortBy('price-desc')">Price: High to Low</button>
+                                
+                                <!-- Horsepower Sorting -->
+                                <button onclick="sortBy('horsepower-desc')">Horsepower: High to Low</button>
+                                <button onclick="sortBy('horsepower-asc')">Horsepower: Low to High</button>
+                                
+                                <!-- NEW: Cargo Space Sorting -->
+                                <button onclick="sortBy('cargo-asc')">Cargo Space: Low to High</button>
+                                <button onclick="sortBy('cargo-desc')">Cargo Space: High to Low</button>
+                                
+                                <!-- NEW: Seating Capacity Sorting -->
+                                <button onclick="sortBy('seating-asc')">Seating: Low to High</button>
+                                <button onclick="sortBy('seating-desc')">Seating: High to Low</button>
+                              </div>
+                            </div>
+                          </th>
                       </tr>
                   </thead>
                   <tbody id="car-specs">
