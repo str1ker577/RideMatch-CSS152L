@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, redirect, render_template, send_from_directory, session
+from flask import Flask, request, jsonify, redirect, render_template, send_from_directory, session, url_for
 from flask_cors import CORS 
 import pandas as pd
 import json
@@ -12,21 +12,62 @@ app = Flask(__name__)
 CORS(app)
 
 app.secret_key = os.environ.get('SECRET_KEY', 'fallback_secret_key')
-app.config.from_pyfile('config.py')
 
-cred = credentials.Certificate('serviceAccountKey.json')  # Initialize Firebase credentials
-print("✅ Firebase credentials initialized.")
-firebase_admin.initialize_app(cred)
+# Load configuration safely
+try:
+    app.config.from_pyfile('config.py')
+except:
+    print("⚠️ config.py not found, using environment variables")
 
-db = firestore.client()
+# Initialize Firebase safely
+try:
+    # Load serviceAccountKey.json
+    if 'SERVICE_ACCOUNT_KEY_JSON' in os.environ:
+        service_account = json.loads(os.environ['SERVICE_ACCOUNT_KEY_JSON'])
+        cred = credentials.Certificate(service_account)
+    else:
+        cred = credentials.Certificate('serviceAccountKey.json')
+    
+    print("✅ Firebase credentials initialized.")
+    firebase_admin.initialize_app(cred)
+    db = firestore.client()
+except Exception as e:
+    print(f"❌ Firebase initialization failed: {e}")
+    db = None
 
-# Load CSV data
-df = pd.read_csv('car_data.csv', encoding='utf-8')
+# Load Firebase config safely
+try:
+    if 'FIREBASE_CONFIG_JSON' in os.environ:
+        firebase_config = json.loads(os.environ['FIREBASE_CONFIG_JSON'])
+    else:
+        with open('firebaseConfig.json') as f:
+            firebase_config = json.load(f)
+    
+    api_key = firebase_config.get('apiKey')
+except Exception as e:
+    print(f"⚠️ Firebase config not loaded: {e}")
+    firebase_config = {}
+    api_key = None
 
-@app.route('/')  # Home route
+# Load CSV data safely
+try:
+    df = pd.read_csv('car_data.csv', encoding='utf-8')
+    
+    # Ensure all relevant columns are strings before extraction
+    df["Cargo_space"] = df["Cargo_space"].astype(str).str.extract("(\d+)", expand=False).astype(float)
+    df["Ground_Clearance"] = df["Ground_Clearance"].astype(str).str.extract("([\d.]+)", expand=False).astype(float)
+    df["Horsepower"] = df["Horsepower"].astype(str).str.extract("(\d+)", expand=False).astype(float)
+    df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
+    
+    print("✅ CSV data loaded successfully")
+except Exception as e:
+    print(f"❌ CSV loading failed: {e}")
+    df = pd.DataFrame()  # Empty dataframe as fallback
+
+@app.route('/')
 def home():
     print("🔍 Rendering home page.")
-    return render_template('index.html')  # Render the home page
+    return render_template('index.html')
 
 # Serve images from the "resources" folder
 @app.route('/resources/<path:filename>')
@@ -35,6 +76,9 @@ def serve_resources(filename):
 
 @app.route('/firebase-config')
 def get_firebase_config():
+    if not firebase_config:
+        return jsonify({"error": "Firebase config not available"}), 500
+    
     client_config = {
         'apiKey': firebase_config.get('apiKey'),
         'authDomain': firebase_config.get('authDomain'), 
@@ -48,8 +92,10 @@ def get_firebase_config():
 
 @app.route('/verify-token', methods=['POST'])
 def verify_token():
+    if not db:
+        return jsonify({"status": "error", "message": "Database not available"}), 500
+    
     try:
-        # Get the ID token from the request
         data = request.get_json()
         id_token = data.get('idToken')
         email = data.get('email')
@@ -57,11 +103,9 @@ def verify_token():
         if not id_token:
             return jsonify({"status": "error", "message": "No token provided"}), 400
         
-        # Verify the ID token with Firebase Admin SDK
         decoded_token = auth.verify_id_token(id_token)
         uid = decoded_token['uid']
         
-        # Create session
         session['user'] = uid
         session['email'] = email
         session['idToken'] = id_token
@@ -75,81 +119,61 @@ def verify_token():
         app.logger.error(f"Token verification failed: {str(e)}")
         return jsonify({"status": "error", "message": "Authentication failed"}), 500
 
+@app.route('/signup', methods=['POST'])
 def signup():
-    if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
+    if not db:
+        return jsonify({"status": "error", "message": "Database not available"}), 500
+    
+    email = request.form.get('email')
+    password = request.form.get('password')
 
-        if not email or not password:
-            return jsonify({"status": "error", "message": "All fields are required."}), 400
+    if not email or not password:
+        return jsonify({"status": "error", "message": "All fields are required."}), 400
 
-        try:
-            # Check if user already exists
-            user = auth.get_user_by_email(email)
-            return jsonify({"status": "error", "message": "Email already in use."}), 400
-        except firebase_admin.auth.UserNotFoundError:
-            pass  # Proceed with user creation if not found
+    try:
+        user = auth.get_user_by_email(email)
+        return jsonify({"status": "error", "message": "Email already in use."}), 400
+    except firebase_admin.auth.UserNotFoundError:
+        pass
 
-        try:
-            # Create a new user in Firebase Authentication
-            user = auth.create_user(
-                email=email,
-                password=password
-            )
-            app.logger.info("✅ User signed up successfully.")
+    try:
+        user = auth.create_user(email=email, password=password)
+        app.logger.info("✅ User signed up successfully.")
+        return jsonify({"status": "success", "message": "User signed up successfully! Please log in."}), 200
+    except Exception as e:
+        return jsonify({"status": "error", "message": f"Signup failed: {str(e)}"}), 400
 
-            return jsonify({"status": "success", "message": "User signed up successfully! Please log in."}), 200
-        except Exception as e:
-            return jsonify({"status": "error", "message": f"Signup failed: {str(e)}"}), 400
-
-
+@app.route('/login', methods=['POST'])
 def login():
-   if request.method == 'POST':
-        email = request.form.get('email')
-        password = request.form.get('password')
+    if not api_key:
+        return jsonify({"status": False, "message": "Authentication not configured"}), 500
+    
+    email = request.form.get('email')
+    password = request.form.get('password')
 
-        url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
-        payload = {
-            "email": email,
-            "password": password,
-            "returnSecureToken": True
-        }
+    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
+    payload = {
+        "email": email,
+        "password": password,
+        "returnSecureToken": True
+    }
 
-        response = requests.post(url, json=payload)
-        if response.status_code == 200:
-            user_data = response.json()
-            session['user'] = user_data['localId']  # Use Firebase UID
-            session['idToken'] = user_data['idToken']  # Store token for authentication
+    response = requests.post(url, json=payload)
+    if response.status_code == 200:
+        user_data = response.json()
+        session['user'] = user_data['localId']
+        session['idToken'] = user_data['idToken']
 
-            print("Logged in!")
-            return jsonify({"status": True, "message": "Welcome back, ", "email": email}), 200
-        else:
-            print("Incorrect password!")
-            return jsonify({"status": False, "message": "Incorrect credentials."}), 400
+        print("Logged in!")
+        return jsonify({"status": True, "message": "Welcome back, ", "email": email}), 200
+    else:
+        print("Incorrect password!")
+        return jsonify({"status": False, "message": "Incorrect credentials."}), 400
 
 @app.route('/logout', methods=['POST'])
 def logout():
-    session.clear()  # Clear server-side session
+    session.clear()
     return jsonify({"status": "success", "message": "Logged out successfully"}), 200
-
-
-#with open('firebaseConfig.json') as f:
-    firebase_config = json.load(f)
-    api_key = firebase_config.get('apiKey')  # Extract API key if available
-    
-# Load firebaseConfig.json
-if 'FIREBASE_CONFIG_JSON' in os.environ:
-    firebase_config = json.loads(os.environ['FIREBASE_CONFIG_JSON'])
-else:
-    with open('firebaseConfig.json') as f:
-        firebase_config = json.load(f)
-
-# Load serviceAccountKey.json
-if 'SERVICE_ACCOUNT_KEY_JSON' in os.environ:
-    service_account = json.loads(os.environ['SERVICE_ACCOUNT_KEY_JSON'])
-else:
-    with open('serviceAccountKey.json') as f:
-        service_account = json.load(f)
 
 @app.route('/about')
 def about():
@@ -173,7 +197,6 @@ def favourites():
 def testimonials():
     return render_template('testimonials.html')
 
-#Added new links for the new pages
 @app.route('/patches')
 def patches():
     return render_template('patches.html')
@@ -189,25 +212,18 @@ def forum():
 @app.route('/profile', methods=['GET', 'POST'])
 def profile():
     if 'user' not in session:
-        return redirect(url_for('home'))  # or show login popup
+        return redirect(url_for('home'))
     
     if request.method == 'POST':
-        # Handle profile picture upload in the future
         pass
     
     return render_template('profile.html')
 
-
-# Ensure all relevant columns are strings before extraction
-df["Cargo_space"] = df["Cargo_space"].astype(str).str.extract("(\d+)", expand=False).astype(float)
-df["Ground_Clearance"] = df["Ground_Clearance"].astype(str).str.extract("([\d.]+)", expand=False).astype(float)
-df["Horsepower"] = df["Horsepower"].astype(str).str.extract("(\d+)", expand=False).astype(float)
-
-# Ensure 'Price' is numeric
-df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
-
-@app.route('/get-faves', methods=['POST'])  # Get favorites route
+@app.route('/get-faves', methods=['POST'])
 def get_faves():
+    if not db:
+        return jsonify({"error": "Database not available"}), 500
+    
     if 'user' in session:
         user_id = session['user']
         favorites_ref = db.collection('users').document(user_id).collection('favorites')
@@ -217,14 +233,16 @@ def get_faves():
         for favorite in favorites:
             favorite_variants.append(favorite.to_dict())
 
-        return jsonify(favorite_variants)  # Return the list of favorite variants
+        return jsonify(favorite_variants)
+    return jsonify({"error": "Not logged in"}), 401
 
-@app.route('/get_cars', methods=['GET'])  # Get cars route
+@app.route('/get_cars', methods=['GET'])
 def get_cars():
-    # Debugging - Log received values
-    app.logger.info("\n🔍 Received Filters:")  # Log received filters
+    if df.empty:
+        return jsonify({"error": "Car data not available"}), 500
+    
+    app.logger.info("\n🔍 Received Filters:")
 
-    # Extract parameters safely with default values
     brand = request.args.get("brand", "").strip()
     model = request.args.get("model", "").strip()
     body_type = request.args.get("body_type", "").strip()
@@ -237,89 +255,78 @@ def get_cars():
     min_ground_clearance = request.args.get("min_ground_clearance", type=float, default=13.3)
     seating = request.args.get("seating", type=int, default=None)
 
-    filtered_df = df.copy()  # Create a copy of the DataFrame for filtering
+    filtered_df = df.copy()
 
-
-    # 🛠 Handle "Any" selection ("" means no filter applied)
-    if brand and brand.lower() not in ["any", "all brands"]:  # Filter by brand if specified
-
+    if brand and brand.lower() not in ["any", "all brands"]:
         filtered_df = filtered_df[filtered_df["Brand"].str.lower() == brand.lower()]
     
-    if model and model.lower() != "any":  # Filter by model if specified
-
+    if model and model.lower() != "any":
         filtered_df = filtered_df[filtered_df["Model"].str.lower() == model.lower()]
     
-    if body_type:  # Filter by body type if specified
-
+    if body_type:
         filtered_df = filtered_df[filtered_df["Body_Type"].str.lower() == body_type.lower()]
 
-    if drive_train:  # Filter by drive train if specified
-
+    if drive_train:
         filtered_df = filtered_df[filtered_df["Drive_Train"].str.lower().str.contains(drive_train.lower(), na=False)]
         
-    if transmission:  # Filter by transmission if specified
-
+    if transmission:
         filtered_df = filtered_df[filtered_df["Transmission"].str.lower() == transmission.lower()]
     
-    if fuel_type:  # Filter by fuel type if specified
-
+    if fuel_type:
         filtered_df = filtered_df[filtered_df["Fuel_Type"].str.lower().str.contains(fuel_type.lower(), na=False)]
 
-    # 🏎 Apply numerical filters
-    filtered_df = filtered_df[  # Apply numerical filters
+    filtered_df = filtered_df[
         (filtered_df["Horsepower"] >= min_hp) &
         (filtered_df["Cargo_space"] >= min_cargo) &
         (filtered_df["Price"] <= max_price) &
         (filtered_df["Ground_Clearance"] >= min_ground_clearance)
     ]
     
-    if seating is not None and seating > 0:  # Filter by seating capacity if specified
-
+    if seating is not None and seating > 0:
         filtered_df = filtered_df[filtered_df["Seating_Capacity"] == seating]
 
-
-    # Debugging: Print filtered results
     app.logger.info("\n📊 Filtered DataFrame:")
-
     print(filtered_df)
 
-    # Convert DataFrame to JSON
     filtered_cars = filtered_df.fillna("").to_dict(orient="records")
-
-    return jsonify(filtered_cars)  # Return the filtered cars as JSON
+    return jsonify(filtered_cars)
 
 @app.route('/get_all_models', methods=['GET'])
 def get_all_models():
-  models = df["Model"].unique().tolist()
-  return jsonify(models)
+    if df.empty:
+        return jsonify([])
+    models = df["Model"].unique().tolist()
+    return jsonify(models)
 
 @app.route('/get_models', methods=['GET'])
 def get_models():
+    if df.empty:
+        return jsonify([])
+    
     brand = request.args.get("brand", "").strip()
-
     if not brand:
-        return jsonify([])  # Return empty list if no brand is selected
+        return jsonify([])
 
-    # Get unique models for the selected brand
     models = df[df["Brand"].str.lower() == brand.lower()]["Model"].unique().tolist()
-
     return jsonify(models)
 
 @app.route('/get_variants', methods=['GET'])
 def get_variants():
+    if df.empty:
+        return jsonify([])
+    
     model = request.args.get("model", "").strip()
-
     if not model:
-        return jsonify([])  # Return empty list if no brand is selected
+        return jsonify([])
 
-    # Get unique models for the selected brand
     variants = df[df["Model"].str.lower() == model.lower()]["Variant"].unique().tolist()
-
     return jsonify(variants)
 
-IMAGE_FOLDER = os.path.join(app.static_folder, "resources")
-
 def find_colors(model):
+    IMAGE_FOLDER = os.path.join(app.static_folder, "resources")
+    if not os.path.exists(IMAGE_FOLDER):
+        return []
+    
     model = ''.join(e for e in model if e.isalnum())
     colors = []
     for filename in os.listdir(IMAGE_FOLDER):
@@ -329,7 +336,6 @@ def find_colors(model):
             colors.append({"color": color, "image_path": image_path})
     return colors
 
-    
 @app.route('/get_colors', methods=['GET'])
 def get_colors():
     model = request.args.get("model", "").strip()
@@ -337,26 +343,34 @@ def get_colors():
     return jsonify(colors)
 
 def find_car_image(model):
+    IMAGE_FOLDER = os.path.join(app.static_folder, "resources")
+    if not os.path.exists(IMAGE_FOLDER):
+        return "/static/resources/tesr.png"
+    
     model = ''.join(e for e in model if e.isalnum() or e == '_')
     print(model)
     for filename in os.listdir(IMAGE_FOLDER):
-        if filename.lower().startswith(model.lower()):  # Case-insensitive match
-            return f"/static/resources/{filename}"  # Return correct image path
-    return "/static/resources/tesr.png"  # Fallback image if no match is found
+        if filename.lower().startswith(model.lower()):
+            return f"/static/resources/{filename}"
+    return "/static/resources/tesr.png"
 
 @app.route('/get_specs', methods=['GET'])
 def get_specs():
-    variant = request.args.get("variant", "").strip()
-
-    if not variant:
-        return jsonify({})  # Return empty object if no variant is provided
-
-    # Filter the dataframe to get the specifications of the given variant
-    specs = df[df["Variant"].str.lower() == variant.lower()].iloc[0]
+    if df.empty:
+        return jsonify({"error": "Car data not available"}), 500
     
+    variant = request.args.get("variant", "").strip()
+    if not variant:
+        return jsonify({})
+
+    specs_df = df[df["Variant"].str.lower() == variant.lower()]
+    if specs_df.empty:
+        return jsonify({"error": "Variant not found"}), 404
+    
+    specs = specs_df.iloc[0]
     image_path = find_car_image(str(specs["Model"]))
     print(image_path)
-    # Create a dictionary with the required specifications
+    
     car_specs = {
         "Brand": str(specs["Brand"]),
         "Model": str(specs["Model"]),
@@ -377,34 +391,32 @@ def get_specs():
 
 @app.route('/toggle-fave', methods=['POST'])
 def toggle_fave():
+    if not db:
+        return jsonify({"error": "Database not available"}), 500
+    
     if 'user' in session:
         user_id = session['user']
-        variant = request.json.get('variant')  # Get the variant from the request
-        liked = request.json.get('liked')  # Get the liked status from the request
+        variant = request.json.get('variant')
+        liked = request.json.get('liked')
 
-        # Reference to the user's favorites in Firestore, ensuring user is logged in
         favorites_ref = db.collection('users').document(user_id).collection('favorites')
-
-        # Check if the variant is already in favorites
         existing_fave = favorites_ref.where('variant', '==', variant).get()
 
         if existing_fave:
-            # If it exists and liked is False, remove it
             if not liked:
                 for fave in existing_fave:
                     favorites_ref.document(fave.id).delete()
                 db.collection('users').document(user_id).update({'favourites': firestore.ArrayRemove([variant])})
-                return jsonify({"status": "removed", "variant": variant, "liked": False}), 200  # Return status of removal
+                return jsonify({"status": "removed", "variant": variant, "liked": False}), 200
         else:
-            # If it doesn't exist and liked is True, add it
             if liked:
                 favorites_ref.add({'variant': variant})
-                return jsonify({"status": "added", "variant": variant, "liked": True}), 200  # Return status of addition
+                return jsonify({"status": "added", "variant": variant, "liked": True}), 200
 
-        return jsonify({"status": "no change", "variant": variant, "liked": liked}), 200  # Return status if no change
+        return jsonify({"status": "no change", "variant": variant, "liked": liked}), 200
     else:
-        return jsonify({"error": "User not logged in"}), 401  # Return error if user is not logged in
+        return jsonify({"error": "User not logged in"}), 401
 
-#if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8000))  # Get Railway's assigned port
-    app.run(host="0.0.0.0", port=port, debug=True)
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    app.run(host="0.0.0.0", port=port, debug=False)  # Set debug=False for production
