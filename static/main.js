@@ -4,7 +4,7 @@
 
 
 const isLocalhost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
-const baseUrl = isLocalhost ? 'http://127.0.0.1:5000' : window.location.origin;
+const baseUrl = isLocalhost ? 'http://127.0.0.1:8000' : window.location.origin;
 
 // Firebase initialization 
 let auth; // Global auth object
