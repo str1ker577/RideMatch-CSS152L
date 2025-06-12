@@ -585,21 +585,21 @@ header{
     backdrop-filter: blur(18px);
     overflow: hidden;
 }
+
 /* Results Frame - Initially Hidden */
-    #results-frame {
-        display: none;
-    }
+#results-frame {
+    display: none;
+}
 
-    #results-frame.visible {
-        display: block;
-    }
+#results-frame.visible {
+    display: block;
+}
 
-
-/* ✅ Ensures table layout consistency */
+/* ✅ Ensures table layout consistency - REMOVED fixed layout for better column adaptation */
 table {
     width: 100%;
     border-collapse: collapse;
-    table-layout: fixed;
+    /* Removed table-layout: fixed to allow columns to size naturally */
 }
 
 /* ✅ Scrollable Table Wrapper */
@@ -631,20 +631,22 @@ table {
 .table-header table,
 .results-table {
     width: 100%;
-    table-layout: fixed;
     border-collapse: collapse;
+    /* Removed table-layout: fixed for better column sizing */
 }
 
-/* ✅ Styling for Table Header */
+/* ✅ Styling for Table Header and Body - IMPROVED TEXT HANDLING */
 .table-header th,
 .results-table td {
-    padding: 12px;
+    padding: 12px 8px; /* Reduced horizontal padding for more space */
     text-align: center;
-    font-size: 16px;
-    height: 50px;
-    white-space: nowrap; /* Prevents text from wrapping */
-    overflow: hidden;
-    text-overflow: ellipsis; /* Adds "..." if text is too long */
+    font-size: 14px; /* Slightly smaller font for more content visibility */
+    min-height: 50px;
+    /* REMOVED white-space: nowrap to allow text wrapping */
+    /* REMOVED text-overflow: ellipsis to show full content */
+    word-wrap: break-word; /* Allow long words to break */
+    overflow-wrap: break-word; /* Better word breaking support */
+    vertical-align: middle; /* Center content vertically */
 }
 
 /* ✅ Keep table header visible */
@@ -661,14 +663,17 @@ table {
 
 /* ✅ Ensure header cells match body width */
 .results-table thead th {
-    padding: 12px;
+    padding: 12px 8px;
     text-align: center;
-    font-size: 16px;
-    height: 50px;
+    font-size: 14px;
+    min-height: 50px;
     background: var(--second-color);
     position: sticky;
     top: 0;
     z-index: 40;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    vertical-align: middle;
 }
 
 /* ✅ Table Body Styling */
@@ -677,56 +682,141 @@ table {
     backdrop-filter: blur(18px);
 }
 
-/* ✅ Column Adjustments */
+/* ✅ Improved Column Adjustments - Set optimal widths for better content display */
 .results-table th,
 .results-table td {
-    white-space: nowrap; /* Prevents text wrapping */
-    padding: 10px;
+    /* Allow natural column sizing based on content */
+    padding: 10px 6px;
     text-align: center;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
 }
 
-/* ✅ Adjust Key Column Widths to Prevent Overlap */
+/* ✅ Specific column width optimizations */
+.results-table th:nth-child(1), /* Brand */
+.results-table td:nth-child(1) {
+    min-width: 80px;
+    width: 8%;
+}
+
+.results-table th:nth-child(2), /* Model */
+.results-table td:nth-child(2) {
+    min-width: 80px;
+    width: 8%;
+}
+
+.results-table th:nth-child(3), /* Body Type */
+.results-table td:nth-child(3) {
+    min-width: 80px;
+    width: 8%;
+}
+
 .results-table th:nth-child(4), /* Variant */
-.results-table td:nth-child(4),
+.results-table td:nth-child(4) {
+    min-width: 120px;
+    width: 12%;
+}
+
+.results-table th:nth-child(5), /* Drive Train */
+.results-table td:nth-child(5) {
+    min-width: 70px;
+    width: 7%;
+}
+
 .results-table th:nth-child(6), /* Engine */
-.results-table td:nth-child(6),
+.results-table td:nth-child(6) {
+    min-width: 100px;
+    width: 10%;
+}
+
+.results-table th:nth-child(7), /* Horsepower */
+.results-table td:nth-child(7) {
+    min-width: 80px;
+    width: 8%;
+}
+
 .results-table th:nth-child(8), /* Transmission */
 .results-table td:nth-child(8) {
-    min-width: 150px; /* Ensures enough space */
+    min-width: 110px;
+    width: 11%;
 }
 
-/* ✅ Reduce width of last column (Like button) */
+.results-table th:nth-child(9), /* Fuel Type */
+.results-table td:nth-child(9) {
+    min-width: 80px;
+    width: 8%;
+}
+
+.results-table th:nth-child(10), /* Ground Clearance */
+.results-table td:nth-child(10) {
+    min-width: 90px;
+    width: 9%;
+}
+
+.results-table th:nth-child(11), /* Cargo Space */
+.results-table td:nth-child(11) {
+    min-width: 80px;
+    width: 8%;
+}
+
+.results-table th:nth-child(12), /* Seating Capacity */
+.results-table td:nth-child(12) {
+    min-width: 80px;
+    width: 8%;
+}
+
+.results-table th:nth-child(13), /* Price */
+.results-table td:nth-child(13) {
+    min-width: 100px;
+    width: 10%;
+    font-weight: bold;
+}
+
+/* ✅ FIXED: Filter dropdown column - reduced width and removed centering issues */
 .results-table th:last-child,
 .results-table td:last-child {
-    width: 50px; /* Makes it smaller */
+    width: 40px; /* Minimal width for filter button */
+    min-width: 40px;
+    padding: 8px 4px;
 }
 
 /* ✅ Minimal Scrollbar Styling */
 .results-inner-frame::-webkit-scrollbar,
-.table-header::-webkit-scrollbar {
+.table-header::-webkit-scrollbar,
+.table-container::-webkit-scrollbar {
     height: 6px;
+    width: 6px;
 }
 
 .results-inner-frame::-webkit-scrollbar-thumb,
-.table-header::-webkit-scrollbar-thumb {
+.table-header::-webkit-scrollbar-thumb,
+.table-container::-webkit-scrollbar-thumb {
     background: #b49b66;
     border-radius: 3px;
 }
 
 .results-inner-frame::-webkit-scrollbar-track,
-.table-header::-webkit-scrollbar-track {
+.table-header::-webkit-scrollbar-track,
+.table-container::-webkit-scrollbar-track {
     background: rgba(255, 255, 255, 0.2);
 }
 
-/* ✅ Ensure Responsiveness */
+/* ✅ Ensure Responsiveness - Set minimum table width to prevent crushing */
 @media (max-width: 768px) {
-    .results-inner-frame {
+    .results-inner-frame,
+    .table-container {
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
     }
 
     table {
-        min-width: 1000px;
+        min-width: 1200px; /* Increased to accommodate all columns properly */
+    }
+    
+    .results-table th,
+    .results-table td {
+        font-size: 12px;
+        padding: 8px 4px;
     }
 }
 
@@ -773,46 +863,62 @@ table {
     margin: 5px 0;
 }
 
+/* ✅ IMPROVED DROPDOWN STYLING - Fixed positioning and centering issues */
 .dropdown {
-  position: relative;
-  display: inline-block;
+    position: relative;
+    display: inline-block;
+    width: 100%; /* Take full width of cell */
 }
 
 .dropdown-toggle {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: white;
-  font-size: 1rem;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: white;
+    font-size: 1rem;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 .dropdown-menu {
     display: none;
     position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
+    right: 0; /* FIXED: Align to right edge instead of centering */
+    top: 100%;
     margin-top: 8px;
     background: white;
     backdrop-filter: blur(18px);
     border: 2px solid #b49b66;
     border-radius: 10px;
-    min-width: 180px;
+    min-width: 200px; /* Adequate width for menu items */
     padding: 8px 0;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-    z-index: 10;
+    z-index: 1000; /* Higher z-index to ensure it appears above everything */
     flex-direction: column;
+    white-space: nowrap; /* Prevent menu text from wrapping */
+}
+
+/* ✅ Adjust dropdown position on smaller screens */
+@media (max-width: 768px) {
+    .dropdown-menu {
+        right: -50px; /* Slight adjustment for mobile */
+        min-width: 180px;
+    }
 }
 
 .dropdown-menu button {
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  padding: 10px 15px;
-  cursor: pointer;
-  color: black;
-  font-weight: 500;
-  display: block;
+    background: none;
+    border: none;
+    width: 100%;
+    text-align: left;
+    padding: 10px 15px;
+    cursor: pointer;
+    color: black;
+    font-weight: 500;
+    display: block;
+    white-space: nowrap;
 }
 
 .dropdown-menu button:hover {
@@ -823,7 +929,21 @@ table {
 
 /* Use JS class toggle instead of hover */
 .dropdown.open .dropdown-menu {
-  display: flex;
+    display: flex;
+}
+
+/* ✅ Add alternating row colors for better readability */
+.results-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.results-table tbody tr:nth-child(odd) {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.results-table tbody tr:hover {
+    background: rgba(180, 155, 102, 0.1);
+    transition: background 0.2s ease;
 }
 
 /****************/
