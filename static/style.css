@@ -787,20 +787,21 @@ table {
 }
 
 .dropdown-menu {
-  display: none;
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: 8px;
-  background: rgba(255, 255, 255, 0.4); /* Frosted white */
-  backdrop-filter: blur(12px);
-  border: 2px solid #b49b66;
-  border-radius: 10px;
-  min-width: 180px;
-  padding: 8px 0;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  z-index: 10;
-  flex-direction: column;
+    display: none;
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-top: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(18px);
+    border: 2px solid #b49b66;
+    border-radius: 10px;
+    min-width: 180px;
+    padding: 8px 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    z-index: 10;
+    flex-direction: column;
 }
 
 .dropdown-menu button {
