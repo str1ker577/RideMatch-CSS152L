@@ -332,8 +332,11 @@ def get_cars():
     
     app.logger.info("🔍 Processing car filter request")
     app.logger.info(f"Request args: {dict(request.args)}")
+    app.logger.info(f"DataFrame shape: {df.shape}")
+    app.logger.info(f"DataFrame columns: {list(df.columns)}")
 
     try:
+        # Get filter parameters
         brand = request.args.get("brand", "").strip()
         model = request.args.get("model", "").strip()
         body_type = request.args.get("body_type", "").strip()
@@ -346,51 +349,110 @@ def get_cars():
         min_ground_clearance = request.args.get("min_ground_clearance", type=float, default=13.3)
         seating = request.args.get("seating", type=int, default=None)
 
+        app.logger.info(f"Filter parameters: brand={brand}, model={model}, body_type={body_type}")
+        app.logger.info(f"Numeric filters: min_hp={min_hp}, min_cargo={min_cargo}, max_price={max_price}, min_ground_clearance={min_ground_clearance}, seating={seating}")
+
         filtered_df = df.copy()
         initial_count = len(filtered_df)
+        app.logger.info(f"Starting with {initial_count} cars")
 
+        # Check data types and sample values
+        app.logger.info(f"Horsepower dtype: {filtered_df['Horsepower'].dtype}")
+        app.logger.info(f"Cargo_space dtype: {filtered_df['Cargo_space'].dtype}")
+        app.logger.info(f"Ground_Clearance dtype: {filtered_df['Ground_Clearance'].dtype}")
+        app.logger.info(f"Price dtype: {filtered_df['Price'].dtype}")
+        
+        # Sample values
+        app.logger.info(f"Sample Horsepower values: {filtered_df['Horsepower'].head().tolist()}")
+        app.logger.info(f"Sample Cargo_space values: {filtered_df['Cargo_space'].head().tolist()}")
+        app.logger.info(f"Sample Ground_Clearance values: {filtered_df['Ground_Clearance'].head().tolist()}")
+        app.logger.info(f"Sample Price values: {filtered_df['Price'].head().tolist()}")
+
+        # Apply filters step by step
         if brand and brand.lower() not in ["any", "all brands"]:
+            app.logger.info(f"Applying brand filter: {brand}")
+            app.logger.info(f"Available brands: {filtered_df['Brand'].unique().tolist()}")
             filtered_df = filtered_df[filtered_df["Brand"].str.lower() == brand.lower()]
             app.logger.info(f"After brand filter: {len(filtered_df)} cars")
         
         if model and model.lower() != "any":
+            app.logger.info(f"Applying model filter: {model}")
+            app.logger.info(f"Available models: {filtered_df['Model'].unique().tolist()}")
             filtered_df = filtered_df[filtered_df["Model"].str.lower() == model.lower()]
             app.logger.info(f"After model filter: {len(filtered_df)} cars")
         
         if body_type:
+            app.logger.info(f"Applying body type filter: {body_type}")
+            app.logger.info(f"Available body types: {filtered_df['Body_Type'].unique().tolist()}")
             filtered_df = filtered_df[filtered_df["Body_Type"].str.lower() == body_type.lower()]
             app.logger.info(f"After body type filter: {len(filtered_df)} cars")
 
         if drive_train:
+            app.logger.info(f"Applying drive train filter: {drive_train}")
+            app.logger.info(f"Available drive trains: {filtered_df['Drive_Train'].unique().tolist()}")
             filtered_df = filtered_df[filtered_df["Drive_Train"].str.lower().str.contains(drive_train.lower(), na=False)]
             app.logger.info(f"After drive train filter: {len(filtered_df)} cars")
             
         if transmission:
+            app.logger.info(f"Applying transmission filter: {transmission}")
+            app.logger.info(f"Available transmissions: {filtered_df['Transmission'].unique().tolist()}")
             filtered_df = filtered_df[filtered_df["Transmission"].str.lower() == transmission.lower()]
             app.logger.info(f"After transmission filter: {len(filtered_df)} cars")
         
         if fuel_type:
+            app.logger.info(f"Applying fuel type filter: {fuel_type}")
+            app.logger.info(f"Available fuel types: {filtered_df['Fuel_Type'].unique().tolist()}")
             filtered_df = filtered_df[filtered_df["Fuel_Type"].str.lower().str.contains(fuel_type.lower(), na=False)]
             app.logger.info(f"After fuel type filter: {len(filtered_df)} cars")
 
+        # Apply numeric filters
+        app.logger.info("Applying numeric filters...")
+        
+        # Check for NaN values before filtering
+        nan_hp = filtered_df["Horsepower"].isna().sum()
+        nan_cargo = filtered_df["Cargo_space"].isna().sum()
+        nan_price = filtered_df["Price"].isna().sum()
+        nan_clearance = filtered_df["Ground_Clearance"].isna().sum()
+        
+        app.logger.info(f"NaN values - HP: {nan_hp}, Cargo: {nan_cargo}, Price: {nan_price}, Clearance: {nan_clearance}")
+        
+        # Apply numeric filters with proper handling of NaN values
+        before_numeric = len(filtered_df)
         filtered_df = filtered_df[
+            (filtered_df["Horsepower"].notna()) &
+            (filtered_df["Cargo_space"].notna()) &
+            (filtered_df["Price"].notna()) &
+            (filtered_df["Ground_Clearance"].notna()) &
             (filtered_df["Horsepower"] >= min_hp) &
             (filtered_df["Cargo_space"] >= min_cargo) &
             (filtered_df["Price"] <= max_price) &
             (filtered_df["Ground_Clearance"] >= min_ground_clearance)
         ]
-        app.logger.info(f"After numeric filters: {len(filtered_df)} cars")
+        app.logger.info(f"After numeric filters: {len(filtered_df)} cars (removed {before_numeric - len(filtered_df)} cars)")
         
         if seating is not None and seating > 0:
+            app.logger.info(f"Applying seating filter: {seating}")
+            app.logger.info(f"Available seating capacities: {filtered_df['Seating_Capacity'].unique().tolist()}")
             filtered_df = filtered_df[filtered_df["Seating_Capacity"] == seating]
             app.logger.info(f"After seating filter: {len(filtered_df)} cars")
 
+        # Convert to JSON
+        app.logger.info("Converting to JSON...")
         filtered_cars = filtered_df.fillna("").to_dict(orient="records")
+        
         app.logger.info(f"✅ Returning {len(filtered_cars)} filtered cars")
+        
+        # Log first car if any results
+        if filtered_cars:
+            app.logger.info(f"Sample result: {filtered_cars[0]}")
+            
         return jsonify(filtered_cars)
         
     except Exception as e:
         app.logger.error(f"Error filtering cars: {e}")
+        app.logger.error(f"Exception type: {type(e)}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to filter cars: {str(e)}"}), 500
 
 @app.route('/get_all_models', methods=['GET'])
