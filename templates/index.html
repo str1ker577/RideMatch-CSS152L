@@ -268,7 +268,18 @@
                           <th>Cargo Space</th>
                           <th>Seating Capacity</th>
                           <th>Price</th>
-                          <th></th>
+                          <th>
+                              <div class="dropdown">
+                                <button class="dropdown-toggle">
+                                  <i class="fa-regular fa-filter" style="color: #ffffff;"></i>
+                                </button>
+                                <ul class="dropdown-menu">
+                                  <li><button data-sort="price-asc">Price: Low to High</button></li>
+                                  <li><button data-sort="price-desc">Price: High to Low</button></li>
+                                  <li><button data-sort="horsepower-desc">Horsepower: High to Low</button></li>
+                                </ul>
+                              </div>
+                          </th>
                       </tr>
                   </thead>
                   <tbody id="car-specs">
@@ -280,7 +291,6 @@
       </div>
   </div>
 </div>
-
 
     <footer>
         <div class="footer-container">

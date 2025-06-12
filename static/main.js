@@ -3,8 +3,8 @@
 //////////////////////
 
 
-const baseUrl = window.location.origin; // Base URL for API requests
-//const baseUrl = `http://127.0.0.1:5000`; // Base URL for API requests
+const isLocalhost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
+const baseUrl = isLocalhost ? 'http://127.0.0.1:5000' : window.location.origin;
 
 // Firebase initialization 
 let auth; // Global auth object
@@ -487,6 +487,14 @@ document.addEventListener("DOMContentLoaded", function () {
     updateSliderValue("horsepower", "HP", false);
     updateSliderValue("seating", "seats", false);
 
+});
+
+document.querySelectorAll(".dropdown-menu button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const sortType = btn.getAttribute("data-sort");
+    console.log("Sorting by:", sortType);
+    // Add your sorting logic here based on sortType
+  });
 });
 
 
