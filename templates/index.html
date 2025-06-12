@@ -269,16 +269,17 @@
                           <th>Seating Capacity</th>
                           <th>Price</th>
                           <th>
-                              <div class="dropdown">
-                                <button class="dropdown-toggle">
-                                  <i class="fa-regular fa-filter" style="color: #ffffff;"></i>
-                                </button>
-                                <ul class="dropdown-menu">
-                                  <li><button data-sort="price-asc">Price: Low to High</button></li>
-                                  <li><button data-sort="price-desc">Price: High to Low</button></li>
-                                  <li><button data-sort="horsepower-desc">Horsepower: High to Low</button></li>
-                                </ul>
+                            <div class="dropdown">
+                              <button class="dropdown-toggle">
+                                <i class="fa-solid fa-filter" style="color: #ffffff;"></i>
+                              </button>
+                              <div class="dropdown-menu">
+                                <button onclick="sortBy('price-asc')">Price: Low to High</button>
+                                <button onclick="sortBy('price-desc')">Price: High to Low</button>
+                                <button onclick="sortBy('horsepower-desc')">Horsepower: High to Low</button>
+                                <button onclick="sortBy('horsepower-asc')">Horsepower: Low to High</button>
                               </div>
+                            </div>
                           </th>
                       </tr>
                   </thead>
