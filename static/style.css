@@ -816,8 +816,7 @@ table {
 }
 
 .dropdown-menu button:hover {
-  background-color: rgba(180, 155, 102, 0.2);
-  color: #333;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
 /* Use JS class toggle instead of hover */
