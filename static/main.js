@@ -10,6 +10,7 @@ const baseUrl = isLocalhost ? 'http://127.0.0.1:8000' : window.location.origin;
 let auth; // Global auth object
 let userName = null; // Keep your existing userName variable
 let currentCarData = []; // Global variable to store current car data for sorting
+let defaultCarsLoaded = false;
 //const baseUrl = "https://a7cbb3da-2928-4d18-ba75-ea41ce8ad0c5-00-g8eiilou0duk.sisko.replit.dev"; // Base URL for API requests
 
 // Get elements for toggling sidebar and menu button
@@ -322,7 +323,6 @@ function updateSliderValue(id, unit = "", isCurrency = false) {
 
 
 async function applyFilters() {
-
     console.log("apply filters clicked");
 
     const brand = document.getElementById("brand").value.trim().toLowerCase();
@@ -333,23 +333,13 @@ async function applyFilters() {
     const fuelType = document.getElementById("fuel-type").value.trim().toLowerCase(); 
     const minHp = parseFloat(document.getElementById("horsepower").value) || 50;
     const minCargo = parseFloat(document.getElementById("cargo-space").value) || 100;
-    const maxPrice = parseFloat(document.getElementById("price").value) || 3000000; // Use slider value as max price
+    const maxPrice = parseFloat(document.getElementById("price").value) || 3000000;
     const minGroundClearance = parseFloat(document.getElementById("ground-clearance").value) || 2;
     const seating = parseInt(document.getElementById("seating").value) || 0;
 
     console.log("🚀 Filters Applied:");
-    console.log("Starting applyFilters function..."); // Added debugging log
     console.log("Brand:", brand);
     console.log("Model:", model);
-    console.log("Body Type:", bodyType);
-    console.log("Drive Train:", driveTrain);
-    console.log("Transmission:", transmission);
-    console.log("Fuel Type:", fuelType);
-    console.log("Min HP:", minHp);
-    console.log("Min Cargo Space:", minCargo);
-    console.log("Min Ground Clearance:", minGroundClearance);
-    console.log("Min Seating Capacity:", seating);
-    console.log("Brand:", brand);
     console.log("Body Type:", bodyType);
     console.log("Drive Train:", driveTrain);
     console.log("Transmission:", transmission);
@@ -360,41 +350,47 @@ async function applyFilters() {
     console.log("Min Ground Clearance:", minGroundClearance);
     console.log("Min Seating Capacity:", seating);
 
-    // Render API Link //
-    const url = new URL(`${baseUrl}/get_cars`);//
+    // Check if any filters are applied (not default values)
+    const hasFilters = brand || model || bodyType || driveTrain || transmission || fuelType || 
+                      minHp > 50 || minCargo > 100 || maxPrice < 3000000 || 
+                      minGroundClearance > 2 || seating > 0;
+
+    // If no filters are applied, load default cars
+    if (!hasFilters) {
+        console.log("No filters applied, loading default cars");
+        loadDefaultCars();
+        return;
+    }
+
+    // Render API Link with filters
+    const url = new URL(`${baseUrl}/get_cars`);
     
-    if (brand) url.searchParams.append("brand", brand.charAt(0).toUpperCase() + brand.slice(1)); // Append brand filter if specified
-
+    if (brand) url.searchParams.append("brand", brand.charAt(0).toUpperCase() + brand.slice(1));
     if (model) url.searchParams.append("model", model.charAt(0).toUpperCase() + model.slice(1));
-
-    if (bodyType) url.searchParams.append("body_type", bodyType.charAt(0).toUpperCase() + bodyType.slice(1)); // Append body type filter if specified
-
-    if (driveTrain) url.searchParams.append("drive_train", driveTrain.charAt(0).toUpperCase() + driveTrain.slice(1)); // Append drive train filter if specified
-
-    if (transmission) url.searchParams.append("transmission", transmission.charAt(0).toUpperCase() + transmission.slice(1)); // Append transmission filter if specified
-
-    if (fuelType) url.searchParams.append("fuel_type", fuelType.charAt(0).toUpperCase() + fuelType.slice(1)); // Append fuel type filter if specified
+    if (bodyType) url.searchParams.append("body_type", bodyType.charAt(0).toUpperCase() + bodyType.slice(1));
+    if (driveTrain) url.searchParams.append("drive_train", driveTrain.charAt(0).toUpperCase() + driveTrain.slice(1));
+    if (transmission) url.searchParams.append("transmission", transmission.charAt(0).toUpperCase() + transmission.slice(1));
+    if (fuelType) url.searchParams.append("fuel_type", fuelType.charAt(0).toUpperCase() + fuelType.slice(1));
 
     url.searchParams.append("min_hp", minHp);
     url.searchParams.append("min_cargo", minCargo);
-    url.searchParams.append("max_price", maxPrice); // Updated to max_price
+    url.searchParams.append("max_price", maxPrice);
     url.searchParams.append("min_ground_clearance", minGroundClearance);
     url.searchParams.append("seating", seating);
 
-
-    console.log("📤 Sending request to:", url.href); // Log the request URL
-
+    console.log("📤 Sending request to:", url.href);
 
     try {
-    const response = await fetch(url); // Fetch data from the constructed URL
-
+        const response = await fetch(url);
         const data = await response.json();
         console.log("📥 Received data:", data);
+        
         if (data.length === 0) {
             console.warn("⚠️ No cars found for given filters.");
             alert("No matching cars found. Please try different filters.");
         } else {
             displayFilteredCars(data);
+            defaultCarsLoaded = true; // Set flag to true after any successful data load
         }
     } catch (error) {
         console.error("🚨 Error fetching data:", error);
@@ -686,6 +682,57 @@ function resetAllFilters() {
     updateSliderValue("ground-clearance", "cm", false);
 }
 
+function refreshResults() {
+    console.log("Refreshing results...");
+    
+    // Add visual feedback - rotate animation
+    const refreshIcon = document.querySelector('.refresh-icon');
+    if (refreshIcon) {
+        refreshIcon.style.transform = 'rotate(360deg)';
+        
+        // Reset the rotation after animation
+        setTimeout(() => {
+            refreshIcon.style.transform = 'rotate(0deg)';
+        }, 550);
+    }
+    
+    // Reset all filter inputs to their default values
+    resetAllFilters();
+    
+    // If default cars haven't been loaded yet, just reset filters and return
+    if (!defaultCarsLoaded) {
+        console.log("No default cars loaded yet, just resetting filters");
+        return;
+    }
+    
+    // If default cars have been loaded, show all cars again
+    console.log("Loading default car list...");
+    loadDefaultCars();
+}
+
+// New function to load all cars by default
+async function loadDefaultCars() {
+    console.log("Loading default cars...");
+    
+    try {
+        // Fetch all cars without any filters
+        const response = await fetch(`${baseUrl}/get_cars`);
+        const data = await response.json();
+        
+        console.log("📥 Received default data:", data);
+        
+        if (data.length === 0) {
+            console.warn("⚠️ No cars found in database.");
+            alert("No cars available in the database.");
+        } else {
+            displayFilteredCars(data);
+            defaultCarsLoaded = true; // Set flag to true after loading default cars
+        }
+    } catch (error) {
+        console.error("🚨 Error fetching default cars:", error);
+        alert("An error occurred while fetching cars. Please try again later.");
+    }
+}
 
 //////////////////////
 // COMPARE Function //
