@@ -120,7 +120,7 @@
   </header>
   
 <div class="calculator-container">
-        <h1 class="calculator-title">🚗💰 Car Affordability Calculator</h1>
+        <h1 class="calculator-title">Car Affordability Calculator</h1>
         
         <form id="price-calculator-form" onsubmit="event.preventDefault(); calculateAffordability();">
             <div class="calculator-form">
@@ -238,19 +238,22 @@
 
     <style>
         .calculator-container {
-            max-width: 800px;
-            margin: 2rem auto;
-            padding: 2rem;
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            width: 70%; /* Adjust the width as necessary */
+            margin: 50px auto;
+            margin-top: 10%;
+            padding: 20px;
+            border: 2px solid #b49b66;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            background: rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(18px);
         }
         
         .calculator-title {
             text-align: center;
-            color: #333;
-            margin-bottom: 2rem;
-            font-size: 2rem;
+            margin-bottom: 20px;
+            color: #b49b66;
+            font-size: 24px;
         }
         
         .calculator-form {
@@ -262,7 +265,7 @@
             background: #f8f9fa;
             padding: 1.5rem;
             border-radius: 8px;
-            border-left: 4px solid #007bff;
+            border-left: 4px solid #b49b66;
         }
         
         .section-title {
@@ -307,7 +310,7 @@
         
         input:focus, select:focus {
             outline: none;
-            border-color: #007bff;
+            border-color: #b49b66;
         }
         
         .input-group {
@@ -340,7 +343,7 @@
         }
         
         .calculate-btn {
-            background: linear-gradient(135deg, #007bff, #0056b3);
+            background: linear-gradient(135deg, #b49b66, #0056b3);
             color: white;
             padding: 1rem 2rem;
             border: none;
@@ -418,7 +421,7 @@
         }
         
         .info-tooltip {
-            color: #007bff;
+            color: #b49b66;
             cursor: help;
             font-size: 0.9rem;
         }
