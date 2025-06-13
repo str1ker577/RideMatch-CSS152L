@@ -119,8 +119,337 @@
 </div>
   </header>
   
+<div class="calculator-container">
+        <h1 class="calculator-title">🚗💰 Car Affordability Calculator</h1>
+        
+        <form id="price-calculator-form" onsubmit="event.preventDefault(); calculateAffordability();">
+            <div class="calculator-form">
+                
+                <!-- Income Section -->
+                <div class="form-section">
+                    <h3 class="section-title">💼 Income Information</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="monthly-income">
+                                Monthly Income 
+                                <span class="info-tooltip" title="Your gross monthly salary or income">ℹ️</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-prefix">₱</span>
+                                <input type="number" id="monthly-income" class="input-with-prefix" 
+                                       placeholder="50000" min="0" step="1000">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="income-ratio">
+                                Income Ratio for Car Payment
+                                <span class="info-tooltip" title="Recommended: 20-30% of monthly income">ℹ️</span>
+                            </label>
+                            <div class="input-group">
+                                <input type="number" id="income-ratio" class="input-with-suffix" 
+                                       value="30" min="10" max="50" step="5">
+                                <span class="input-suffix">%</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="calculation-preview" class="calculation-preview"></div>
+                </div>
+                
+                <!-- Savings Section -->
+                <div class="form-section">
+                    <h3 class="section-title">💳 Available Budget</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="total-savings">
+                                Total Savings/Cash Available
+                                <span class="info-tooltip" title="Total amount you can pay upfront (optional if using loan)">ℹ️</span>
+                            </label>
+                            <div class="input-group">
+                                <span class="input-prefix">₱</span>
+                                <input type="number" id="total-savings" class="input-with-prefix" 
+                                       placeholder="200000" min="0" step="10000">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="down-payment">
+                                Down Payment Percentage
+                                <span class="info-tooltip" title="Typical range: 20-30%">ℹ️</span>
+                            </label>
+                            <select id="down-payment">
+                                <option value="10">10%</option>
+                                <option value="15">15%</option>
+                                <option value="20" selected>20%</option>
+                                <option value="25">25%</option>
+                                <option value="30">30%</option>
+                                <option value="40">40%</option>
+                                <option value="50">50%</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Loan Section -->
+                <div class="form-section">
+                    <h3 class="section-title">🏦 Loan Terms</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="interest-rate">
+                                Annual Interest Rate
+                                <span class="info-tooltip" title="Average car loan rate in PH: 6-8%">ℹ️</span>
+                            </label>
+                            <div class="input-group">
+                                <input type="number" id="interest-rate" class="input-with-suffix" 
+                                       value="6.5" min="0" max="20" step="0.1">
+                                <span class="input-suffix">%</span>
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label for="loan-term">Loan Term</label>
+                            <select id="loan-term">
+                                <option value="1">1 year</option>
+                                <option value="2">2 years</option>
+                                <option value="3">3 years</option>
+                                <option value="4">4 years</option>
+                                <option value="5" selected>5 years</option>
+                                <option value="6">6 years</option>
+                                <option value="7">7 years</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                
+                <button type="submit" class="calculate-btn">
+                    Calculate What I Can Afford 🧮
+                </button>
+            </div>
+        </form>
+        
+        <!-- Results Section -->
+        <div id="calculator-results" style="display: none;"></div>
+    </div>
 
+    <!-- Include your existing results table structure here -->
+    <div id="results-frame" class="results-frame" style="display: none;">
+        <!-- Your existing car results table -->
+    </div>
 
+    <style>
+        .calculator-container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        
+        .calculator-title {
+            text-align: center;
+            color: #333;
+            margin-bottom: 2rem;
+            font-size: 2rem;
+        }
+        
+        .calculator-form {
+            display: grid;
+            gap: 1.5rem;
+        }
+        
+        .form-section {
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        
+        .section-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 1rem;
+        }
+        
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group.full-width {
+            grid-column: span 2;
+        }
+        
+        label {
+            font-weight: 600;
+            color: #555;
+            margin-bottom: 0.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        input, select {
+            padding: 0.75rem;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+        
+        .input-group {
+            position: relative;
+        }
+        
+        .input-prefix {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            font-weight: bold;
+        }
+        
+        .input-with-prefix {
+            padding-left: 2rem;
+        }
+        
+        .input-suffix {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+        }
+        
+        .input-with-suffix {
+            padding-right: 2rem;
+        }
+        
+        .calculate-btn {
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-top: 1rem;
+        }
+        
+        .calculate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+        }
+        
+        .affordability-result {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+            padding: 2rem;
+            border-radius: 12px;
+            margin-top: 2rem;
+            text-align: center;
+        }
+        
+        .main-result {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .price-highlight {
+            font-size: 2rem;
+            font-weight: bold;
+            display: block;
+            margin-top: 0.5rem;
+        }
+        
+        .calculation-method {
+            font-size: 1.1rem;
+            margin-bottom: 1rem;
+            opacity: 0.9;
+        }
+        
+        .calc-detail {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 0.5rem 1rem;
+            margin: 0.5rem 0;
+            border-radius: 6px;
+            text-align: left;
+        }
+        
+        .action-buttons {
+            margin-top: 1.5rem;
+        }
+        
+        .view-cars-btn, .reset-calc-btn {
+            padding: 0.75rem 1.5rem;
+            margin: 0 0.5rem;
+            border: 2px solid white;
+            background: transparent;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        
+        .view-cars-btn:hover {
+            background: white;
+            color: #28a745;
+        }
+        
+        .reset-calc-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .info-tooltip {
+            color: #007bff;
+            cursor: help;
+            font-size: 0.9rem;
+        }
+        
+        .calculation-preview {
+            font-style: italic;
+            color: #666;
+            margin-top: 0.5rem;
+        }
+        
+        @media (max-width: 768px) {
+            .form-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .calculator-container {
+                margin: 1rem;
+                padding: 1rem;
+            }
+            
+            .action-buttons {
+                display: flex;
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .view-cars-btn, .reset-calc-btn {
+                margin: 0;
+            }
+        }
+    </style>
     <footer>
         <div class="footer-container">
             <div class="footer-section">

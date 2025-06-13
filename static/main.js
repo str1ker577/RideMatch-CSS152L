@@ -1,6 +1,6 @@
-//////////////////////
-//Side Menu Function//
-//////////////////////
+////////////////////////
+//Global Functionality//
+///////////////////////
 
 
 const isLocalhost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
@@ -13,7 +13,9 @@ let currentCarData = []; // Global variable to store current car data for sortin
 let defaultCarsLoaded = false;
 //const baseUrl = "https://a7cbb3da-2928-4d18-ba75-ea41ce8ad0c5-00-g8eiilou0duk.sisko.replit.dev"; // Base URL for API requests
 
-// Get elements for toggling sidebar and menu button
+//////////////////////
+//Side Menu Function//
+//////////////////////
 
 const menuButton = document.getElementById('menu-button');
 const closeButton = document.getElementById('close-button');
@@ -64,6 +66,10 @@ document.addEventListener('click', function(event) {
         popup.classList.remove('active');
     });
 });
+
+/////////////////////////
+//Firebase Related Code//
+////////////////////////
 
 // Initialize Firebase when the page loads
 async function initializeFirebase() {
@@ -135,6 +141,11 @@ async function initializeFirebase() {
     }
 }
 
+///////////////////////////////////////
+//Denies access to users to the User //
+// Profile Page, unless signed in    //
+///////////////////////////////////////
+
 function handleUserIconClick() {
     if (userName) {
         window.location.href = '/profile';
@@ -167,8 +178,10 @@ function handleLogout() {
     }
 }
 
+////////////////////
+//Sing Up Function//
+////////////////////
 
-// REPLACE your existing handleSignup function with this:
 function handleSignup(event) {
     event.preventDefault();
     const email = document.querySelector('input[name="email_signup"]').value;
@@ -202,7 +215,9 @@ function handleSignup(event) {
         });
 }
 
-// REPLACE your existing handleLogin function with this:
+///////////////////
+//Login  Function//
+////////s//////////
 function handleLogin(event) {
     event.preventDefault();
     const email = document.querySelector('input[name="email"]').value;
@@ -275,6 +290,10 @@ function getFirebaseErrorMessage(errorCode) {
     }
 }
 
+/////////////////////////
+//Formats the CSV file //
+//data to be readable  //
+////////////////////////
 function parseCSV(data) {
     const lines = data.split('\n');
     const result = [];
@@ -321,6 +340,9 @@ function updateSliderValue(id, unit = "", isCurrency = false) {
     }
 }
 
+//////////////////////
+//Filtering Function//
+//////////////////////
 
 async function applyFilters() {
     console.log("apply filters clicked");
@@ -398,6 +420,10 @@ async function applyFilters() {
     }
 }
 
+//////////////////////////////// 
+//Shows the filtered Results //
+//////////////////////////////
+
 function displayFilteredCars(data) {
     console.log("📊 Displaying cars data:", data);
 
@@ -466,6 +492,11 @@ function displayFilteredCars(data) {
     console.log("✅ Table updated successfully!");
 }
 
+/////////////////////////////////
+//Adds corresponding Icon to  // 
+// the appropriate Car Type  //
+//////////////////////////////
+
 function getFuelTypeIcon(fuelType) {
     if (!fuelType || fuelType === "N/A") return "";
     
@@ -484,9 +515,10 @@ function getFuelTypeIcon(fuelType) {
         return ""; // No icon for unknown fuel types
     }
 }
-////////////////////////////////////
-//When Filter is button is Pressed//
+
 //////////////////////////////////////
+//When Filter is button is Pressed //
+////////////////////////////////////
 
 
 document.addEventListener("DOMContentLoaded", function () {
@@ -618,6 +650,9 @@ function sortBy(type) {
     dropdown.classList.remove("open");
 } 
 
+///////////////////////////
+//reset Filter Function //
+/////////////////////////
 
 function refreshResults() {
     console.log("Refreshing results...");
@@ -734,9 +769,9 @@ async function loadDefaultCars() {
     }
 }
 
-//////////////////////
+///////////////////////
 // COMPARE Function //
-//////////////////////
+/////////////////////
 
 // Function to populate models based on selected brand
 async function populateModels() {
@@ -877,6 +912,11 @@ async function compareCars() {
     container.appendChild(carColumn);
 }
 
+//////////////////////////////////
+// Shows corresponding models  //
+// when a specific brand is   //
+// selected by the user      //
+//////////////////////////////
 
 async function populateModels() {
     const selectedBrand = document.getElementById('brand').value;
@@ -907,6 +947,12 @@ async function populateModels() {
     }
 }
 
+///////////////////////////////////////////
+// Shows the corresponding variants     //
+// when a specific model is selected   //
+// by the user                        //
+///////////////////////////////////////
+
 async function populateVariants() {
     const selectedModel = document.getElementById('model').value;
     if (!selectedModel) return; // Exit if no model is selected
@@ -927,9 +973,9 @@ async function populateVariants() {
 }
 
 
-///////////////////////
+////////////////////////
 //FAVOURITES Function//
-///////////////////////
+//////////////////////
 async function addToFave(event, variant) {
 
     const isLiked = event.target.classList.contains('fa-solid');
@@ -952,6 +998,12 @@ async function addToFave(event, variant) {
     }
 
 }
+
+/////////////////////
+//Loads the users // 
+// Favorite cars //
+//////////////////
+
 async function loadFavorites() {
     console.log("function favorites is running")
 
@@ -1014,6 +1066,12 @@ async function loadFavorites() {
     }
 }
 
+//////////////////////////////
+//Allows users to change   //
+// the color of the car   //
+// image being displayed //
+//////////////////////////
+
 async function populateColors(model) {
     const selectedModel = model;
     if (!selectedModel) return; // Exit if no model is selected
@@ -1042,6 +1100,12 @@ async function populateColors(model) {
         document.querySelector(".img-fave-frame img").src = imageUrl;
     });
 }
+
+////////////////////////////////
+//Allows users to print      //
+// or save the favorite     //
+// car specs as a pdf copy //
+////////////////////////////
 
 function printPopup() {
     const printContent = document.getElementById("printable-popup").innerHTML;
@@ -1081,3 +1145,312 @@ function printPopup() {
     document.body.innerHTML = originalContent;
     location.reload(); // Reload to restore event listeners
 }
+
+
+//////////////////////
+//PRICE CALCULATOR  //
+//////////////////////
+
+// Price Calculator Function
+function calculateAffordability() {
+    console.log("Calculating affordability...");
+    
+    // Get input values
+    const monthlyIncome = parseFloat(document.getElementById("monthly-income").value) || 0;
+    const totalSavings = parseFloat(document.getElementById("total-savings").value) || 0;
+    const downPaymentPercent = parseFloat(document.getElementById("down-payment").value) || 20;
+    const interestRate = parseFloat(document.getElementById("interest-rate").value) || 6.5;
+    const loanTermYears = parseInt(document.getElementById("loan-term").value) || 5;
+    const incomeRatio = parseFloat(document.getElementById("income-ratio").value) || 30;
+    
+    console.log("Input values:", {
+        monthlyIncome,
+        totalSavings,
+        downPaymentPercent,
+        interestRate,
+        loanTermYears,
+        incomeRatio
+    });
+    
+    // Validation
+    if (monthlyIncome <= 0 && totalSavings <= 0) {
+        alert("Please enter either your monthly income or total savings.");
+        return;
+    }
+    
+    let maxCarPrice = 0;
+    let calculationMethod = "";
+    
+    // Method 1: Based on Monthly Income (Loan Calculation)
+    if (monthlyIncome > 0) {
+        const maxMonthlyPayment = (monthlyIncome * incomeRatio) / 100;
+        const monthlyInterestRate = (interestRate / 100) / 12;
+        const totalPayments = loanTermYears * 12;
+        
+        // Calculate maximum loan amount using loan formula
+        let maxLoanAmount = 0;
+        if (monthlyInterestRate > 0) {
+            maxLoanAmount = maxMonthlyPayment * 
+                ((1 - Math.pow(1 + monthlyInterestRate, -totalPayments)) / monthlyInterestRate);
+        } else {
+            // If interest rate is 0
+            maxLoanAmount = maxMonthlyPayment * totalPayments;
+        }
+        
+        // Calculate down payment based on loan amount
+        const downPaymentAmount = (maxLoanAmount * downPaymentPercent) / (100 - downPaymentPercent);
+        maxCarPrice = maxLoanAmount + downPaymentAmount;
+        calculationMethod = "loan";
+        
+        console.log("Loan calculation:", {
+            maxMonthlyPayment,
+            maxLoanAmount,
+            downPaymentAmount,
+            maxCarPrice
+        });
+    }
+    
+    // Method 2: Based on Total Savings (Cash Purchase)
+    if (totalSavings > 0) {
+        const cashMaxPrice = totalSavings;
+        
+        // Use the lower of the two methods if both are provided
+        if (maxCarPrice > 0) {
+            maxCarPrice = Math.min(maxCarPrice, cashMaxPrice);
+            calculationMethod = maxCarPrice === cashMaxPrice ? "cash" : "loan";
+        } else {
+            maxCarPrice = cashMaxPrice;
+            calculationMethod = "cash";
+        }
+    }
+    
+    // Display results
+    displayAffordabilityResults(maxCarPrice, calculationMethod, {
+        monthlyIncome,
+        totalSavings,
+        downPaymentPercent,
+        interestRate,
+        loanTermYears,
+        incomeRatio
+    });
+    
+    // Filter cars based on calculated price
+    filterCarsByPrice(maxCarPrice);
+}
+
+// Display calculation results
+function displayAffordabilityResults(maxPrice, method, inputs) {
+    const resultsDiv = document.getElementById("calculator-results");
+    
+    if (!resultsDiv) {
+        console.error("Calculator results div not found");
+        return;
+    }
+    
+    let methodText = "";
+    let additionalInfo = "";
+    
+    if (method === "loan" && inputs.monthlyIncome > 0) {
+        const maxMonthlyPayment = (inputs.monthlyIncome * inputs.incomeRatio) / 100;
+        methodText = `Based on your monthly income of ₱${inputs.monthlyIncome.toLocaleString()}`;
+        additionalInfo = `
+            <div class="calc-detail">
+                <strong>Maximum Monthly Payment:</strong> ₱${maxMonthlyPayment.toLocaleString()}
+            </div>
+            <div class="calc-detail">
+                <strong>Loan Term:</strong> ${inputs.loanTermYears} years at ${inputs.interestRate}% interest
+            </div>
+            <div class="calc-detail">
+                <strong>Down Payment:</strong> ${inputs.downPaymentPercent}%
+            </div>
+        `;
+    } else if (method === "cash") {
+        methodText = `Based on your total savings of ₱${inputs.totalSavings.toLocaleString()}`;
+        additionalInfo = `<div class="calc-detail"><strong>Payment Method:</strong> Cash Purchase</div>`;
+    }
+    
+    resultsDiv.innerHTML = `
+        <div class="affordability-result">
+            <h3>💰 Affordability Calculator Results</h3>
+            <div class="main-result">
+                <strong>Maximum Car Price You Can Afford:</strong>
+                <span class="price-highlight">₱${Math.floor(maxPrice).toLocaleString()}</span>
+            </div>
+            <div class="calculation-method">
+                ${methodText}
+            </div>
+            ${additionalInfo}
+            <div class="action-buttons">
+                <button onclick="showAffordableCars(${maxPrice})" class="view-cars-btn">
+                    View Affordable Cars
+                </button>
+                <button onclick="resetCalculator()" class="reset-calc-btn">
+                    Reset Calculator
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Show the results section
+    resultsDiv.style.display = "block";
+}
+
+// Filter cars by calculated maximum price
+async function filterCarsByPrice(maxPrice) {
+    console.log(`Filtering cars with max price: ₱${maxPrice.toLocaleString()}`);
+    
+    try {
+        // Use your existing API endpoint with price filter
+        const url = new URL(`${baseUrl}/get_cars`);
+        url.searchParams.append("max_price", Math.floor(maxPrice));
+        
+        console.log("📤 Sending price filter request to:", url.href);
+        
+        const response = await fetch(url);
+        const data = await response.json();
+        
+        console.log("📥 Received affordable cars data:", data);
+        
+        if (data.length === 0) {
+            alert("No cars found within your budget. Try adjusting your parameters or consider a higher budget.");
+        } else {
+            // Update the global car data for sorting
+            currentCarData = data;
+            
+            // Display the filtered cars
+            displayFilteredCars(data);
+            
+            // Update the results frame title to show it's filtered by budget
+            const resultsFrame = document.getElementById("results-frame");
+            if (resultsFrame) {
+                const existingTitle = resultsFrame.querySelector('h2') || resultsFrame.querySelector('.results-title');
+                if (existingTitle) {
+                    existingTitle.textContent = `Cars Within Your Budget (₱${Math.floor(maxPrice).toLocaleString()} or less)`;
+                }
+            }
+            
+            defaultCarsLoaded = true;
+        }
+    } catch (error) {
+        console.error("🚨 Error fetching affordable cars:", error);
+        alert("An error occurred while fetching affordable cars. Please try again later.");
+    }
+}
+
+// Show affordable cars (called from results button)
+function showAffordableCars(maxPrice) {
+    // Scroll to results if they exist, otherwise filter cars
+    const resultsFrame = document.getElementById("results-frame");
+    
+    if (resultsFrame && resultsFrame.style.display === "block") {
+        // Results already showing, just scroll to them
+        resultsFrame.scrollIntoView({ behavior: 'smooth' });
+    } else {
+        // Filter and show cars
+        filterCarsByPrice(maxPrice);
+        
+        // Scroll to results after a short delay to allow for rendering
+        setTimeout(() => {
+            if (resultsFrame) {
+                resultsFrame.scrollIntoView({ behavior: 'smooth' });
+            }
+        }, 500);
+    }
+}
+
+// Reset calculator form
+function resetCalculator() {
+    // Reset all input fields
+    document.getElementById("monthly-income").value = "";
+    document.getElementById("total-savings").value = "";
+    document.getElementById("down-payment").value = "20";
+    document.getElementById("interest-rate").value = "6.5";
+    document.getElementById("loan-term").value = "5";
+    document.getElementById("income-ratio").value = "30";
+    
+    // Hide results
+    const resultsDiv = document.getElementById("calculator-results");
+    if (resultsDiv) {
+        resultsDiv.style.display = "none";
+        resultsDiv.innerHTML = "";
+    }
+    
+    // Clear any filtered results
+    const resultsFrame = document.getElementById("results-frame");
+    if (resultsFrame) {
+        resultsFrame.style.display = "none";
+        resultsFrame.classList.remove("active");
+    }
+    
+    // Clear car data
+    currentCarData = [];
+    const resultsBody = document.getElementById("car-specs");
+    if (resultsBody) {
+        resultsBody.innerHTML = "";
+    }
+    
+    console.log("Calculator reset successfully");
+}
+
+// Add event listeners for real-time calculation (optional)
+function setupCalculatorListeners() {
+    const inputs = [
+        "monthly-income",
+        "total-savings", 
+        "down-payment",
+        "interest-rate",
+        "loan-term",
+        "income-ratio"
+    ];
+    
+    inputs.forEach(inputId => {
+        const element = document.getElementById(inputId);
+        if (element) {
+            element.addEventListener("input", debounce(updateCalculationPreview, 500));
+        }
+    });
+}
+
+// Debounce function to prevent too many calculations
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Optional: Show live preview of affordability (without full calculation)
+function updateCalculationPreview() {
+    const monthlyIncome = parseFloat(document.getElementById("monthly-income").value) || 0;
+    const incomeRatio = parseFloat(document.getElementById("income-ratio").value) || 30;
+    
+    if (monthlyIncome > 0) {
+        const maxMonthlyPayment = (monthlyIncome * incomeRatio) / 100;
+        const previewDiv = document.getElementById("calculation-preview");
+        
+        if (previewDiv) {
+            previewDiv.innerHTML = `
+                <small>Preview: Max monthly payment ≈ ₱${maxMonthlyPayment.toLocaleString()}</small>
+            `;
+        }
+    }
+}
+
+// Initialize calculator when DOM loads (add to your existing DOMContentLoaded)
+document.addEventListener("DOMContentLoaded", function () {
+    // Your existing code...
+    
+    // Add calculator setup
+    setupCalculatorListeners();
+    
+    // Reset calculator on page load
+    const calculatorForm = document.getElementById("price-calculator-form");
+    if (calculatorForm) {
+        resetCalculator();
+    }
+});
