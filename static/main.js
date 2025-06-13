@@ -446,8 +446,13 @@ function displayFilteredCars(data) {
         <td>${car.Engine || "N/A"}</td>
         <td>${car.Horsepower ? car.Horsepower + " hp" : "N/A"}</td>
         <td>${car.Transmission || "N/A"}</td>
-        <td style="display: flex; align-items: center; justify-content: flex-start;">
-            ${car.Fuel_Type || "N/A"}${fuelTypeIcon}
+        <td>
+            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                <span>${car.Fuel_Type || "N/A"}</span>
+                <span style="display: inline-flex; width: 20px; justify-content: center;">
+                    ${fuelTypeIcon}
+                </span>
+            </div>
         </td>
         <td>${car.Ground_Clearance ? car.Ground_Clearance + " cm" : "N/A"}</td>
         <td>${car.Cargo_space ? car.Cargo_space + " L" : "N/A"}</td>
@@ -464,24 +469,22 @@ function displayFilteredCars(data) {
 
     console.log("✅ Table updated successfully!");
 }
-
 function getFuelTypeIcon(fuelType) {
     if (!fuelType || fuelType === "N/A") return "";
     
     const fuelTypeLower = fuelType.toLowerCase();
     
-    switch (fuelTypeLower) {
-        case 'electric':
-            return '<i class="fa-regular fa-bolt" style="color: #b49b66; margin-left: 8px;"></i>';
-        case 'gas':
-        case 'gasoline':
-            return '<i class="fa-solid fa-gas-pump" style="color: #a63e1a; margin-left: 8px;"></i>';
-        case 'diesel':
-            return '<i class="fa-solid fa-oil-can" style="color: #5e5e5e; margin-left: 8px;"></i>';
-        case 'hybrid':
-            return '<i class="fa-solid fa-recycle" style="color: #6ca966; margin-left: 8px;"></i>';
-        default:
-            return ""; // No icon for unknown fuel types
+    // Check if fuel type contains specific keywords
+    if (fuelTypeLower.includes('electric')) {
+        return '<i class="fa-solid fa-bolt" style="color: #b49b66;"></i>';
+    } else if (fuelTypeLower.includes('gas') || fuelTypeLower.includes('gasoline')) {
+        return '<i class="fa-solid fa-gas-pump" style="color: #a63e1a;"></i>';
+    } else if (fuelTypeLower.includes('diesel')) {
+        return '<i class="fa-solid fa-oil-can" style="color: #5e5e5e;"></i>';
+    } else if (fuelTypeLower.includes('hybrid')) {
+        return '<i class="fa-solid fa-recycle" style="color: #6ca966;"></i>';
+    } else {
+        return ""; // No icon for unknown fuel types
     }
 }
 
