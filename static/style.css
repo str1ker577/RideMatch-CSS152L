@@ -820,6 +820,39 @@ table {
     }
 }
 
+/* Results title container with flex layout */
+.results-title-container {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    padding: 0 1rem;
+}
+
+.results-title {
+    margin: 0;
+    flex: 1;
+}
+
+/* Refresh icon styling matching your sidebar icons */
+.refresh-icon {
+    padding: 1.25rem 1rem;
+    font-size: 2rem;
+    color: var(--second-color);
+    cursor: pointer;
+    transition: all .55s ease;
+    border-radius: 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.refresh-icon:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--box-shadow);
+    background-color: rgba(180, 155, 102, 0.1);
+}
+
 /* ✅ Title Styling */
 .results-title {
     text-align: center;

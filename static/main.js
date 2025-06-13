@@ -623,6 +623,70 @@ function sortBy(type) {
 } 
 
 
+function refreshResults() {
+    console.log("Refreshing results...");
+    
+    // Add visual feedback - rotate animation
+    const refreshIcon = document.querySelector('.refresh-icon');
+    refreshIcon.style.transform = 'rotate(360deg)';
+    
+    // Reset the rotation after animation
+    setTimeout(() => {
+        refreshIcon.style.transform = 'rotate(0deg)';
+    }, 550);
+    
+    // Clear current results and reset filters
+    currentCarData = [];
+    const resultsBody = document.getElementById("car-specs");
+    if (resultsBody) {
+        resultsBody.innerHTML = "";
+    }
+    
+    // Hide results frame
+    const resultsFrame = document.getElementById("results-frame");
+    if (resultsFrame) {
+        resultsFrame.style.display = "none";
+        resultsFrame.classList.remove("active");
+    }
+    
+    // Reset all filter inputs to their default values
+    resetAllFilters();
+    
+    console.log("Results refreshed and filters reset!");
+}
+
+// Helper function to reset all filters
+function resetAllFilters() {
+    // Reset dropdowns
+    document.getElementById("brand").value = "";
+    document.getElementById("model").value = "";
+    document.getElementById("body-type").value = "";
+    document.getElementById("drive-train").value = "";
+    document.getElementById("transmission").value = "";
+    document.getElementById("fuel-type").value = "";
+    
+    // Reset sliders to their initial values
+    const priceSlider = document.getElementById("price");
+    const horsepowerSlider = document.getElementById("horsepower");
+    const seatingSlider = document.getElementById("seating");
+    const cargoSlider = document.getElementById("cargo-space");
+    const groundClearanceSlider = document.getElementById("ground-clearance");
+    
+    if (priceSlider) priceSlider.value = priceSlider.max;
+    if (horsepowerSlider) horsepowerSlider.value = horsepowerSlider.min;
+    if (seatingSlider) seatingSlider.value = "0";
+    if (cargoSlider) cargoSlider.value = cargoSlider.min;
+    if (groundClearanceSlider) groundClearanceSlider.value = groundClearanceSlider.min;
+    
+    // Update slider display values
+    updateSliderValue("price", "", true);
+    updateSliderValue("horsepower", "HP", false);
+    updateSliderValue("seating", "seats", false);
+    updateSliderValue("cargo-space", "L", false);
+    updateSliderValue("ground-clearance", "cm", false);
+}
+
+
 //////////////////////
 // COMPARE Function //
 //////////////////////
