@@ -447,9 +447,9 @@ function displayFilteredCars(data) {
         <td>${car.Horsepower ? car.Horsepower + " hp" : "N/A"}</td>
         <td>${car.Transmission || "N/A"}</td>
         <td>
-            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
-                <span>${car.Fuel_Type || "N/A"}</span>
-                <span style="display: inline-flex; width: 20px; justify-content: center;">
+            <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 15px;">
+                <span style="flex: 1; text-align: center;">${car.Fuel_Type || "N/A"}</span>
+                <span style="width: 20px; display: flex; justify-content: center;">
                     ${fuelTypeIcon}
                 </span>
             </div>
@@ -469,25 +469,25 @@ function displayFilteredCars(data) {
 
     console.log("✅ Table updated successfully!");
 }
+
 function getFuelTypeIcon(fuelType) {
     if (!fuelType || fuelType === "N/A") return "";
     
     const fuelTypeLower = fuelType.toLowerCase();
     
-    // Check if fuel type contains specific keywords
-    if (fuelTypeLower.includes('electric')) {
+    // Check for hybrid FIRST (priority order matters!)
+    if (fuelTypeLower.includes('hybrid')) {
+        return '<i class="fa-solid fa-recycle" style="color: #6ca966;"></i>';
+    } else if (fuelTypeLower.includes('electric')) {
         return '<i class="fa-solid fa-bolt" style="color: #b49b66;"></i>';
-    } else if (fuelTypeLower.includes('gas') || fuelTypeLower.includes('gasoline')) {
-        return '<i class="fa-solid fa-gas-pump" style="color: #a63e1a;"></i>';
     } else if (fuelTypeLower.includes('diesel')) {
         return '<i class="fa-solid fa-oil-can" style="color: #5e5e5e;"></i>';
-    } else if (fuelTypeLower.includes('hybrid')) {
-        return '<i class="fa-solid fa-recycle" style="color: #6ca966;"></i>';
+    } else if (fuelTypeLower.includes('gas') || fuelTypeLower.includes('gasoline')) {
+        return '<i class="fa-solid fa-gas-pump" style="color: #a63e1a;"></i>';
     } else {
         return ""; // No icon for unknown fuel types
     }
 }
-
 ////////////////////////////////////
 //When Filter is button is Pressed//
 //////////////////////////////////////
