@@ -1454,3 +1454,34 @@ document.addEventListener("DOMContentLoaded", function () {
         resetCalculator();
     }
 });
+
+function calculateMaxAffordableCarPrice() {
+    const income = parseFloat(document.getElementById("monthly-income").value) || 0;
+    const savings = parseFloat(document.getElementById("total-savings").value) || 0;
+    const downPaymentPercent = parseFloat(document.getElementById("down-payment").value) || 20;
+    const interestRate = parseFloat(document.getElementById("interest-rate").value) || 6.5;
+    const loanTermYears = parseInt(document.getElementById("loan-term").value) || 5;
+    const incomeRatio = parseFloat(document.getElementById("income-ratio").value) || 30;
+
+    const loanMonths = loanTermYears * 12;
+    const maxMonthlyPayment = (income * incomeRatio) / 100;
+
+    // Loan amount before interest (simple calculation)
+    const loanAmount = maxMonthlyPayment * loanMonths;
+
+    // Approximate car price by dividing by (1 - downPayment%)
+    const carPriceFromLoan = loanAmount / (1 - (downPaymentPercent / 100));
+
+    // Total available price = savings + what loan can cover
+    const maxAffordablePrice = Math.round(carPriceFromLoan);
+
+    // Show results
+    const resultsDiv = document.getElementById("calculator-results");
+    if (resultsDiv) {
+        resultsDiv.style.display = "block";
+        resultsDiv.innerHTML = `<strong>Max car price you can afford:</strong> ₱${maxAffordablePrice.toLocaleString()}`;
+    }
+
+    // Pass it to the function that shows results
+    showAffordableCars(maxAffordablePrice);
+}
