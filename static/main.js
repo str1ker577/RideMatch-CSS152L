@@ -1473,7 +1473,7 @@ function calculateMaxAffordableCarPrice() {
     const carPriceFromLoan = loanAmount / (1 - (downPaymentPercent / 100));
 
     // Total available price = savings + what loan can cover
-    const maxAffordablePrice = Math.round(carPriceFromLoan);
+    const maxAffordablePrice = Math.round(carPriceFromLoan + savings);
 
     // Show results
     const resultsDiv = document.getElementById("calculator-results");
