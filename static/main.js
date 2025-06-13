@@ -1180,6 +1180,8 @@ function calculateAffordability() {
     
     let maxCarPrice = 0;
     let calculationMethod = "";
+    let loanBasedPrice = 0;
+    let savingsBasedPrice = 0;
     
     // Method 1: Based on Monthly Income (Loan Calculation)
     if (monthlyIncome > 0) {
@@ -1197,32 +1199,66 @@ function calculateAffordability() {
             maxLoanAmount = maxMonthlyPayment * totalPayments;
         }
         
-        // Calculate down payment based on loan amount
-        const downPaymentAmount = (maxLoanAmount * downPaymentPercent) / (100 - downPaymentPercent);
-        maxCarPrice = maxLoanAmount + downPaymentAmount;
-        calculationMethod = "loan";
+        // Calculate total car price (loan + down payment)
+        // If loan amount is L and down payment is D%, then:
+        // Total Price = Loan Amount / (1 - Down Payment %)
+        loanBasedPrice = maxLoanAmount / (1 - (downPaymentPercent / 100));
         
         console.log("Loan calculation:", {
             maxMonthlyPayment,
             maxLoanAmount,
-            downPaymentAmount,
-            maxCarPrice
+            downPaymentAmount: loanBasedPrice - maxLoanAmount,
+            loanBasedPrice
         });
     }
     
-    // Method 2: Based on Total Savings (Cash Purchase)
+    // Method 2: Based on Total Savings
     if (totalSavings > 0) {
-        const cashMaxPrice = totalSavings;
-        
-        // Use the lower of the two methods if both are provided
-        if (maxCarPrice > 0) {
-            maxCarPrice = Math.min(maxCarPrice, cashMaxPrice);
-            calculationMethod = maxCarPrice === cashMaxPrice ? "cash" : "loan";
+        if (monthlyIncome > 0) {
+            // If both income and savings are provided, savings can be used as down payment
+            // Calculate max car price where savings covers the down payment
+            savingsBasedPrice = totalSavings / (downPaymentPercent / 100);
+            
+            console.log("Savings calculation (with financing):", {
+                totalSavings,
+                downPaymentPercent,
+                savingsBasedPrice
+            });
         } else {
-            maxCarPrice = cashMaxPrice;
-            calculationMethod = "cash";
+            // If only savings provided, assume cash purchase
+            savingsBasedPrice = totalSavings;
+            
+            console.log("Savings calculation (cash only):", {
+                totalSavings,
+                savingsBasedPrice
+            });
         }
     }
+    
+    // Determine final max car price and method
+    if (loanBasedPrice > 0 && savingsBasedPrice > 0) {
+        // Both methods available - use the more restrictive (lower) one
+        if (loanBasedPrice <= savingsBasedPrice) {
+            maxCarPrice = loanBasedPrice;
+            calculationMethod = "loan";
+        } else {
+            maxCarPrice = savingsBasedPrice;
+            calculationMethod = monthlyIncome > 0 ? "savings_limited" : "cash";
+        }
+    } else if (loanBasedPrice > 0) {
+        maxCarPrice = loanBasedPrice;
+        calculationMethod = "loan";
+    } else if (savingsBasedPrice > 0) {
+        maxCarPrice = savingsBasedPrice;
+        calculationMethod = monthlyIncome > 0 ? "savings_limited" : "cash";
+    }
+    
+    console.log("Final calculation:", {
+        loanBasedPrice,
+        savingsBasedPrice,
+        maxCarPrice,
+        calculationMethod
+    });
     
     // Display results
     displayAffordabilityResults(maxCarPrice, calculationMethod, {
@@ -1231,7 +1267,9 @@ function calculateAffordability() {
         downPaymentPercent,
         interestRate,
         loanTermYears,
-        incomeRatio
+        incomeRatio,
+        loanBasedPrice,
+        savingsBasedPrice
     });
     
     // Filter cars based on calculated price
@@ -1249,21 +1287,54 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
     
     let methodText = "";
     let additionalInfo = "";
+    let limitingFactor = "";
     
-    if (method === "loan" && inputs.monthlyIncome > 0) {
+    if (method === "loan") {
         const maxMonthlyPayment = (inputs.monthlyIncome * inputs.incomeRatio) / 100;
+        const downPaymentAmount = maxPrice * (inputs.downPaymentPercent / 100);
+        const loanAmount = maxPrice - downPaymentAmount;
+        
         methodText = `Based on your monthly income of ₱${inputs.monthlyIncome.toLocaleString()}`;
         additionalInfo = `
             <div class="calc-detail">
                 <strong>Maximum Monthly Payment:</strong> ₱${maxMonthlyPayment.toLocaleString()}
             </div>
             <div class="calc-detail">
-                <strong>Loan Term:</strong> ${inputs.loanTermYears} years at ${inputs.interestRate}% interest
+                <strong>Loan Amount:</strong> ₱${loanAmount.toLocaleString()}
             </div>
             <div class="calc-detail">
-                <strong>Down Payment:</strong> ${inputs.downPaymentPercent}%
+                <strong>Down Payment Needed:</strong> ₱${downPaymentAmount.toLocaleString()} (${inputs.downPaymentPercent}%)
+            </div>
+            <div class="calc-detail">
+                <strong>Loan Term:</strong> ${inputs.loanTermYears} years at ${inputs.interestRate}% interest
             </div>
         `;
+        
+        if (inputs.totalSavings > 0 && inputs.savingsBasedPrice < inputs.loanBasedPrice) {
+            limitingFactor = `<div class="limiting-factor">⚠️ Your savings limit your purchase to ₱${Math.floor(inputs.savingsBasedPrice).toLocaleString()}</div>`;
+        }
+        
+    } else if (method === "savings_limited") {
+        const downPaymentAmount = maxPrice * (inputs.downPaymentPercent / 100);
+        const loanAmount = maxPrice - downPaymentAmount;
+        const maxMonthlyPayment = (inputs.monthlyIncome * inputs.incomeRatio) / 100;
+        
+        methodText = `Limited by your savings of ₱${inputs.totalSavings.toLocaleString()} for down payment`;
+        additionalInfo = `
+            <div class="calc-detail">
+                <strong>Down Payment:</strong> ₱${downPaymentAmount.toLocaleString()} (${inputs.downPaymentPercent}%)
+            </div>
+            <div class="calc-detail">
+                <strong>Loan Amount:</strong> ₱${loanAmount.toLocaleString()}
+            </div>
+            <div class="calc-detail">
+                <strong>Monthly Payment:</strong> ₱${calculateMonthlyPayment(loanAmount, inputs.interestRate, inputs.loanTermYears).toLocaleString()}
+            </div>
+            <div class="calc-detail">
+                <strong>Your Max Monthly Capacity:</strong> ₱${maxMonthlyPayment.toLocaleString()}
+            </div>
+        `;
+        
     } else if (method === "cash") {
         methodText = `Based on your total savings of ₱${inputs.totalSavings.toLocaleString()}`;
         additionalInfo = `<div class="calc-detail"><strong>Payment Method:</strong> Cash Purchase</div>`;
@@ -1279,7 +1350,16 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
             <div class="calculation-method">
                 ${methodText}
             </div>
+            ${limitingFactor}
             ${additionalInfo}
+            <div class="comparison-info">
+                ${inputs.loanBasedPrice > 0 && inputs.savingsBasedPrice > 0 ? 
+                    `<small>
+                        Income-based limit: ₱${Math.floor(inputs.loanBasedPrice).toLocaleString()} | 
+                        Savings-based limit: ₱${Math.floor(inputs.savingsBasedPrice).toLocaleString()}
+                    </small>` : ''
+                }
+            </div>
             <div class="action-buttons">
                 <button onclick="showAffordableCars(${maxPrice})" class="view-cars-btn">
                     View Affordable Cars
@@ -1293,6 +1373,19 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
     
     // Show the results section
     resultsDiv.style.display = "block";
+}
+
+// Helper function to calculate monthly payment
+function calculateMonthlyPayment(loanAmount, annualRate, years) {
+    const monthlyRate = (annualRate / 100) / 12;
+    const numPayments = years * 12;
+    
+    if (monthlyRate === 0) {
+        return loanAmount / numPayments;
+    }
+    
+    return loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, numPayments)) / 
+           (Math.pow(1 + monthlyRate, numPayments) - 1);
 }
 
 // Filter cars by calculated maximum price
