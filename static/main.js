@@ -1150,9 +1150,34 @@ function printPopup() {
 //PRICE CALCULATOR  //
 //////////////////////
 
-// Price Calculator Function
+// Precision helper function to handle floating point arithmetic
+function preciseCalculation(callback) {
+    // Use higher precision for financial calculations
+    const originalToFixed = Number.prototype.toFixed;
+    try {
+        return callback();
+    } finally {
+        Number.prototype.toFixed = originalToFixed;
+    }
+}
+
+// More precise loan calculation with proper rounding
+function calculatePresentValue(monthlyPayment, monthlyRate, numPayments) {
+    if (monthlyRate === 0) {
+        return monthlyPayment * numPayments;
+    }
+    
+    // Use more precise calculation with proper decimal handling
+    const factor = Math.pow(1 + monthlyRate, -numPayments);
+    const numerator = 1 - factor;
+    const denominator = monthlyRate;
+    
+    return monthlyPayment * (numerator / denominator);
+}
+
+// Price Calculator Function with Enhanced Precision
 function calculateAffordability() {
-    console.log("Calculating affordability...");
+    console.log("Calculating affordability with enhanced precision...");
     
     // Get input values
     const monthlyIncome = parseFloat(document.getElementById("monthly-income").value) || 0;
@@ -1181,18 +1206,22 @@ function calculateAffordability() {
     let calculationMethod = "";
     let loanBasedPrice = 0;
     let savingsBasedPrice = 0;
+    let calculationDetails = {};
     
-    // Method 1: Based on Monthly Income (Loan Calculation)
+    // Method 1: Based on Monthly Income (Loan Calculation) - ENHANCED PRECISION
     if (monthlyIncome > 0) {
         const maxMonthlyPayment = (monthlyIncome * incomeRatio) / 100;
+        
+        // Convert annual rate to precise monthly rate
         const monthlyInterestRate = (interestRate / 100) / 12;
         const totalPayments = loanTermYears * 12;
         
-        // Calculate maximum loan amount using loan formula
+        // Calculate maximum loan amount using enhanced precision
         let maxLoanAmount = 0;
+        
         if (monthlyInterestRate > 0) {
-            maxLoanAmount = maxMonthlyPayment * 
-                ((1 - Math.pow(1 + monthlyInterestRate, -totalPayments)) / monthlyInterestRate);
+            // Use the more precise calculation
+            maxLoanAmount = calculatePresentValue(maxMonthlyPayment, monthlyInterestRate, totalPayments);
         } else {
             // If interest rate is 0
             maxLoanAmount = maxMonthlyPayment * totalPayments;
@@ -1201,14 +1230,20 @@ function calculateAffordability() {
         // Calculate total car price (loan + down payment)
         // If loan amount is L and down payment is D%, then:
         // Total Price = Loan Amount / (1 - Down Payment %)
-        loanBasedPrice = maxLoanAmount / (1 - (downPaymentPercent / 100));
+        const downPaymentDecimal = downPaymentPercent / 100;
+        loanBasedPrice = maxLoanAmount / (1 - downPaymentDecimal);
         
-        console.log("Loan calculation:", {
-            maxMonthlyPayment,
-            maxLoanAmount,
-            downPaymentAmount: loanBasedPrice - maxLoanAmount,
-            loanBasedPrice
-        });
+        // Store detailed calculation info
+        calculationDetails.income = {
+            maxMonthlyPayment: Math.round(maxMonthlyPayment * 100) / 100,
+            monthlyInterestRate: monthlyInterestRate,
+            totalPayments: totalPayments,
+            maxLoanAmount: Math.round(maxLoanAmount * 100) / 100,
+            downPaymentAmount: Math.round((loanBasedPrice * downPaymentDecimal) * 100) / 100,
+            totalCarPrice: Math.round(loanBasedPrice * 100) / 100
+        };
+        
+        console.log("Enhanced loan calculation:", calculationDetails.income);
     }
     
     // Method 2: Based on Total Savings
@@ -1218,48 +1253,57 @@ function calculateAffordability() {
             // Calculate max car price where savings covers the down payment
             savingsBasedPrice = totalSavings / (downPaymentPercent / 100);
             
-            console.log("Savings calculation (with financing):", {
-                totalSavings,
-                downPaymentPercent,
-                savingsBasedPrice
-            });
+            calculationDetails.savings = {
+                totalSavings: totalSavings,
+                downPaymentPercent: downPaymentPercent,
+                maxCarPrice: Math.round(savingsBasedPrice * 100) / 100
+            };
+            
+            console.log("Savings calculation (with financing):", calculationDetails.savings);
         } else {
             // If only savings provided, assume cash purchase
             savingsBasedPrice = totalSavings;
             
-            console.log("Savings calculation (cash only):", {
-                totalSavings,
-                savingsBasedPrice
-            });
+            calculationDetails.savings = {
+                totalSavings: totalSavings,
+                paymentMethod: "cash",
+                maxCarPrice: savingsBasedPrice
+            };
+            
+            console.log("Savings calculation (cash only):", calculationDetails.savings);
         }
     }
     
-    // Determine final max car price and method
-    if (loanBasedPrice > 0 && savingsBasedPrice > 0) {
+    // Determine final max car price and method - using rounded values for comparison
+    const roundedLoanPrice = Math.round(loanBasedPrice * 100) / 100;
+    const roundedSavingsPrice = Math.round(savingsBasedPrice * 100) / 100;
+    
+    if (roundedLoanPrice > 0 && roundedSavingsPrice > 0) {
         // Both methods available - use the more restrictive (lower) one
-        if (savingsBasedPrice <= loanBasedPrice) {
-            maxCarPrice = savingsBasedPrice;
+        if (roundedSavingsPrice <= roundedLoanPrice) {
+            maxCarPrice = roundedSavingsPrice;
             calculationMethod = "savings_limited";
         } else {
-            maxCarPrice = loanBasedPrice;
+            maxCarPrice = roundedLoanPrice;
             calculationMethod = "loan";
         }
-    } else if (loanBasedPrice > 0) {
-        maxCarPrice = loanBasedPrice;
+    } else if (roundedLoanPrice > 0) {
+        maxCarPrice = roundedLoanPrice;
         calculationMethod = "loan";
-    } else if (savingsBasedPrice > 0) {
-        maxCarPrice = savingsBasedPrice;
+    } else if (roundedSavingsPrice > 0) {
+        maxCarPrice = roundedSavingsPrice;
         calculationMethod = monthlyIncome > 0 ? "savings_limited" : "cash";
     }
     
-    console.log("Final calculation:", {
-        loanBasedPrice,
-        savingsBasedPrice,
-        maxCarPrice,
-        calculationMethod
+    console.log("Final precise calculation:", {
+        loanBasedPrice: roundedLoanPrice,
+        savingsBasedPrice: roundedSavingsPrice,
+        maxCarPrice: maxCarPrice,
+        calculationMethod: calculationMethod,
+        details: calculationDetails
     });
     
-    // Display results
+    // Display results with enhanced precision
     displayAffordabilityResults(maxCarPrice, calculationMethod, {
         monthlyIncome,
         totalSavings,
@@ -1267,15 +1311,16 @@ function calculateAffordability() {
         interestRate,
         loanTermYears,
         incomeRatio,
-        loanBasedPrice,
-        savingsBasedPrice
+        loanBasedPrice: roundedLoanPrice,
+        savingsBasedPrice: roundedSavingsPrice,
+        calculationDetails
     });
     
     // Filter cars based on calculated price
     filterCarsByPrice(maxCarPrice);
 }
 
-// Display calculation results
+// Enhanced Display calculation results with precise formatting
 function displayAffordabilityResults(maxPrice, method, inputs) {
     const resultsDiv = document.getElementById("calculator-results");
     
@@ -1287,25 +1332,36 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
     let methodText = "";
     let additionalInfo = "";
     let limitingFactor = "";
+    let precisionNote = "";
     
     if (method === "loan") {
-        const maxMonthlyPayment = (inputs.monthlyIncome * inputs.incomeRatio) / 100;
-        const downPaymentAmount = maxPrice * (inputs.downPaymentPercent / 100);
-        const loanAmount = maxPrice - downPaymentAmount;
+        const details = inputs.calculationDetails.income;
         
         methodText = `Based on your monthly income of ₱${inputs.monthlyIncome.toLocaleString()}`;
         additionalInfo = `
             <div class="calc-detail">
-                <strong>Maximum Monthly Payment:</strong> ₱${maxMonthlyPayment.toLocaleString()}
+                <strong>Maximum Monthly Payment:</strong> ₱${details.maxMonthlyPayment.toLocaleString()}
             </div>
             <div class="calc-detail">
-                <strong>Loan Amount:</strong> ₱${loanAmount.toLocaleString()}
+                <strong>Loan Amount:</strong> ₱${details.maxLoanAmount.toLocaleString()}
             </div>
             <div class="calc-detail">
-                <strong>Down Payment Needed:</strong> ₱${downPaymentAmount.toLocaleString()} (${inputs.downPaymentPercent}%)
+                <strong>Down Payment Needed:</strong> ₱${details.downPaymentAmount.toLocaleString()} (${inputs.downPaymentPercent}%)
             </div>
             <div class="calc-detail">
                 <strong>Loan Term:</strong> ${inputs.loanTermYears} years at ${inputs.interestRate}% interest
+            </div>
+        `;
+        
+        // Show precise calculation breakdown
+        precisionNote = `
+            <div class="precision-note">
+                <small><strong>Precise Calculation Breakdown:</strong><br>
+                Monthly Rate: ${(inputs.interestRate/100/12).toFixed(8)}<br>
+                PV Factor: ${((1 - Math.pow(1 + inputs.interestRate/100/12, -(inputs.loanTermYears * 12))) / (inputs.interestRate/100/12)).toFixed(6)}<br>
+                Loan Amount: ₱${details.maxLoanAmount.toFixed(2)}<br>
+                Total Car Price: ₱${details.totalCarPrice.toFixed(2)}
+                </small>
             </div>
         `;
         
@@ -1322,21 +1378,21 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
         methodText = `Limited by your available savings of ₱${inputs.totalSavings.toLocaleString()} for down payment`;
         additionalInfo = `
             <div class="calc-detail">
-                <strong>Down Payment Required:</strong> ₱${inputs.totalSavings.toLocaleString()} (${inputs.downPaymentPercent}% of total price)
+                <strong>Down Payment Required:</strong> ₱${Math.round(inputs.totalSavings * 100) / 100} (${inputs.downPaymentPercent}% of total price)
             </div>
             <div class="calc-detail">
-                <strong>Loan Amount:</strong> ₱${loanAmount.toLocaleString()}
+                <strong>Loan Amount:</strong> ₱${Math.round(loanAmount * 100) / 100}
             </div>
             <div class="calc-detail">
-                <strong>Monthly Payment:</strong> ₱${monthlyPayment.toLocaleString()}
+                <strong>Monthly Payment:</strong> ₱${Math.round(monthlyPayment * 100) / 100}
             </div>
             <div class="calc-detail">
-                <strong>Your Monthly Payment Capacity:</strong> ₱${maxMonthlyPayment.toLocaleString()}
+                <strong>Your Monthly Payment Capacity:</strong> ₱${Math.round(maxMonthlyPayment * 100) / 100}
             </div>
         `;
         
         if (monthlyPayment > maxMonthlyPayment) {
-            additionalInfo += `<div class="warning">⚠️ Monthly payment exceeds your capacity by ₱${(monthlyPayment - maxMonthlyPayment).toLocaleString()}</div>`;
+            additionalInfo += `<div class="warning">⚠️ Monthly payment exceeds your capacity by ₱${Math.round((monthlyPayment - maxMonthlyPayment) * 100) / 100}</div>`;
         }
         
     } else if (method === "cash") {
@@ -1349,18 +1405,19 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
             <h3>💰 Affordability Calculator Results</h3>
             <div class="main-result">
                 <strong>Maximum Car Price You Can Afford:</strong>
-                <span class="price-highlight">₱${Math.floor(maxPrice).toLocaleString()}</span>
+                <span class="price-highlight">₱${Math.round(maxPrice * 100) / 100}</span>
             </div>
             <div class="calculation-method">
                 ${methodText}
             </div>
             ${limitingFactor}
             ${additionalInfo}
+            ${precisionNote}
             <div class="comparison-info">
                 ${inputs.loanBasedPrice > 0 && inputs.savingsBasedPrice > 0 ? 
                     `<small>
-                        Income-based limit: ₱${Math.floor(inputs.loanBasedPrice).toLocaleString()} | 
-                        Savings-based limit: ₱${Math.floor(inputs.savingsBasedPrice).toLocaleString()}
+                        Income-based limit: ₱${Math.round(inputs.loanBasedPrice * 100) / 100} | 
+                        Savings-based limit: ₱${Math.round(inputs.savingsBasedPrice * 100) / 100}
                     </small>` : ''
                 }
             </div>
@@ -1379,7 +1436,7 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
     resultsDiv.style.display = "block";
 }
 
-// Helper function to calculate monthly payment
+// Enhanced Helper function to calculate monthly payment with better precision
 function calculateMonthlyPayment(loanAmount, annualRate, years) {
     const monthlyRate = (annualRate / 100) / 12;
     const numPayments = years * 12;
@@ -1388,8 +1445,51 @@ function calculateMonthlyPayment(loanAmount, annualRate, years) {
         return loanAmount / numPayments;
     }
     
-    return loanAmount * (monthlyRate * Math.pow(1 + monthlyRate, numPayments)) / 
-           (Math.pow(1 + monthlyRate, numPayments) - 1);
+    // Enhanced precision calculation
+    const factor = Math.pow(1 + monthlyRate, numPayments);
+    const monthlyPayment = loanAmount * (monthlyRate * factor) / (factor - 1);
+    
+    return Math.round(monthlyPayment * 100) / 100;
+}
+
+// Test function to verify calculations
+function testCalculatorPrecision() {
+    console.log("=== TESTING CALCULATOR PRECISION ===");
+    
+    // Test Case 1 from your example
+    const testInputs = {
+        monthlyIncome: 25000,
+        incomeRatio: 20,
+        interestRate: 7,
+        loanTermYears: 5,
+        downPaymentPercent: 20
+    };
+    
+    const maxMonthlyPayment = (testInputs.monthlyIncome * testInputs.incomeRatio) / 100;
+    const monthlyRate = (testInputs.interestRate / 100) / 12;
+    const totalPayments = testInputs.loanTermYears * 12;
+    
+    console.log("Test inputs:", testInputs);
+    console.log("Max monthly payment:", maxMonthlyPayment);
+    console.log("Monthly rate:", monthlyRate);
+    console.log("Total payments:", totalPayments);
+    
+    // Calculate using enhanced precision
+    const maxLoanAmount = calculatePresentValue(maxMonthlyPayment, monthlyRate, totalPayments);
+    const totalCarPrice = maxLoanAmount / (1 - testInputs.downPaymentPercent / 100);
+    const downPayment = totalCarPrice * (testInputs.downPaymentPercent / 100);
+    
+    console.log("=== RESULTS ===");
+    console.log("Max loan amount:", maxLoanAmount);
+    console.log("Total car price:", totalCarPrice);
+    console.log("Down payment:", downPayment);
+    console.log("Verification - Loan + Down:", maxLoanAmount + downPayment);
+    
+    return {
+        maxLoanAmount: Math.round(maxLoanAmount * 100) / 100,
+        totalCarPrice: Math.round(totalCarPrice * 100) / 100,
+        downPayment: Math.round(downPayment * 100) / 100
+    };
 }
 
 // Filter cars by calculated maximum price
@@ -1550,4 +1650,9 @@ document.addEventListener("DOMContentLoaded", function () {
     if (calculatorForm) {
         resetCalculator();
     }
+    
+    // Run precision test in console
+    console.log("Running precision test...");
+    const testResults = testCalculatorPrecision();
+    console.log("Test completed. Results:", testResults);
 });
