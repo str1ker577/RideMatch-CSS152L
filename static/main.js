@@ -1146,7 +1146,6 @@ function printPopup() {
     location.reload(); // Reload to restore event listeners
 }
 
-
 //////////////////////
 //PRICE CALCULATOR  //
 //////////////////////
@@ -1238,12 +1237,12 @@ function calculateAffordability() {
     // Determine final max car price and method
     if (loanBasedPrice > 0 && savingsBasedPrice > 0) {
         // Both methods available - use the more restrictive (lower) one
-        if (loanBasedPrice <= savingsBasedPrice) {
+        if (savingsBasedPrice <= loanBasedPrice) {
+            maxCarPrice = savingsBasedPrice;
+            calculationMethod = "savings_limited";
+        } else {
             maxCarPrice = loanBasedPrice;
             calculationMethod = "loan";
-        } else {
-            maxCarPrice = savingsBasedPrice;
-            calculationMethod = monthlyIncome > 0 ? "savings_limited" : "cash";
         }
     } else if (loanBasedPrice > 0) {
         maxCarPrice = loanBasedPrice;
@@ -1311,29 +1310,34 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
         `;
         
         if (inputs.totalSavings > 0 && inputs.savingsBasedPrice < inputs.loanBasedPrice) {
-            limitingFactor = `<div class="limiting-factor">⚠️ Your savings limit your purchase to ₱${Math.floor(inputs.savingsBasedPrice).toLocaleString()}</div>`;
+            limitingFactor = `<div class="limiting-factor">⚠️ Limited by available savings for down payment</div>`;
         }
         
     } else if (method === "savings_limited") {
         const downPaymentAmount = maxPrice * (inputs.downPaymentPercent / 100);
         const loanAmount = maxPrice - downPaymentAmount;
+        const monthlyPayment = calculateMonthlyPayment(loanAmount, inputs.interestRate, inputs.loanTermYears);
         const maxMonthlyPayment = (inputs.monthlyIncome * inputs.incomeRatio) / 100;
         
-        methodText = `Limited by your savings of ₱${inputs.totalSavings.toLocaleString()} for down payment`;
+        methodText = `Limited by your available savings of ₱${inputs.totalSavings.toLocaleString()} for down payment`;
         additionalInfo = `
             <div class="calc-detail">
-                <strong>Down Payment:</strong> ₱${downPaymentAmount.toLocaleString()} (${inputs.downPaymentPercent}%)
+                <strong>Down Payment Required:</strong> ₱${inputs.totalSavings.toLocaleString()} (${inputs.downPaymentPercent}% of total price)
             </div>
             <div class="calc-detail">
                 <strong>Loan Amount:</strong> ₱${loanAmount.toLocaleString()}
             </div>
             <div class="calc-detail">
-                <strong>Monthly Payment:</strong> ₱${calculateMonthlyPayment(loanAmount, inputs.interestRate, inputs.loanTermYears).toLocaleString()}
+                <strong>Monthly Payment:</strong> ₱${monthlyPayment.toLocaleString()}
             </div>
             <div class="calc-detail">
-                <strong>Your Max Monthly Capacity:</strong> ₱${maxMonthlyPayment.toLocaleString()}
+                <strong>Your Monthly Payment Capacity:</strong> ₱${maxMonthlyPayment.toLocaleString()}
             </div>
         `;
+        
+        if (monthlyPayment > maxMonthlyPayment) {
+            additionalInfo += `<div class="warning">⚠️ Monthly payment exceeds your capacity by ₱${(monthlyPayment - maxMonthlyPayment).toLocaleString()}</div>`;
+        }
         
     } else if (method === "cash") {
         methodText = `Based on your total savings of ₱${inputs.totalSavings.toLocaleString()}`;
