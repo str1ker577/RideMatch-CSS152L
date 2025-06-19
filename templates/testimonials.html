@@ -16,22 +16,6 @@
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
 
-  <!-- Optional inline style for the sidebar slide animation -->
-  <style>
-    .SideBar {
-      position: fixed;
-      top: 0;
-      left: -100%;
-      width: 500px;
-      height: 100%;
-      background-color: #fff;
-      transition: left 0.5s ease-in-out;
-      z-index: 1000;
-    }
-    .SideBar.open {
-      left: 0;
-    }
-  </style>
 </head>
 <body>
     <!-- Popup Containers -->
@@ -160,42 +144,73 @@
 
     <div class="liked"><a href="#"></a></div>
   </header>
+  
+<!-- Main Container -->
+    <div class="testimonials-container">
+        <!-- Testimonial Form -->
+        <div id="testimonial-form" class="testimonial-form">
+            <div class="form-header">
+                <h3>Share Your Experience</h3>
+                <button class="close-btn" onclick="toggleTestimonialForm()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="form-body">
+                <div class="input-group">
+                    <label for="title-input">Title (Optional)</label>
+                    <input type="text" id="title-input" placeholder="Your title or role">
+                </div>
+                <div class="input-group">
+                    <label for="testimonial-input">Your Experience</label>
+                    <textarea id="testimonial-input" placeholder="Share your experience with RideMatch..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button class="cancel-btn" onclick="toggleTestimonialForm()">Cancel</button>
+                    <button class="submit-btn" onclick="submitTestimonial(event)">Submit Testimonial</button>
+                </div>
+            </div>
+        </div>
 
-<!-- Main Testimonials Content -->
-<div class="testimonials-content">
-  <h2>Client Testimonials</h2>
-  <p>Our clients love us! Read what they have to say below.</p>
+        <!-- Testimonials Container -->
+        <div id="testimonials-container">
+            <!-- Sample Testimonial -->
+            <div class="testimonial-card expanded" data-expanded="true">
+                <div class="card-header">
+                    <div class="profile-section">
+                        <div class="profile-icon"><i class="fas fa-user"></i></div>
+                    </div>
+                    <button class="toggle-btn" onclick="toggleCard(this)">
+                        <i class="fas fa-chevron-down"></i>
+                    </button>
+                </div>
+                
+                <div class="card-content expanded-content">
+                    <div class="quote-container">
+                        <i class="fas fa-quote-left quote-left"></i>
+                        <p class="testimonial-text">RideMatch has completely transformed my daily commute. The platform is incredibly user-friendly and I've met some amazing people through carpooling. It's not just about saving money - it's about building a community!</p>
+                        <i class="fas fa-quote-right quote-right"></i>
+                    </div>
+                    <div class="testimonial-footer">
+                        <div class="author-info">
+                            <span class="date">June 19, 2025</span>
+                            <span class="author-name">Sarah Johnson</span>
+                            <span class="author-title">Daily Commuter</span>
+                        </div>
+                    </div>
+                </div>
 
-  <!-- Testimonial Cards -->
-  <div class="testimonial-card">
-    <div class="testimonial-images">
-      <img src="resources/testimonial1.jpg" alt="John Doe">
-      <img src="resources/car1.jpg" alt="Car Bought by John Doe">
+                <div class="card-content compact-content">
+                    <p class="compact-text">Check out <span class="author-name">Sarah Johnson</span>'s testimonial!</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Add Testimonial Button -->
+        <button id="add-testimonial-btn" class="add-testimonial-btn" onclick="toggleTestimonialForm()">
+            <i class="fas fa-plus"></i>
+            Add Your Testimonial
+        </button>
     </div>
-    <h3>John Doe</h3>
-    <p>"RideMatch helped me find the perfect car for my family. The filters made it so easy to narrow down my options!"</p>
-  </div>
-
-  <div class="testimonial-card">
-    <div class="testimonial-images">
-      <img src="resources/testimonial2.jpg" alt="Jane Smith">
-      <img src="resources/car2.jpg" alt="Car Bought by Jane Smith">
-    </div>
-    <h3>Jane Smith</h3>
-    <p>"I was able to find a car that fit my budget and preferences in just a few clicks. Highly recommend RideMatch!"</p>
-  </div>
-
-  <div class="testimonial-card">
-    <div class="testimonial-images">
-      <img src="resources/testimonial3.jpg" alt="Mike Johnson">
-      <img src="resources/car3.jpg" alt="Car Bought by Mike Johnson">
-    </div>
-    <h3>Mike Johnson</h3>
-    <p>"The customer service was excellent, and the website is very user-friendly. I found my dream car thanks to RideMatch."</p>
-  </div>
-</div>
-
-
 
   <!-- Footer -->
   <footer>

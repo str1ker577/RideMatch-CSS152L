@@ -5,13 +5,14 @@
 
 const isLocalhost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 const baseUrl = isLocalhost ? 'http://127.0.0.1:8000' : window.location.origin;
+//const baseUrl = "https://a7cbb3da-2928-4d18-ba75-ea41ce8ad0c5-00-g8eiilou0duk.sisko.replit.dev"; // Base URL for API requests
 
 // Firebase initialization 
 let auth; // Global auth object
 let userName = null; // Keep your existing userName variable
 let currentCarData = []; // Global variable to store current car data for sorting
 let defaultCarsLoaded = false;
-//const baseUrl = "https://a7cbb3da-2928-4d18-ba75-ea41ce8ad0c5-00-g8eiilou0duk.sisko.replit.dev"; // Base URL for API requests
+
 
 //////////////////////
 //Side Menu Function//
@@ -1656,3 +1657,293 @@ document.addEventListener("DOMContentLoaded", function () {
     const testResults = testCalculatorPrecision();
     console.log("Test completed. Results:", testResults);
 });
+
+/////////////////////////
+//Testimonials Logic  //
+///////////////////////
+
+let testimonialForm;
+let testimonialInput;
+let titleInput;
+let testimonialsContainer;
+let addTestimonialBtn;
+
+// Initialize testimonials DOM elements
+function initializeTestimonialElements() {
+  testimonialForm = document.getElementById('testimonial-form');
+  testimonialInput = document.getElementById('testimonial-input');
+  titleInput = document.getElementById('title-input');
+  testimonialsContainer = document.getElementById('testimonials-container');
+  addTestimonialBtn = document.getElementById('add-testimonial-btn');
+
+  // Check if critical elements exist
+  if (!testimonialForm || !testimonialInput || !testimonialsContainer || !addTestimonialBtn) {
+    console.error('Critical testimonial DOM elements not found. Check your HTML IDs.');
+    return false;
+  }
+
+  // Initialize form as hidden
+  testimonialForm.style.display = 'none';
+  return true;
+}
+
+// Toggle testimonial form - called from HTML onclick
+function toggleTestimonialForm() {
+  console.log('toggleTestimonialForm called');
+  
+  if (!testimonialForm) {
+    console.error('Testimonial form element not found');
+    return;
+  }
+
+  // For demo purposes, we'll skip auth check
+  // In your real implementation, uncomment these lines:
+  /*
+  if (!auth.currentUser) {
+    alert("Please sign in to submit a testimonial.");
+    return;
+  }
+  */
+
+  // Toggle form visibility
+  const isHidden = testimonialForm.style.display === 'none' || testimonialForm.style.display === '';
+  testimonialForm.style.display = isHidden ? 'block' : 'none';
+  
+  // Clear form when closing
+  if (!isHidden) {
+    testimonialInput.value = '';
+    titleInput.value = '';
+  }
+  
+  console.log('Form display changed to:', testimonialForm.style.display);
+}
+
+// Submit testimonial - called from HTML onclick
+function submitTestimonial(event) {
+  console.log('submitTestimonial called');
+  
+  if (!testimonialInput || !titleInput) {
+    console.error('Testimonial input elements not found');
+    return;
+  }
+
+  const testimonialText = testimonialInput.value.trim();
+  const titleText = titleInput.value.trim();
+  
+  if (!testimonialText) {
+    alert("Please enter a testimonial.");
+    return;
+  }
+
+  // For demo purposes, we'll create a mock user
+  // In your real implementation, get the actual user:
+  const mockUser = {
+    uid: 'demo-user-' + Date.now(),
+    email: 'demo@example.com',
+    displayName: 'Demo User',
+    photoURL: null
+  };
+
+  // Show loading state
+  const submitButton = event.target;
+  const originalText = submitButton.textContent;
+  submitButton.textContent = 'Submitting...';
+  submitButton.disabled = true;
+
+  // For demo purposes, we'll simulate the database operation
+  // In your real implementation, use your Firebase db:
+  /*
+  db.collection("testimonials").add({
+    message: testimonialText,
+    title: titleText || null,
+    userId: user.uid,
+    userEmail: user.email,
+    userName: user.displayName || "Anonymous",
+    userPhoto: user.photoURL || null,
+    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+  })
+  */
+
+  // Simulate async operation
+  setTimeout(() => {
+    console.log('Testimonial submitted successfully');
+    
+    // Add testimonial to display
+    addTestimonialToDisplay({
+      message: testimonialText,
+      title: titleText || null,
+      userId: mockUser.uid,
+      userEmail: mockUser.email,
+      userName: mockUser.displayName || "Anonymous",
+      userPhoto: mockUser.photoURL || null,
+      timestamp: new Date()
+    });
+
+    // Reset form
+    testimonialInput.value = '';
+    titleInput.value = '';
+    testimonialForm.style.display = 'none';
+    
+    // Reset button state
+    submitButton.textContent = originalText;
+    submitButton.disabled = false;
+    
+    alert('Thank you for your testimonial!');
+  }, 1000);
+}
+
+// Add testimonial to display
+function addTestimonialToDisplay(testimonial) {
+  if (!testimonialsContainer) {
+    console.error('Testimonials container not found');
+    return;
+  }
+
+  // Remove empty state if it exists
+  const emptyState = testimonialsContainer.querySelector('.empty-state');
+  if (emptyState) {
+    emptyState.remove();
+  }
+
+  const date = testimonial.timestamp instanceof Date ? testimonial.timestamp : new Date(testimonial.timestamp);
+  const testimonialElement = document.createElement('div');
+  testimonialElement.className = 'testimonial-card expanded';
+  testimonialElement.setAttribute('data-expanded', 'true');
+  
+  testimonialElement.innerHTML = `
+    <div class="card-header">
+      <div class="profile-section">
+        ${testimonial.userPhoto ? 
+          `<img src="${escapeHtml(testimonial.userPhoto)}" alt="Profile" class="profile-pic">` :
+          `<div class="profile-icon"><i class="fas fa-user"></i></div>`
+        }
+      </div>
+      <button class="toggle-btn" onclick="toggleCard(this)">
+        <i class="fas fa-chevron-down"></i>
+      </button>
+    </div>
+    
+    <div class="card-content expanded-content">
+      <div class="quote-container">
+        <i class="fas fa-quote-left quote-left"></i>
+        <p class="testimonial-text">${escapeHtml(testimonial.message)}</p>
+        <i class="fas fa-quote-right quote-right"></i>
+      </div>
+      <div class="testimonial-footer">
+        <div class="author-info">
+          <span class="date">${date.toLocaleDateString()}</span>
+          <span class="author-name">${escapeHtml(testimonial.userName)}</span>
+          ${testimonial.title ? `<span class="author-title">${escapeHtml(testimonial.title)}</span>` : '<span class="author-title"></span>'}
+        </div>
+      </div>
+    </div>
+
+    <div class="card-content compact-content">
+      <p class="compact-text">Check out <span class="author-name">${escapeHtml(testimonial.userName)}</span>'s testimonial!</p>
+    </div>
+  `;
+  
+  // Add to the end of the container (before the add button) for newest at bottom
+  testimonialsContainer.appendChild(testimonialElement);
+}
+
+// Toggle individual testimonial card
+function toggleCard(button) {
+  const card = button.closest('.testimonial-card');
+  const isExpanded = card.classList.contains('expanded');
+  
+  if (isExpanded) {
+    card.classList.remove('expanded');
+    card.setAttribute('data-expanded', 'false');
+  } else {
+    card.classList.add('expanded');
+    card.setAttribute('data-expanded', 'true');
+  }
+}
+
+// Display testimonials (for real Firebase implementation)
+function displayTestimonials() {
+  if (!testimonialsContainer) {
+    console.error('Testimonials container not found');
+    return;
+  }
+
+  // For demo purposes, we'll show a sample testimonial
+  // In your real implementation, use this pattern:
+  /*
+  db.collection("testimonials")
+    .orderBy("timestamp", "asc") // Changed to asc for oldest first
+    .onSnapshot((snapshot) => {
+      testimonialsContainer.innerHTML = '';
+      
+      if (snapshot.empty) {
+        showEmptyState();
+        return;
+      }
+
+      snapshot.forEach(doc => {
+        const testimonial = doc.data();
+        addTestimonialToDisplay(testimonial);
+      });
+    }, (error) => {
+      console.error("Error fetching testimonials: ", error);
+      showErrorState();
+    });
+  */
+}
+
+// Show empty state
+function showEmptyState() {
+  if (!testimonialsContainer) return;
+  
+  testimonialsContainer.innerHTML = `
+    <div class="empty-state">
+      <i class="fas fa-comments"></i>
+      <h3>No testimonials yet</h3>
+      <p>Be the first to share your experience with RideMatch!</p>
+    </div>
+  `;
+}
+
+// Show error state
+function showErrorState() {
+  if (!testimonialsContainer) return;
+  
+  testimonialsContainer.innerHTML = `
+    <div class="empty-state">
+      <i class="fas fa-exclamation-triangle"></i>
+      <h3>Error loading testimonials</h3>
+      <p>Please try again later.</p>
+    </div>
+  `;
+}
+
+// Helper function to escape HTML to prevent XSS
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Initialize testimonials when page loads
+function initializeTestimonials() {
+  console.log('Initializing testimonials functionality');
+  
+  if (initializeTestimonialElements()) {
+    displayTestimonials();
+    console.log('Testimonials system initialized successfully');
+  } else {
+    console.error('Failed to initialize testimonials system');
+  }
+}
+
+// Auto-initialize when DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+  initializeTestimonials();
+});
+
+// Make functions globally available for HTML onclick handlers
+window.toggleTestimonialForm = toggleTestimonialForm;
+window.submitTestimonial = submitTestimonial;
+window.toggleCard = toggleCard;
