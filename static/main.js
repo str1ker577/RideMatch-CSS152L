@@ -1671,374 +1671,584 @@ document.addEventListener("DOMContentLoaded", function () {
 //Testimonials Logic  //
 ///////////////////////
 
-// Initialize variables as null - they will be set when DOM loads
-let testimonialForm = null;
-let testimonialInput = null;
-let titleInput = null;
-let testimonialsContainer = null;
-let addTestimonialBtn = null;
+// Wrap everything in an IIFE to avoid global namespace pollution
+(function() {
+  'use strict';
 
-// Function to get current user name
-function getCurrentUserName() {
-  if (auth && auth.currentUser) {
-    return auth.currentUser.displayName || auth.currentUser.email || 'Anonymous';
-  }
-  return 'Anonymous';
-}
+  // Private variables within the module
+  const testimonialElements = {
+    form: null,
+    input: null,
+    titleInput: null,
+    container: null,
+    addBtn: null,
+    submitBtn: null,
+    cancelBtn: null,
+    closeBtn: null,
+    initialized: false,
+    loading: false
+  };
 
-// Initialize testimonials DOM elements
-function initializeTestimonialElements() {
-  testimonialForm = document.getElementById('testimonial-form');
-  testimonialInput = document.getElementById('testimonial-input');
-  titleInput = document.getElementById('title-input');
-  testimonialsContainer = document.getElementById('testimonials-container');
-  addTestimonialBtn = document.getElementById('add-testimonial-btn');
+  let testimonialRefreshInterval = null;
 
-  // Check if critical elements exist
-  if (!testimonialForm || !testimonialInput || !testimonialsContainer || !addTestimonialBtn) {
-    console.error('Critical testimonial DOM elements not found. Check your HTML IDs.');
-    return false;
-  }
-
-  // Initialize form as hidden
-  testimonialForm.style.display = 'none';
-  return true;
-}
-
-// Toggle testimonial form - called from HTML onclick
-function toggleTestimonialForm() {
-  console.log('toggleTestimonialForm called');
-  
-  // Initialize elements if not already done
-  if (!testimonialForm) {
-    console.log('Elements not initialized, initializing now...');
-    if (!initializeTestimonialElements()) {
-      console.error('Failed to initialize testimonial elements');
-      return;
-    }
-  }
-
-  // Check authentication (uncomment when ready)
-  /*
-  if (!auth.currentUser) {
-    alert("Please sign in to submit a testimonial.");
-    return;
-  }
-  */
-
-  // Toggle form visibility
-  const isHidden = testimonialForm.style.display === 'none' || testimonialForm.style.display === '';
-  testimonialForm.style.display = isHidden ? 'block' : 'none';
-  
-  // Clear form when closing
-  if (!isHidden && testimonialInput && titleInput) {
-    testimonialInput.value = '';
-    titleInput.value = '';
-  }
-  
-  console.log('Form display changed to:', testimonialForm.style.display);
-}
-
-// Submit testimonial - called from HTML onclick
-async function submitTestimonial(event) {
-  console.log('submitTestimonial called');
-  console.log('Event:', event);
-  
-  // Initialize elements if not already done
-  if (!testimonialInput || !titleInput) {
-    if (!initializeTestimonialElements()) {
-      console.error('Failed to initialize testimonial elements');
-      return;
-    }
-  }
-
-  const testimonialText = testimonialInput.value.trim();
-  const titleText = titleInput.value.trim();
-  
-  console.log('Testimonial text:', testimonialText);
-  console.log('Title text:', titleText);
-  
-  if (!testimonialText) {
-    alert("Please enter a testimonial.");
-    return;
-  }
-
-  // Show loading state
-  const submitButton = event.target;
-  const originalText = submitButton.textContent;
-  submitButton.textContent = 'Submitting...';
-  submitButton.disabled = true;
-
-  try {
-    // Get user name
-    const userName = getCurrentUserName();
-    console.log('User name:', userName);
+  // Show loading indicator
+  function showLoadingIndicator() {
+    if (testimonialElements.loading) return;
     
-    // Prepare testimonial data for Flask API
-    const testimonialData = {
-      name: userName,
-      testimonial: testimonialText,
-      title: titleText || null,
-      rating: 5
-    };
+    testimonialElements.loading = true;
+    const loadingDiv = document.createElement('div');
+    loadingDiv.id = 'testimonial-loading';
+    loadingDiv.className = 'testimonial-loading';
+    loadingDiv.innerHTML = `
+      <div class="loading-spinner">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Loading testimonials...</p>
+      </div>
+    `;
+    
+    if (testimonialElements.container) {
+      testimonialElements.container.appendChild(loadingDiv);
+    }
+  }
 
-    console.log('Sending testimonial data:', testimonialData);
+  // Hide loading indicator
+  function hideLoadingIndicator() {
+    testimonialElements.loading = false;
+    const loadingDiv = document.getElementById('testimonial-loading');
+    if (loadingDiv) {
+      loadingDiv.remove();
+    }
+  }
 
-    // Send to Flask API
-    const response = await fetch('/api/testimonials', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(testimonialData)
+  // Function to get current user name
+  function getCurrentUserName() {
+    if (typeof auth !== 'undefined' && auth && auth.currentUser) {
+      return auth.currentUser.displayName || auth.currentUser.email || 'Anonymous';
+    }
+    return 'Anonymous';
+  }
+
+  // Initialize testimonials DOM elements
+  function initializeTestimonialElements() {
+    try {
+      console.log('Initializing testimonial elements...');
+      
+      testimonialElements.form = document.getElementById('testimonial-form');
+      testimonialElements.input = document.getElementById('testimonial-input');
+      testimonialElements.titleInput = document.getElementById('title-input');
+      testimonialElements.container = document.getElementById('testimonials-container');
+      testimonialElements.addBtn = document.getElementById('add-testimonial-btn');
+      testimonialElements.submitBtn = document.querySelector('.submit-btn');
+      testimonialElements.cancelBtn = document.querySelector('.cancel-btn');
+      testimonialElements.closeBtn = document.querySelector('.close-btn');
+
+      // Check if critical elements exist
+      if (!testimonialElements.form || !testimonialElements.input || !testimonialElements.container || !testimonialElements.addBtn) {
+        console.error('Critical testimonial DOM elements not found. Check your HTML IDs.');
+        console.log('Found elements:', {
+          form: !!testimonialElements.form,
+          input: !!testimonialElements.input,
+          container: !!testimonialElements.container,
+          addBtn: !!testimonialElements.addBtn,
+          submitBtn: !!testimonialElements.submitBtn,
+          cancelBtn: !!testimonialElements.cancelBtn,
+          closeBtn: !!testimonialElements.closeBtn
+        });
+        return false;
+      }
+
+      // Initialize form as hidden
+      testimonialElements.form.style.display = 'none';
+      testimonialElements.initialized = true;
+      
+      console.log('Testimonial elements initialized successfully');
+      return true;
+    } catch (error) {
+      console.error('Error initializing testimonial elements:', error);
+      return false;
+    }
+  }
+
+  // Bind event listeners to DOM elements
+  function bindEventListeners() {
+    console.log('Binding event listeners...');
+    
+    // Add testimonial button
+    if (testimonialElements.addBtn) {
+      testimonialElements.addBtn.addEventListener('click', toggleTestimonialForm);
+    }
+
+    // Submit button
+    if (testimonialElements.submitBtn) {
+      testimonialElements.submitBtn.addEventListener('click', submitTestimonial);
+    }
+
+    // Cancel button
+    if (testimonialElements.cancelBtn) {
+      testimonialElements.cancelBtn.addEventListener('click', toggleTestimonialForm);
+    }
+
+    // Close button
+    if (testimonialElements.closeBtn) {
+      testimonialElements.closeBtn.addEventListener('click', toggleTestimonialForm);
+    }
+
+    // Form submission prevention
+    if (testimonialElements.form) {
+      testimonialElements.form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        submitTestimonial(event);
+      });
+    }
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', function(event) {
+      // Escape key to close form
+      if (event.key === 'Escape' && testimonialElements.form && testimonialElements.form.style.display === 'block') {
+        toggleTestimonialForm();
+      }
     });
 
-    console.log('Response status:', response.status);
-    console.log('Response ok:', response.ok);
+    console.log('Event listeners bound successfully');
+  }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('API Error:', errorText);
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+  // Safe element getter with automatic initialization
+  function getTestimonialElements() {
+    if (!testimonialElements.initialized) {
+      console.log('Elements not initialized, initializing now...');
+      if (!initializeTestimonialElements()) {
+        return null;
+      }
+      bindEventListeners();
+    }
+    return testimonialElements;
+  }
+
+  // Toggle testimonial form
+  function toggleTestimonialForm() {
+    console.log('toggleTestimonialForm called');
+    
+    // Get elements safely
+    const elements = getTestimonialElements();
+    
+    if (!elements || !elements.initialized || !elements.form) {
+      console.error('Failed to initialize testimonial elements');
+      alert('Testimonial form is not ready yet. Please try again in a moment.');
+      return;
     }
 
-    const newTestimonial = await response.json();
-    console.log('Testimonial submitted successfully:', newTestimonial);
+    // Check authentication (uncomment when ready)
+    /*
+    if (typeof auth !== 'undefined' && auth && !auth.currentUser) {
+      alert("Please sign in to submit a testimonial.");
+      return;
+    }
+    */
 
-    // Reset form
-    testimonialInput.value = '';
-    titleInput.value = '';
-    testimonialForm.style.display = 'none';
+    // Toggle form visibility
+    const isHidden = elements.form.style.display === 'none' || elements.form.style.display === '';
+    elements.form.style.display = isHidden ? 'block' : 'none';
     
-    // Refresh testimonials to show the new one
-    await loadTestimonials();
-    
-    alert('Thank you for your testimonial!');
+    // Clear form when closing
+    if (!isHidden && elements.input && elements.titleInput) {
+      elements.input.value = '';
+      elements.titleInput.value = '';
+    }
 
-  } catch (error) {
-    console.error('Error submitting testimonial:', error);
-    alert('Failed to submit testimonial. Please try again. Check console for details.');
-  } finally {
-    // Reset button state
-    submitButton.textContent = originalText;
-    submitButton.disabled = false;
+    // Focus on first input when opening
+    if (isHidden && elements.titleInput) {
+      setTimeout(() => elements.titleInput.focus(), 100);
+    }
+    
+    console.log('Form display changed to:', elements.form.style.display);
   }
-}
 
-// Load testimonials from Flask API
-async function loadTestimonials() {
-  // Initialize elements if not already done
-  if (!testimonialsContainer) {
-    if (!initializeTestimonialElements()) {
+  // Submit testimonial
+  async function submitTestimonial(event) {
+    console.log('submitTestimonial called');
+    
+    // Prevent default form submission
+    if (event && event.preventDefault) {
+      event.preventDefault();
+    }
+    
+    // Get elements safely
+    const elements = getTestimonialElements();
+    
+    if (!elements || !elements.initialized || !elements.input || !elements.titleInput) {
+      console.error('Failed to initialize testimonial elements');
+      alert('Testimonial form is not ready yet. Please try again in a moment.');
+      return;
+    }
+
+    const testimonialText = elements.input.value.trim();
+    const titleText = elements.titleInput.value.trim();
+    
+    console.log('Testimonial text:', testimonialText);
+    console.log('Title text:', titleText);
+    
+    if (!testimonialText) {
+      alert("Please enter a testimonial.");
+      elements.input.focus();
+      return;
+    }
+
+    // Show loading state
+    const submitButton = elements.submitBtn;
+    if (submitButton) {
+      const originalText = submitButton.textContent;
+      submitButton.textContent = 'Submitting...';
+      submitButton.disabled = true;
+
+      try {
+        // Get user name
+        const userName = getCurrentUserName();
+        console.log('User name:', userName);
+        
+        // Prepare testimonial data for Flask API
+        const testimonialData = {
+          name: userName,
+          testimonial: testimonialText,
+          title: titleText || null,
+          rating: 5
+        };
+
+        console.log('Sending testimonial data:', testimonialData);
+
+        // Send to Flask API
+        const response = await fetch('/api/testimonials', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(testimonialData)
+        });
+
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error('API Error:', errorText);
+          throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        }
+
+        const newTestimonial = await response.json();
+        console.log('Testimonial submitted successfully:', newTestimonial);
+
+        // Reset form
+        elements.input.value = '';
+        elements.titleInput.value = '';
+        elements.form.style.display = 'none';
+        
+        // Refresh testimonials to show the new one
+        await loadTestimonials();
+        
+        // Show success message
+        showSuccessMessage('Thank you for your testimonial!');
+
+      } catch (error) {
+        console.error('Error submitting testimonial:', error);
+        showErrorMessage('Failed to submit testimonial. Please try again.');
+      } finally {
+        // Reset button state
+        if (submitButton) {
+          submitButton.textContent = originalText;
+          submitButton.disabled = false;
+        }
+      }
+    }
+  }
+
+  // Load testimonials from Flask API
+  async function loadTestimonials() {
+    // Get elements safely
+    const elements = getTestimonialElements();
+    
+    if (!elements || !elements.initialized || !elements.container) {
       console.error('Failed to initialize testimonial elements for loading');
       return;
     }
+
+    try {
+      console.log('Loading testimonials from API...');
+      showLoadingIndicator();
+      
+      const response = await fetch('/api/testimonials');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const testimonials = await response.json();
+      console.log('Testimonials loaded:', testimonials);
+
+      // Clear container
+      elements.container.innerHTML = '';
+
+      if (!testimonials || testimonials.length === 0) {
+        showEmptyState();
+        return;
+      }
+
+      // Add each testimonial to display
+      testimonials.forEach(testimonial => {
+        addTestimonialToDisplay(testimonial);
+      });
+
+    } catch (error) {
+      console.error('Error loading testimonials:', error);
+      showErrorState();
+    } finally {
+      hideLoadingIndicator();
+    }
   }
 
-  try {
-    console.log('Loading testimonials from API...');
-    const response = await fetch('/api/testimonials');
+  // Add testimonial to display
+  function addTestimonialToDisplay(testimonial) {
+    const elements = getTestimonialElements();
     
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const testimonials = await response.json();
-    console.log('Testimonials loaded:', testimonials);
-
-    // Clear container
-    testimonialsContainer.innerHTML = '';
-
-    if (!testimonials || testimonials.length === 0) {
-      showEmptyState();
+    if (!elements || !elements.initialized || !elements.container) {
+      console.error('Testimonials container not found');
       return;
     }
 
-    // Add each testimonial to display
-    testimonials.forEach(testimonial => {
-      addTestimonialToDisplay(testimonial);
-    });
-
-  } catch (error) {
-    console.error('Error loading testimonials:', error);
-    showErrorState();
-  }
-}
-
-// Add testimonial to display (updated to work with Flask API data structure)
-function addTestimonialToDisplay(testimonial) {
-  if (!testimonialsContainer) {
-    console.error('Testimonials container not found');
-    return;
-  }
-
-  // Remove empty state if it exists
-  const emptyState = testimonialsContainer.querySelector('.empty-state');
-  if (emptyState) {
-    emptyState.remove();
-  }
-
-  // Convert timestamp to date
-  const date = testimonial.timestamp ? new Date(testimonial.timestamp) : new Date();
-  
-  const testimonialElement = document.createElement('div');
-  testimonialElement.className = 'testimonial-card expanded';
-  testimonialElement.setAttribute('data-expanded', 'true');
-  testimonialElement.setAttribute('data-id', testimonial.id); // Store ID for potential deletion
-  
-  testimonialElement.innerHTML = `
-    <div class="card-header">
-      <div class="profile-section">
-        ${testimonial.userPhoto ? 
-          `<img src="${escapeHtml(testimonial.userPhoto)}" alt="Profile" class="profile-pic">` :
-          `<div class="profile-icon"><i class="fas fa-user"></i></div>`
-        }
-      </div>
-      <button class="toggle-btn" onclick="toggleCard(this)">
-        <i class="fas fa-chevron-down"></i>
-      </button>
-    </div>
-    
-    <div class="card-content expanded-content">
-      <div class="quote-container">
-        <i class="fas fa-quote-left quote-left"></i>
-        <p class="testimonial-text">${escapeHtml(testimonial.testimonial)}</p>
-        <i class="fas fa-quote-right quote-right"></i>
-      </div>
-      <div class="testimonial-footer">
-        <div class="author-info">
-          <span class="date">${date.toLocaleDateString()}</span>
-          <span class="author-name">${escapeHtml(testimonial.name)}</span>
-          ${testimonial.title ? `<span class="author-title">${escapeHtml(testimonial.title)}</span>` : '<span class="author-title"></span>'}
-        </div>
-      </div>
-    </div>
-
-    <div class="card-content compact-content">
-      <p class="compact-text">Check out <span class="author-name">${escapeHtml(testimonial.name)}</span>'s testimonial!</p>
-    </div>
-  `;
-  
-  // Add to the end of the container (newest at bottom based on API sorting)
-  testimonialsContainer.appendChild(testimonialElement);
-}
-
-// Toggle individual testimonial card
-function toggleCard(button) {
-  const card = button.closest('.testimonial-card');
-  const isExpanded = card.classList.contains('expanded');
-  
-  if (isExpanded) {
-    card.classList.remove('expanded');
-    card.setAttribute('data-expanded', 'false');
-  } else {
-    card.classList.add('expanded');
-    card.setAttribute('data-expanded', 'true');
-  }
-}
-
-// Display testimonials (now calls loadTestimonials)
-function displayTestimonials() {
-  loadTestimonials();
-}
-
-// Delete testimonial (optional - for admin use)
-async function deleteTestimonial(testimonialId) {
-  try {
-    const response = await fetch(`/api/testimonials/${testimonialId}`, {
-      method: 'DELETE'
-    });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+    // Remove empty state if it exists
+    const emptyState = elements.container.querySelector('.empty-state');
+    if (emptyState) {
+      emptyState.remove();
     }
 
-    console.log('Testimonial deleted successfully');
-    // Reload testimonials
-    await loadTestimonials();
+    // Convert timestamp to date
+    const date = testimonial.timestamp ? new Date(testimonial.timestamp) : new Date();
     
-  } catch (error) {
-    console.error('Error deleting testimonial:', error);
-    alert('Failed to delete testimonial.');
+    const testimonialElement = document.createElement('div');
+    testimonialElement.className = 'testimonial-card expanded';
+    testimonialElement.setAttribute('data-expanded', 'true');
+    testimonialElement.setAttribute('data-id', testimonial.id);
+    
+    testimonialElement.innerHTML = `
+      <div class="card-header">
+        <div class="profile-section">
+          ${testimonial.userPhoto ? 
+            `<img src="${escapeHtml(testimonial.userPhoto)}" alt="Profile" class="profile-pic">` :
+            `<div class="profile-icon"><i class="fas fa-user"></i></div>`
+          }
+        </div>
+        <button class="toggle-btn" data-action="toggle-card">
+          <i class="fas fa-chevron-down"></i>
+        </button>
+      </div>
+      
+      <div class="card-content expanded-content">
+        <div class="quote-container">
+          <i class="fas fa-quote-left quote-left"></i>
+          <p class="testimonial-text">${escapeHtml(testimonial.testimonial)}</p>
+          <i class="fas fa-quote-right quote-right"></i>
+        </div>
+        <div class="testimonial-footer">
+          <div class="author-info">
+            <span class="date">${date.toLocaleDateString()}</span>
+            <span class="author-name">${escapeHtml(testimonial.name)}</span>
+            ${testimonial.title ? `<span class="author-title">${escapeHtml(testimonial.title)}</span>` : '<span class="author-title"></span>'}
+          </div>
+        </div>
+      </div>
+
+      <div class="card-content compact-content">
+        <p class="compact-text">Check out <span class="author-name">${escapeHtml(testimonial.name)}</span>'s testimonial!</p>
+      </div>
+    `;
+    
+    // Add event listener for toggle button
+    const toggleBtn = testimonialElement.querySelector('.toggle-btn');
+    if (toggleBtn) {
+      toggleBtn.addEventListener('click', function() {
+        toggleCard(testimonialElement);
+      });
+    }
+    
+    // Add to the end of the container
+    elements.container.appendChild(testimonialElement);
   }
-}
 
-// Show empty state
-function showEmptyState() {
-  if (!testimonialsContainer) return;
-  
-  testimonialsContainer.innerHTML = `
-    <div class="empty-state">
-      <i class="fas fa-comments"></i>
-      <h3>No testimonials yet</h3>
-      <p>Be the first to share your experience with RideMatch!</p>
-    </div>
-  `;
-}
-
-// Show error state
-function showErrorState() {
-  if (!testimonialsContainer) return;
-  
-  testimonialsContainer.innerHTML = `
-    <div class="empty-state">
-      <i class="fas fa-exclamation-triangle"></i>
-      <h3>Error loading testimonials</h3>
-      <p>Please try again later.</p>
-    </div>
-  `;
-}
-
-// Helper function to escape HTML to prevent XSS
-function escapeHtml(text) {
-  if (!text) return '';
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
-
-// Set up real-time updates (optional - polls every 30 seconds)
-let testimonialRefreshInterval;
-
-function startTestimonialRefresh() {
-  // Refresh testimonials every 30 seconds to simulate real-time updates
-  testimonialRefreshInterval = setInterval(() => {
-    loadTestimonials();
-  }, 30000);
-}
-
-function stopTestimonialRefresh() {
-  if (testimonialRefreshInterval) {
-    clearInterval(testimonialRefreshInterval);
-    testimonialRefreshInterval = null;
+  // Toggle individual testimonial card
+  function toggleCard(card) {
+    if (!card) return;
+    
+    const isExpanded = card.classList.contains('expanded');
+    
+    if (isExpanded) {
+      card.classList.remove('expanded');
+      card.setAttribute('data-expanded', 'false');
+    } else {
+      card.classList.add('expanded');
+      card.setAttribute('data-expanded', 'true');
+    }
   }
-}
 
-// Initialize testimonials when page loads
-function initializeTestimonials() {
-  console.log('Initializing testimonials functionality');
-  
-  if (initializeTestimonialElements()) {
-    displayTestimonials();
-    startTestimonialRefresh(); // Start auto-refresh
-    console.log('Testimonials system initialized successfully');
+  // Delete testimonial (for admin use)
+  async function deleteTestimonial(testimonialId) {
+    if (!confirm('Are you sure you want to delete this testimonial?')) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/testimonials/${testimonialId}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      console.log('Testimonial deleted successfully');
+      showSuccessMessage('Testimonial deleted successfully');
+      
+      // Reload testimonials
+      await loadTestimonials();
+      
+    } catch (error) {
+      console.error('Error deleting testimonial:', error);
+      showErrorMessage('Failed to delete testimonial.');
+    }
+  }
+
+  // Show empty state
+  function showEmptyState() {
+    const elements = getTestimonialElements();
+    if (!elements || !elements.initialized || !elements.container) return;
+    
+    elements.container.innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-comments"></i>
+        <h3>No testimonials yet</h3>
+        <p>Be the first to share your experience with RideMatch!</p>
+      </div>
+    `;
+  }
+
+  // Show error state
+  function showErrorState() {
+    const elements = getTestimonialElements();
+    if (!elements || !elements.initialized || !elements.container) return;
+    
+    elements.container.innerHTML = `
+      <div class="empty-state">
+        <i class="fas fa-exclamation-triangle"></i>
+        <h3>Error loading testimonials</h3>
+        <p>Please try again later.</p>
+        <button class="retry-btn" onclick="TestimonialsModule.loadTestimonials()">Retry</button>
+      </div>
+    `;
+  }
+
+  // Show success message
+  function showSuccessMessage(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'testimonial-message success';
+    messageDiv.innerHTML = `
+      <i class="fas fa-check-circle"></i>
+      <span>${message}</span>
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    // Auto-remove after 3 seconds
+    setTimeout(() => {
+      if (messageDiv.parentNode) {
+        messageDiv.parentNode.removeChild(messageDiv);
+      }
+    }, 3000);
+  }
+
+  // Show error message
+  function showErrorMessage(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'testimonial-message error';
+    messageDiv.innerHTML = `
+      <i class="fas fa-exclamation-circle"></i>
+      <span>${message}</span>
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+      if (messageDiv.parentNode) {
+        messageDiv.parentNode.removeChild(messageDiv);
+      }
+    }, 5000);
+  }
+
+  // Helper function to escape HTML to prevent XSS
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  // Set up real-time updates
+  function startTestimonialRefresh() {
+    // Only start if not already running
+    if (testimonialRefreshInterval) return;
+    
+    // Refresh testimonials every 30 seconds
+    testimonialRefreshInterval = setInterval(() => {
+      loadTestimonials();
+    }, 30000);
+  }
+
+  function stopTestimonialRefresh() {
+    if (testimonialRefreshInterval) {
+      clearInterval(testimonialRefreshInterval);
+      testimonialRefreshInterval = null;
+    }
+  }
+
+  // Initialize testimonials when page loads
+  function initializeTestimonials() {
+    console.log('Initializing testimonials functionality');
+    
+    // Show initial loading state
+    showLoadingIndicator();
+    
+    // Wait a bit for DOM to be fully ready
+    setTimeout(() => {
+      if (initializeTestimonialElements()) {
+        bindEventListeners();
+        loadTestimonials();
+        startTestimonialRefresh();
+        console.log('Testimonials system initialized successfully');
+      } else {
+        console.error('Failed to initialize testimonials system');
+        hideLoadingIndicator();
+      }
+    }, 100);
+  }
+
+  // Auto-initialize when DOM is loaded
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeTestimonials);
   } else {
-    console.error('Failed to initialize testimonials system');
+    // DOM is already loaded
+    initializeTestimonials();
   }
-}
 
-// Auto-initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-  initializeTestimonials();
-});
+  // Clean up on page unload
+  window.addEventListener('beforeunload', () => {
+    stopTestimonialRefresh();
+  });
 
-// Clean up on page unload
-window.addEventListener('beforeunload', () => {
-  stopTestimonialRefresh();
-});
+  // Public API - expose only necessary functions to global scope
+  window.TestimonialsModule = {
+    loadTestimonials: loadTestimonials,
+    deleteTestimonial: deleteTestimonial,
+    refresh: function() {
+      loadTestimonials();
+    },
+    init: initializeTestimonials
+  };
 
-// Make functions globally available for HTML onclick handlers
-window.toggleTestimonialForm = toggleTestimonialForm;
-window.submitTestimonial = submitTestimonial;
-window.toggleCard = toggleCard;
-window.deleteTestimonial = deleteTestimonial; // For admin use
+})();

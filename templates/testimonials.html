@@ -146,42 +146,42 @@
   </header>
   
 <!-- Main Container -->
-    <div class="testimonials-container">
-        <!-- Testimonial Form -->
-        <div id="testimonial-form" class="testimonial-form">
-            <div class="form-header">
-                <h3>Share Your Experience</h3>
-                <button class="close-btn" onclick="toggleTestimonialForm()">
-                    <i class="fas fa-times"></i>
-                </button>
+<div class="testimonials-container">
+    <!-- Testimonial Form -->
+    <div id="testimonial-form" class="testimonial-form">
+        <div class="form-header">
+            <h3>Share Your Experience</h3>
+            <button class="close-btn">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="form-body">
+            <div class="input-group">
+                <label for="title-input">Title (Optional)</label>
+                <input type="text" id="title-input" placeholder="Your title or role">
             </div>
-            <div class="form-body">
-                <div class="input-group">
-                    <label for="title-input">Title (Optional)</label>
-                    <input type="text" id="title-input" placeholder="Your title or role">
-                </div>
-                <div class="input-group">
-                    <label for="testimonial-input">Your Experience</label>
-                    <textarea id="testimonial-input" placeholder="Share your experience with RideMatch..."></textarea>
-                </div>
-                <div class="form-actions">
-                    <button class="cancel-btn" onclick="toggleTestimonialForm()">Cancel</button>
-                    <button class="submit-btn" onclick="submitTestimonial(event)">Submit Testimonial</button>
-                </div>
+            <div class="input-group">
+                <label for="testimonial-input">Your Experience</label>
+                <textarea id="testimonial-input" placeholder="Share your experience with RideMatch..."></textarea>
+            </div>
+            <div class="form-actions">
+                <button class="cancel-btn">Cancel</button>
+                <button class="submit-btn">Submit Testimonial</button>
             </div>
         </div>
-
-        <!-- Testimonials Container -->
-        <div id="testimonials-container">
-            <!-- Testimonials will be loaded dynamically -->
-        </div>
-
-        <!-- Add Testimonial Button -->
-        <button id="add-testimonial-btn" class="add-testimonial-btn" onclick="toggleTestimonialForm()">
-            <i class="fas fa-plus"></i>
-            Add Your Testimonial
-        </button>
     </div>
+
+    <!-- Testimonials Container -->
+    <div id="testimonials-container">
+        <!-- Testimonials will be loaded dynamically -->
+    </div>
+
+    <!-- Add Testimonial Button -->
+    <button id="add-testimonial-btn" class="add-testimonial-btn">
+        <i class="fas fa-plus"></i>
+        Add Your Testimonial
+    </button>
+</div>
 
   <!-- Footer -->
   <footer>
