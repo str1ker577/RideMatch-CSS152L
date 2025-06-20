@@ -827,9 +827,17 @@ async function populateVariants() {
     });
 }
 
-// Ensure event listeners are added to dropdowns
-document.getElementById('brand').addEventListener('change', populateModels);
-document.getElementById('model').addEventListener('change', populateVariants);
+// Ensure event listeners are added to dropdowns (only if they exist)
+const brandDropdown = document.getElementById('brand');
+const modelDropdown = document.getElementById('model');
+
+if (brandDropdown) {
+    brandDropdown.addEventListener('change', populateModels);
+}
+
+if (modelDropdown) {
+    modelDropdown.addEventListener('change', populateVariants);
+}
 
 // Compare Cars Function
 async function compareCars() {
