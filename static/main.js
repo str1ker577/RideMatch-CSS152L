@@ -1671,11 +1671,20 @@ document.addEventListener("DOMContentLoaded", function () {
 //Testimonials Logic  //
 ///////////////////////
 
-let testimonialForm;
-let testimonialInput;
-let titleInput;
-let testimonialsContainer;
-let addTestimonialBtn;
+// Initialize variables as null - they will be set when DOM loads
+let testimonialForm = null;
+let testimonialInput = null;
+let titleInput = null;
+let testimonialsContainer = null;
+let addTestimonialBtn = null;
+
+// Function to get current user name
+function getCurrentUserName() {
+  if (auth && auth.currentUser) {
+    return auth.currentUser.displayName || auth.currentUser.email || 'Anonymous';
+  }
+  return 'Anonymous';
+}
 
 // Initialize testimonials DOM elements
 function initializeTestimonialElements() {
@@ -1700,13 +1709,16 @@ function initializeTestimonialElements() {
 function toggleTestimonialForm() {
   console.log('toggleTestimonialForm called');
   
+  // Initialize elements if not already done
   if (!testimonialForm) {
-    console.error('Testimonial form element not found');
-    return;
+    console.log('Elements not initialized, initializing now...');
+    if (!initializeTestimonialElements()) {
+      console.error('Failed to initialize testimonial elements');
+      return;
+    }
   }
 
-  // For demo purposes, we'll skip auth check
-  // In your real implementation, uncomment these lines:
+  // Check authentication (uncomment when ready)
   /*
   if (!auth.currentUser) {
     alert("Please sign in to submit a testimonial.");
@@ -1719,7 +1731,7 @@ function toggleTestimonialForm() {
   testimonialForm.style.display = isHidden ? 'block' : 'none';
   
   // Clear form when closing
-  if (!isHidden) {
+  if (!isHidden && testimonialInput && titleInput) {
     testimonialInput.value = '';
     titleInput.value = '';
   }
@@ -1730,14 +1742,21 @@ function toggleTestimonialForm() {
 // Submit testimonial - called from HTML onclick
 async function submitTestimonial(event) {
   console.log('submitTestimonial called');
+  console.log('Event:', event);
   
+  // Initialize elements if not already done
   if (!testimonialInput || !titleInput) {
-    console.error('Testimonial input elements not found');
-    return;
+    if (!initializeTestimonialElements()) {
+      console.error('Failed to initialize testimonial elements');
+      return;
+    }
   }
 
   const testimonialText = testimonialInput.value.trim();
   const titleText = titleInput.value.trim();
+  
+  console.log('Testimonial text:', testimonialText);
+  console.log('Title text:', titleText);
   
   if (!testimonialText) {
     alert("Please enter a testimonial.");
@@ -1751,16 +1770,19 @@ async function submitTestimonial(event) {
   submitButton.disabled = true;
 
   try {
-    // For demo purposes, we'll create a mock user name
+    // Get user name
     const userName = getCurrentUserName();
+    console.log('User name:', userName);
     
     // Prepare testimonial data for Flask API
     const testimonialData = {
       name: userName,
       testimonial: testimonialText,
       title: titleText || null,
-      rating: 5 // You can add a rating input field if needed
+      rating: 5
     };
+
+    console.log('Sending testimonial data:', testimonialData);
 
     // Send to Flask API
     const response = await fetch('/api/testimonials', {
@@ -1771,8 +1793,13 @@ async function submitTestimonial(event) {
       body: JSON.stringify(testimonialData)
     });
 
+    console.log('Response status:', response.status);
+    console.log('Response ok:', response.ok);
+
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      const errorText = await response.text();
+      console.error('API Error:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
     }
 
     const newTestimonial = await response.json();
@@ -1790,7 +1817,7 @@ async function submitTestimonial(event) {
 
   } catch (error) {
     console.error('Error submitting testimonial:', error);
-    alert('Failed to submit testimonial. Please try again.');
+    alert('Failed to submit testimonial. Please try again. Check console for details.');
   } finally {
     // Reset button state
     submitButton.textContent = originalText;
@@ -1800,9 +1827,12 @@ async function submitTestimonial(event) {
 
 // Load testimonials from Flask API
 async function loadTestimonials() {
+  // Initialize elements if not already done
   if (!testimonialsContainer) {
-    console.error('Testimonials container not found');
-    return;
+    if (!initializeTestimonialElements()) {
+      console.error('Failed to initialize testimonial elements for loading');
+      return;
+    }
   }
 
   try {

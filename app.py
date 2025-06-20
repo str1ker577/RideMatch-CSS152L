@@ -40,7 +40,7 @@ except Exception as e:
 # Initialize Firebase safely #
 ##############################
 
-db = None
+firestore_db = None
 realtime_db = None
 try:
     # Load serviceAccountKey.json
@@ -57,7 +57,7 @@ try:
     })
     
     realtime_db = db.reference()
-    db = firestore.client()
+    firestore_db = firestore.client()  # This gets Firestore
     app.logger.info("✅ Firebase initialized successfully")
 except Exception as e:
     app.logger.error(f"❌ Firebase initialization failed: {e}")
@@ -711,7 +711,7 @@ def get_testimonials():
         if realtime_db is None:
             return jsonify({'error': 'Database not initialized'}), 500
         
-        testimonials_ref = realtime_db.reference('testimonials')
+        testimonials_ref = realtime_db.child('testimonials')
         testimonials = testimonials_ref.get()
         
         if testimonials is None:
