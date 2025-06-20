@@ -563,6 +563,111 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 });
 
+function toggleDropdown() {
+    const dropdown = document.getElementById("sortDropdown");
+    dropdown.classList.toggle("open");
+}
+
+// Optional: close if clicking outside
+window.addEventListener("click", function (e) {
+    const dropdown = document.getElementById("sortDropdown");
+    
+    // Close dropdown if clicking outside of it
+    if (dropdown && !dropdown.contains(e.target)) {
+        dropdown.classList.remove("open");
+    }
+});
+
+function sortBy(type) {
+    console.log("Sorting by:", type);
+    
+    if (currentCarData.length === 0) {
+        console.warn("No data to sort");
+        return;
+    }
+
+    let sortedData = [...currentCarData]; // Create a copy to avoid mutating original data
+
+    switch (type) {
+        case 'price-asc':
+            sortedData.sort((a, b) => {
+                const priceA = parseFloat(a.Price) || 0;
+                const priceB = parseFloat(b.Price) || 0;
+                return priceA - priceB;
+            });
+            break;
+        
+        case 'price-desc':
+            sortedData.sort((a, b) => {
+                const priceA = parseFloat(a.Price) || 0;
+                const priceB = parseFloat(b.Price) || 0;
+                return priceB - priceA;
+            });
+            break;
+        
+        case 'horsepower-asc':
+            sortedData.sort((a, b) => {
+                const hpA = parseFloat(a.Horsepower) || 0;
+                const hpB = parseFloat(b.Horsepower) || 0;
+                return hpA - hpB;
+            });
+            break;
+        
+        case 'horsepower-desc':
+            sortedData.sort((a, b) => {
+                const hpA = parseFloat(a.Horsepower) || 0;
+                const hpB = parseFloat(b.Horsepower) || 0;
+                return hpB - hpA;
+            });
+            break;
+        
+        // NEW: Cargo Space sorting options
+        case 'cargo-asc':
+            sortedData.sort((a, b) => {
+                const cargoA = parseFloat(a.Cargo_space) || 0;
+                const cargoB = parseFloat(b.Cargo_space) || 0;
+                return cargoA - cargoB;
+            });
+            break;
+        
+        case 'cargo-desc':
+            sortedData.sort((a, b) => {
+                const cargoA = parseFloat(a.Cargo_space) || 0;
+                const cargoB = parseFloat(b.Cargo_space) || 0;
+                return cargoB - cargoA;
+            });
+            break;
+        
+        // NEW: Seating Capacity sorting options
+        case 'seating-asc':
+            sortedData.sort((a, b) => {
+                const seatingA = parseInt(a.Seating_Capacity) || 0;
+                const seatingB = parseInt(b.Seating_Capacity) || 0;
+                return seatingA - seatingB;
+            });
+            break;
+        
+        case 'seating-desc':
+            sortedData.sort((a, b) => {
+                const seatingA = parseInt(a.Seating_Capacity) || 0;
+                const seatingB = parseInt(b.Seating_Capacity) || 0;
+                return seatingB - seatingA;
+            });
+            break;
+        
+        default:
+            console.warn("Unknown sort type:", type);
+            return;
+    }
+
+    // Update the display with sorted data
+    displayFilteredCars(sortedData);
+    
+    // Close the dropdown after sorting
+    const dropdown = document.getElementById("sortDropdown");
+    dropdown.classList.remove("open");
+} 
+
 ////////////////////////////
 // Reset Filter Function //
 //////////////////////////
