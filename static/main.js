@@ -532,133 +532,36 @@ function getFuelTypeIcon(fuelType) {
 
 
 document.addEventListener("DOMContentLoaded", function () {
-    loadFavorites(); // Call loadFavorites to populate favorites on page load
-
+    // Initialize Firebase first
     initializeFirebase();
+
+    // Only load favorites if the favorites container exists
+    const favoritesContainer = document.getElementById("favorites-items");
+    if (favoritesContainer) {
+        loadFavorites(); // Call loadFavorites to populate favorites on page load
+    }
 
     const filterButton = document.getElementById("filter-btn"); 
     const resultsFrame = document.querySelector(".results-frame");
 
-    // Ensure sliders start at minimum values
+    // Only initialize sliders if they exist on this page
     const priceSlider = document.getElementById("price");
     const horsepowerSlider = document.getElementById("horsepower");
     const seatingSlider = document.getElementById("seating");
 
-    priceSlider.value = priceSlider.max;
-    horsepowerSlider.value = horsepowerSlider.min;
-    seatingSlider.value = "0";
+    // Check if all required slider elements exist before trying to use them
+    if (priceSlider && horsepowerSlider && seatingSlider) {
+        // Ensure sliders start at minimum values
+        priceSlider.value = priceSlider.max;
+        horsepowerSlider.value = horsepowerSlider.min;
+        seatingSlider.value = "0";
 
-    // Update displayed values to match the min values
-    updateSliderValue("price", "₱", true);
-    updateSliderValue("horsepower", "HP", false);
-    updateSliderValue("seating", "seats", false);
-
-});
-
-function toggleDropdown() {
-    const dropdown = document.getElementById("sortDropdown");
-    dropdown.classList.toggle("open");
-}
-
-// Optional: close if clicking outside
-window.addEventListener("click", function (e) {
-    const dropdown = document.getElementById("sortDropdown");
-    
-    // Close dropdown if clicking outside of it
-    if (dropdown && !dropdown.contains(e.target)) {
-        dropdown.classList.remove("open");
+        // Update displayed values to match the min values
+        updateSliderValue("price", "₱", true);
+        updateSliderValue("horsepower", "HP", false);
+        updateSliderValue("seating", "seats", false);
     }
 });
-
-function sortBy(type) {
-    console.log("Sorting by:", type);
-    
-    if (currentCarData.length === 0) {
-        console.warn("No data to sort");
-        return;
-    }
-
-    let sortedData = [...currentCarData]; // Create a copy to avoid mutating original data
-
-    switch (type) {
-        case 'price-asc':
-            sortedData.sort((a, b) => {
-                const priceA = parseFloat(a.Price) || 0;
-                const priceB = parseFloat(b.Price) || 0;
-                return priceA - priceB;
-            });
-            break;
-        
-        case 'price-desc':
-            sortedData.sort((a, b) => {
-                const priceA = parseFloat(a.Price) || 0;
-                const priceB = parseFloat(b.Price) || 0;
-                return priceB - priceA;
-            });
-            break;
-        
-        case 'horsepower-asc':
-            sortedData.sort((a, b) => {
-                const hpA = parseFloat(a.Horsepower) || 0;
-                const hpB = parseFloat(b.Horsepower) || 0;
-                return hpA - hpB;
-            });
-            break;
-        
-        case 'horsepower-desc':
-            sortedData.sort((a, b) => {
-                const hpA = parseFloat(a.Horsepower) || 0;
-                const hpB = parseFloat(b.Horsepower) || 0;
-                return hpB - hpA;
-            });
-            break;
-        
-        // NEW: Cargo Space sorting options
-        case 'cargo-asc':
-            sortedData.sort((a, b) => {
-                const cargoA = parseFloat(a.Cargo_space) || 0;
-                const cargoB = parseFloat(b.Cargo_space) || 0;
-                return cargoA - cargoB;
-            });
-            break;
-        
-        case 'cargo-desc':
-            sortedData.sort((a, b) => {
-                const cargoA = parseFloat(a.Cargo_space) || 0;
-                const cargoB = parseFloat(b.Cargo_space) || 0;
-                return cargoB - cargoA;
-            });
-            break;
-        
-        // NEW: Seating Capacity sorting options
-        case 'seating-asc':
-            sortedData.sort((a, b) => {
-                const seatingA = parseInt(a.Seating_Capacity) || 0;
-                const seatingB = parseInt(b.Seating_Capacity) || 0;
-                return seatingA - seatingB;
-            });
-            break;
-        
-        case 'seating-desc':
-            sortedData.sort((a, b) => {
-                const seatingA = parseInt(a.Seating_Capacity) || 0;
-                const seatingB = parseInt(b.Seating_Capacity) || 0;
-                return seatingB - seatingA;
-            });
-            break;
-        
-        default:
-            console.warn("Unknown sort type:", type);
-            return;
-    }
-
-    // Update the display with sorted data
-    displayFilteredCars(sortedData);
-    
-    // Close the dropdown after sorting
-    const dropdown = document.getElementById("sortDropdown");
-    dropdown.classList.remove("open");
-} 
 
 ////////////////////////////
 // Reset Filter Function //
@@ -1015,64 +918,109 @@ async function addToFave(event, variant) {
 ///////////////////
 
 async function loadFavorites() {
-    console.log("function favorites is running")
+    console.log("function favorites is running");
 
-    const response = await fetch(`${baseUrl}/get-faves`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-    });
-    const favorites = await response.json();
-    const favoritesList = document.getElementById("favorites-items");
-    favoritesList.innerHTML = ""; // Clear existing items
-
-    for (const car of favorites) {
-        const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${car.variant}`, {
-            method: "GET",
-            headers: { "Content-Type": "application/json" }
+    try {
+        const response = await fetch(`${baseUrl}/get-faves`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
         });
-        const variantData = await variantResponse.json();
 
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const favorites = await response.json();
+        
+        // Check if favorites list element exists before trying to use it
+        const favoritesList = document.getElementById("favorites-items");
+        if (!favoritesList) {
+            console.warn("favorites-items element not found on this page");
+            return;
+        }
+        
+        favoritesList.innerHTML = ""; // Clear existing items
+
+        // Check if card container exists
         const cardContainer = document.getElementById("card-container");
+        if (!cardContainer) {
+            console.warn("card-container element not found on this page");
+            return;
+        }
 
-        const card = document.createElement("div");
-        card.classList.add("card");
+        for (const car of favorites) {
+            const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${car.variant}`, {
+                method: "GET",
+                headers: { "Content-Type": "application/json" }
+            });
+            
+            if (!variantResponse.ok) {
+                console.error(`Failed to fetch specs for variant: ${car.variant}`);
+                continue;
+            }
+            
+            const variantData = await variantResponse.json();
 
-        card.innerHTML = `
-            <img src="${variantData.Image}" alt="${variantData.Model}">
-            <div class="name">${variantData.Brand} ${variantData.Model}</div>
-        `;
+            const card = document.createElement("div");
+            card.classList.add("card");
 
-        card.addEventListener("click", function () {
-            console.log("Card clicked - Populating popup");
-            console.log(variantData);
-            // Populate the popup with the selected car's details
-            document.querySelector(".car-title").textContent = `${variantData.Brand} ${variantData.Model}`;
-            document.querySelector(".img-fave-frame img").src = variantData.Image;
-            document.querySelector(".spec-fave-frame .spec-card-container").innerHTML = `
-                <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${variantData.Brand}</span></div>
-                <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${variantData.Model}</span></div>
-                <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${variantData.BodyType}</span></div>
-                <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${car.Variant}</span></div>
-                <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${variantData.DriveTrain}</span></div>
-                <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${variantData.Engine}</span></div>
-                <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${variantData.Horsepower}</span></div>
-                <div class="spec-card"><strong class="spec-label">Transmission</strong><br><span class="spec-value">${variantData.Transmission}</span></div>
-                <div class="spec-card"><strong class="spec-label">Fuel Type</strong><br><span class="spec-value">${variantData.FuelType}</span></div>
-                <div class="spec-card"><strong class="spec-label">Ground Clearance</strong><br><span class="spec-value">${variantData.GroundClearance}</span></div>
-                <div class="spec-card"><strong class="spec-label">Cargo Space</strong><br><span class="spec-value">${variantData.CargoSpace}</span></div>
-                <div class="spec-card"><strong class="spec-label">Seating Capacity</strong><br><span class="spec-value">${variantData.SeatingCapacity}</span></div>
-                <div class="spec-card"><strong class="spec-label">Price</strong><br><span class="spec-value">${variantData.Price}</span></div>
+            card.innerHTML = `
+                <img src="${variantData.Image}" alt="${variantData.Model}">
+                <div class="name">${variantData.Brand} ${variantData.Model}</div>
             `;
 
-            populateColors(variantData.Model);
+            card.addEventListener("click", function () {
+                console.log("Card clicked - Populating popup");
+                console.log(variantData);
+                
+                // Check if popup elements exist before trying to populate them
+                const carTitleElement = document.querySelector(".car-title");
+                const imgElement = document.querySelector(".img-fave-frame img");
+                const specContainer = document.querySelector(".spec-fave-frame .spec-card-container");
+                
+                if (carTitleElement && imgElement && specContainer) {
+                    // Populate the popup with the selected car's details
+                    carTitleElement.textContent = `${variantData.Brand} ${variantData.Model}`;
+                    imgElement.src = variantData.Image;
+                    specContainer.innerHTML = `
+                        <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${variantData.Brand}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${variantData.Model}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${variantData.BodyType}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${car.Variant}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${variantData.DriveTrain}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${variantData.Engine}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${variantData.Horsepower}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Transmission</strong><br><span class="spec-value">${variantData.Transmission}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Fuel Type</strong><br><span class="spec-value">${variantData.FuelType}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Ground Clearance</strong><br><span class="spec-value">${variantData.GroundClearance}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Cargo Space</strong><br><span class="spec-value">${variantData.CargoSpace}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Seating Capacity</strong><br><span class="spec-value">${variantData.SeatingCapacity}</span></div>
+                        <div class="spec-card"><strong class="spec-label">Price</strong><br><span class="spec-value">${variantData.Price}</span></div>
+                    `;
 
-            // Open the popup
-            togglePopup("card-popup");
+                    // Check if populateColors function exists before calling it
+                    if (typeof populateColors === 'function') {
+                        populateColors(variantData.Model);
+                    }
 
-        });
+                    // Open the popup - check if togglePopup function exists
+                    if (typeof togglePopup === 'function') {
+                        togglePopup("card-popup");
+                    }
+                } else {
+                    console.warn("Popup elements not found on this page");
+                }
+            });
 
-        cardContainer.appendChild(card);
-        
+            cardContainer.appendChild(card);
+        }
+    } catch (error) {
+        console.error("Error loading favorites:", error);
+        // Optionally show user-friendly error message
+        const favoritesList = document.getElementById("favorites-items");
+        if (favoritesList) {
+            favoritesList.innerHTML = '<p>Error loading favorites. Please try again later.</p>';
+        }
     }
 }
 
