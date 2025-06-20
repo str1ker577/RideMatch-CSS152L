@@ -2268,26 +2268,36 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Initialize testimonials when page loads
-  function initializeTestimonials() {
+    // Initialize testimonials when page loads
+    function initializeTestimonials() {
     console.log('Initializing testimonials functionality');
+    
+    // First check if testimonial elements exist on this page
+    const testimonialForm = document.getElementById('testimonial-form');
+    const testimonialContainer = document.getElementById('testimonials-container');
+    const addBtn = document.getElementById('add-testimonial-btn');
+    
+    if (!testimonialForm || !testimonialContainer || !addBtn) {
+        console.log('Testimonial elements not found on this page, skipping initialization');
+        return;
+    }
     
     // Show initial loading state
     showLoadingIndicator();
     
     // Wait a bit for DOM to be fully ready
     setTimeout(() => {
-      if (initializeTestimonialElements()) {
+        if (initializeTestimonialElements()) {
         bindEventListeners();
         loadTestimonials();
         startTestimonialRefresh();
         console.log('Testimonials system initialized successfully');
-      } else {
+        } else {
         console.error('Failed to initialize testimonials system');
         hideLoadingIndicator();
-      }
+        }
     }, 100);
-  }
+    }
 
   // Auto-initialize when DOM is loaded
   if (document.readyState === 'loading') {
