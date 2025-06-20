@@ -10,6 +10,15 @@ const baseUrl = isLocalhost ? 'http://127.0.0.1:8000' : window.location.origin;
 // Firebase initialization 
 let auth; // Global auth object
 let userName = null; // Keep your existing userName variable
+
+// Function to get current user name
+function getCurrentUserName() {
+  if (auth && auth.currentUser) {
+    return auth.currentUser.displayName || auth.currentUser.email || 'Anonymous';
+  }
+  return 'Anonymous';
+}
+
 let currentCarData = []; // Global variable to store current car data for sorting
 let defaultCarsLoaded = false;
 
@@ -651,9 +660,9 @@ function sortBy(type) {
     dropdown.classList.remove("open");
 } 
 
-///////////////////////////
-//reset Filter Function //
-/////////////////////////
+////////////////////////////
+// Reset Filter Function //
+//////////////////////////
 
 function refreshResults() {
     console.log("Refreshing results...");
@@ -1000,10 +1009,10 @@ async function addToFave(event, variant) {
 
 }
 
-/////////////////////
-//Loads the users // 
-// Favorite cars //
-//////////////////
+//////////////////////
+// Loads the users // 
+// Favorite cars  //
+///////////////////
 
 async function loadFavorites() {
     console.log("function favorites is running")
@@ -1068,7 +1077,7 @@ async function loadFavorites() {
 }
 
 //////////////////////////////
-//Allows users to change   //
+// Allows users to change  //
 // the color of the car   //
 // image being displayed //
 //////////////////////////
@@ -1103,7 +1112,7 @@ async function populateColors(model) {
 }
 
 ////////////////////////////////
-//Allows users to print      //
+// Allows users to print     //
 // or save the favorite     //
 // car specs as a pdf copy //
 ////////////////////////////
@@ -1719,7 +1728,7 @@ function toggleTestimonialForm() {
 }
 
 // Submit testimonial - called from HTML onclick
-function submitTestimonial(event) {
+async function submitTestimonial(event) {
   console.log('submitTestimonial called');
   
   if (!testimonialInput || !titleInput) {
@@ -1735,64 +1744,98 @@ function submitTestimonial(event) {
     return;
   }
 
-  // For demo purposes, we'll create a mock user
-  // In your real implementation, get the actual user:
-  const mockUser = {
-    uid: 'demo-user-' + Date.now(),
-    email: 'demo@example.com',
-    displayName: 'Demo User',
-    photoURL: null
-  };
-
   // Show loading state
   const submitButton = event.target;
   const originalText = submitButton.textContent;
   submitButton.textContent = 'Submitting...';
   submitButton.disabled = true;
 
-  // For demo purposes, we'll simulate the database operation
-  // In your real implementation, use your Firebase db:
-  /*
-  db.collection("testimonials").add({
-    message: testimonialText,
-    title: titleText || null,
-    userId: user.uid,
-    userEmail: user.email,
-    userName: user.displayName || "Anonymous",
-    userPhoto: user.photoURL || null,
-    timestamp: firebase.firestore.FieldValue.serverTimestamp()
-  })
-  */
-
-  // Simulate async operation
-  setTimeout(() => {
-    console.log('Testimonial submitted successfully');
+  try {
+    // For demo purposes, we'll create a mock user name
+    const userName = getCurrentUserName();
     
-    // Add testimonial to display
-    addTestimonialToDisplay({
-      message: testimonialText,
+    // Prepare testimonial data for Flask API
+    const testimonialData = {
+      name: userName,
+      testimonial: testimonialText,
       title: titleText || null,
-      userId: mockUser.uid,
-      userEmail: mockUser.email,
-      userName: mockUser.displayName || "Anonymous",
-      userPhoto: mockUser.photoURL || null,
-      timestamp: new Date()
+      rating: 5 // You can add a rating input field if needed
+    };
+
+    // Send to Flask API
+    const response = await fetch('/api/testimonials', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(testimonialData)
     });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const newTestimonial = await response.json();
+    console.log('Testimonial submitted successfully:', newTestimonial);
 
     // Reset form
     testimonialInput.value = '';
     titleInput.value = '';
     testimonialForm.style.display = 'none';
     
+    // Refresh testimonials to show the new one
+    await loadTestimonials();
+    
+    alert('Thank you for your testimonial!');
+
+  } catch (error) {
+    console.error('Error submitting testimonial:', error);
+    alert('Failed to submit testimonial. Please try again.');
+  } finally {
     // Reset button state
     submitButton.textContent = originalText;
     submitButton.disabled = false;
-    
-    alert('Thank you for your testimonial!');
-  }, 1000);
+  }
 }
 
-// Add testimonial to display
+// Load testimonials from Flask API
+async function loadTestimonials() {
+  if (!testimonialsContainer) {
+    console.error('Testimonials container not found');
+    return;
+  }
+
+  try {
+    console.log('Loading testimonials from API...');
+    const response = await fetch('/api/testimonials');
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const testimonials = await response.json();
+    console.log('Testimonials loaded:', testimonials);
+
+    // Clear container
+    testimonialsContainer.innerHTML = '';
+
+    if (!testimonials || testimonials.length === 0) {
+      showEmptyState();
+      return;
+    }
+
+    // Add each testimonial to display
+    testimonials.forEach(testimonial => {
+      addTestimonialToDisplay(testimonial);
+    });
+
+  } catch (error) {
+    console.error('Error loading testimonials:', error);
+    showErrorState();
+  }
+}
+
+// Add testimonial to display (updated to work with Flask API data structure)
 function addTestimonialToDisplay(testimonial) {
   if (!testimonialsContainer) {
     console.error('Testimonials container not found');
@@ -1805,10 +1848,13 @@ function addTestimonialToDisplay(testimonial) {
     emptyState.remove();
   }
 
-  const date = testimonial.timestamp instanceof Date ? testimonial.timestamp : new Date(testimonial.timestamp);
+  // Convert timestamp to date
+  const date = testimonial.timestamp ? new Date(testimonial.timestamp) : new Date();
+  
   const testimonialElement = document.createElement('div');
   testimonialElement.className = 'testimonial-card expanded';
   testimonialElement.setAttribute('data-expanded', 'true');
+  testimonialElement.setAttribute('data-id', testimonial.id); // Store ID for potential deletion
   
   testimonialElement.innerHTML = `
     <div class="card-header">
@@ -1826,24 +1872,24 @@ function addTestimonialToDisplay(testimonial) {
     <div class="card-content expanded-content">
       <div class="quote-container">
         <i class="fas fa-quote-left quote-left"></i>
-        <p class="testimonial-text">${escapeHtml(testimonial.message)}</p>
+        <p class="testimonial-text">${escapeHtml(testimonial.testimonial)}</p>
         <i class="fas fa-quote-right quote-right"></i>
       </div>
       <div class="testimonial-footer">
         <div class="author-info">
           <span class="date">${date.toLocaleDateString()}</span>
-          <span class="author-name">${escapeHtml(testimonial.userName)}</span>
+          <span class="author-name">${escapeHtml(testimonial.name)}</span>
           ${testimonial.title ? `<span class="author-title">${escapeHtml(testimonial.title)}</span>` : '<span class="author-title"></span>'}
         </div>
       </div>
     </div>
 
     <div class="card-content compact-content">
-      <p class="compact-text">Check out <span class="author-name">${escapeHtml(testimonial.userName)}</span>'s testimonial!</p>
+      <p class="compact-text">Check out <span class="author-name">${escapeHtml(testimonial.name)}</span>'s testimonial!</p>
     </div>
   `;
   
-  // Add to the end of the container (before the add button) for newest at bottom
+  // Add to the end of the container (newest at bottom based on API sorting)
   testimonialsContainer.appendChild(testimonialElement);
 }
 
@@ -1861,35 +1907,30 @@ function toggleCard(button) {
   }
 }
 
-// Display testimonials (for real Firebase implementation)
+// Display testimonials (now calls loadTestimonials)
 function displayTestimonials() {
-  if (!testimonialsContainer) {
-    console.error('Testimonials container not found');
-    return;
-  }
+  loadTestimonials();
+}
 
-  // For demo purposes, we'll show a sample testimonial
-  // In your real implementation, use this pattern:
-  /*
-  db.collection("testimonials")
-    .orderBy("timestamp", "asc") // Changed to asc for oldest first
-    .onSnapshot((snapshot) => {
-      testimonialsContainer.innerHTML = '';
-      
-      if (snapshot.empty) {
-        showEmptyState();
-        return;
-      }
-
-      snapshot.forEach(doc => {
-        const testimonial = doc.data();
-        addTestimonialToDisplay(testimonial);
-      });
-    }, (error) => {
-      console.error("Error fetching testimonials: ", error);
-      showErrorState();
+// Delete testimonial (optional - for admin use)
+async function deleteTestimonial(testimonialId) {
+  try {
+    const response = await fetch(`/api/testimonials/${testimonialId}`, {
+      method: 'DELETE'
     });
-  */
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    console.log('Testimonial deleted successfully');
+    // Reload testimonials
+    await loadTestimonials();
+    
+  } catch (error) {
+    console.error('Error deleting testimonial:', error);
+    alert('Failed to delete testimonial.');
+  }
 }
 
 // Show empty state
@@ -1926,12 +1967,30 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
+// Set up real-time updates (optional - polls every 30 seconds)
+let testimonialRefreshInterval;
+
+function startTestimonialRefresh() {
+  // Refresh testimonials every 30 seconds to simulate real-time updates
+  testimonialRefreshInterval = setInterval(() => {
+    loadTestimonials();
+  }, 30000);
+}
+
+function stopTestimonialRefresh() {
+  if (testimonialRefreshInterval) {
+    clearInterval(testimonialRefreshInterval);
+    testimonialRefreshInterval = null;
+  }
+}
+
 // Initialize testimonials when page loads
 function initializeTestimonials() {
   console.log('Initializing testimonials functionality');
   
   if (initializeTestimonialElements()) {
     displayTestimonials();
+    startTestimonialRefresh(); // Start auto-refresh
     console.log('Testimonials system initialized successfully');
   } else {
     console.error('Failed to initialize testimonials system');
@@ -1943,7 +2002,13 @@ document.addEventListener('DOMContentLoaded', () => {
   initializeTestimonials();
 });
 
+// Clean up on page unload
+window.addEventListener('beforeunload', () => {
+  stopTestimonialRefresh();
+});
+
 // Make functions globally available for HTML onclick handlers
 window.toggleTestimonialForm = toggleTestimonialForm;
 window.submitTestimonial = submitTestimonial;
 window.toggleCard = toggleCard;
+window.deleteTestimonial = deleteTestimonial; // For admin use

@@ -4,29 +4,44 @@ import pandas as pd
 import json
 import requests
 import firebase_admin
-from firebase_admin import credentials, auth, firestore
+from firebase_admin import credentials, auth, firestore, db as realtime_db
 import numpy as np
 import os
 import logging
+import time
 
 app = Flask(__name__)
 CORS(app)
 
-# Configure logging for Railway
+#########################################
+# Railway Hosting Service Configuration #
+#########################################
+
 logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
 
+##############################
+# Pulls RideMatch secret key #
+##############################
+
 app.secret_key = os.environ.get('SECRET_KEY', 'fallback_secret_key')
 
-# Load configuration safely
+#############################
+# Load configuration safely #
+#############################
+
 try:
     app.config.from_pyfile('config.py')
     app.logger.info("✅ Config.py loaded successfully")
 except Exception as e:
     app.logger.info(f"⚠️ config.py not found: {e}, using environment variables")
 
-# Initialize Firebase safely
+##############################
+# Initialize Firebase safely #
+##############################
+
 db = None
+realtime_db = None
 try:
     # Load serviceAccountKey.json
     if 'SERVICE_ACCOUNT_KEY_JSON' in os.environ:
@@ -37,14 +52,21 @@ try:
         cred = credentials.Certificate('serviceAccountKey.json')
         app.logger.info("✅ Firebase credentials loaded from file")
     
-    firebase_admin.initialize_app(cred)
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app/'  
+    })
+    
+    realtime_db = db.reference()
     db = firestore.client()
     app.logger.info("✅ Firebase initialized successfully")
 except Exception as e:
     app.logger.error(f"❌ Firebase initialization failed: {e}")
     db = None
 
-# Load Firebase config safely
+###############################
+# Load Firebase config safely #
+############################### 
+
 firebase_config = {}
 api_key = None
 try:
@@ -67,7 +89,11 @@ except Exception as e:
     firebase_config = {}
     api_key = None
 
-# Load CSV data safely
+
+########################
+# Load CSV data safely #
+########################
+
 df = pd.DataFrame()
 try:
     # Check if file exists first
@@ -118,6 +144,10 @@ def serve_resources(filename):
         app.logger.warning(f"Resources directory not found: {resources_path}")
         return "Resource not found", 404
     return send_from_directory(resources_path, filename)
+
+##########################
+# Firebase Configuration #
+##########################
 
 @app.route('/firebase-config')
 def get_firebase_config():
@@ -172,6 +202,10 @@ def verify_token():
     except Exception as e:
         app.logger.error(f"Token verification failed: {str(e)}")
         return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
+    
+###################
+# Signup Function #
+###################
 
 @app.route('/signup', methods=['POST'])
 def signup():
@@ -202,6 +236,10 @@ def signup():
     except Exception as e:
         app.logger.error(f"Signup failed for {email}: {str(e)}")
         return jsonify({"status": "error", "message": f"Signup failed: {str(e)}"}), 400
+    
+##################
+# Login Function #
+##################
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -255,6 +293,10 @@ def logout():
     session.clear()
     return jsonify({"status": "success", "message": "Logged out successfully"}), 200
 
+###################
+# HTML Page Links #
+###################
+
 @app.route('/about')
 def about():
     return render_template('about.html')
@@ -299,6 +341,10 @@ def profile():
     
     return render_template('profile.html')
 
+#################################
+# Toggle Favorite/Like Function #
+#################################
+
 @app.route('/get-faves', methods=['POST'])
 def get_faves():
     if not db:
@@ -323,6 +369,10 @@ def get_faves():
     else:
         app.logger.warning("Unauthorized access to favorites")
         return jsonify({"error": "Not logged in"}), 401
+    
+#########################
+# Filter Function Logic #
+#########################
 
 @app.route('/get_cars', methods=['GET'])
 def get_cars():
@@ -550,6 +600,10 @@ def find_car_image(model):
     except Exception as e:
         app.logger.error(f"Error finding image for model {model}: {e}")
         return "/static/resources/tesr.png"
+    
+###########################
+# Pull Data from CSV file #
+###########################
 
 @app.route('/get_specs', methods=['GET'])
 def get_specs():
@@ -593,6 +647,10 @@ def get_specs():
     except Exception as e:
         app.logger.error(f"Error getting specs for variant {variant}: {e}")
         return jsonify({"error": f"Failed to get specs: {str(e)}"}), 500
+
+##########################
+# Favorite/Like Function #
+##########################
 
 @app.route('/toggle-fave', methods=['POST'])
 def toggle_fave():
@@ -639,8 +697,102 @@ def toggle_fave():
     else:
         app.logger.warning("Unauthorized access to toggle-fave")
         return jsonify({"error": "User not logged in"}), 401
+    
+    
+###############################
+# Testimonials Function Logic #
+###############################   
+    
 
-# Error handlers
+@app.route('/api/testimonials', methods=['GET'])
+def get_testimonials():
+    """Get all testimonials"""
+    try:
+        if realtime_db is None:
+            return jsonify({'error': 'Database not initialized'}), 500
+        
+        testimonials_ref = realtime_db.reference('testimonials')
+        testimonials = testimonials_ref.get()
+        
+        if testimonials is None:
+            return jsonify([])
+        
+        # Convert to list format for frontend
+        testimonials_list = []
+        for key, value in testimonials.items():
+            testimonial = value
+            testimonial['id'] = key
+            testimonials_list.append(testimonial)
+        
+        # Sort by timestamp (newest first)
+        testimonials_list.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
+        return jsonify(testimonials_list)
+    
+    except Exception as e:
+        app.logger.error(f"Error getting testimonials: {e}")
+        return jsonify({'error': 'Failed to get testimonials'}), 500
+
+@app.route('/api/testimonials', methods=['POST'])
+def add_testimonial():
+    """Add a new testimonial"""
+    try:
+        if realtime_db is None:
+            return jsonify({'error': 'Database not initialized'}), 500
+        
+        data = request.get_json()
+        
+        # Validate required fields
+        if not data or not data.get('name') or not data.get('testimonial'):
+            return jsonify({'error': 'Name and testimonial are required'}), 400
+        
+        # Create testimonial object
+        testimonial = {
+            'name': data['name'].strip(),
+            'testimonial': data['testimonial'].strip(),
+            'timestamp': int(time.time() * 1000),  # Current timestamp in milliseconds
+            'email': data.get('email', '').strip() if data.get('email') else None,
+            'rating': data.get('rating', 5),  # Default 5 stars
+            'approved': False  # You might want to moderate testimonials
+        }
+        
+        # Add to Real-time Database
+        testimonials_ref = realtime_db.reference('testimonials')
+        new_testimonial_ref = testimonials_ref.push(testimonial)
+        
+        # Return the created testimonial with its ID
+        testimonial['id'] = new_testimonial_ref.key
+        
+        app.logger.info(f"✅ Testimonial added: {new_testimonial_ref.key}")
+        return jsonify(testimonial), 201
+    
+    except Exception as e:
+        app.logger.error(f"Error adding testimonial: {e}")
+        return jsonify({'error': 'Failed to add testimonial'}), 500
+
+@app.route('/api/testimonials/<testimonial_id>', methods=['DELETE'])
+def delete_testimonial(testimonial_id):
+    """Delete a testimonial (admin only)"""
+    try:
+        if realtime_db is None:
+            return jsonify({'error': 'Database not initialized'}), 500
+        
+        # You might want to add authentication check here
+        testimonial_ref = realtime_db.reference(f'testimonials/{testimonial_id}')
+        testimonial_ref.delete()
+        
+        app.logger.info(f"✅ Testimonial deleted: {testimonial_id}")
+        return jsonify({'message': 'Testimonial deleted successfully'})
+    
+    except Exception as e:
+        app.logger.error(f"Error deleting testimonial: {e}")
+        return jsonify({'error': 'Failed to delete testimonial'}), 500   
+    
+    
+##################
+# Error handlers #
+##################
+
 @app.errorhandler(404)
 def not_found(error):
     app.logger.warning(f"404 error: {request.url}")
@@ -655,3 +807,5 @@ if __name__ == "__main__":
     port = int(os.environ.get('PORT', 8000))
     app.logger.info(f"Starting app on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
+    
+    
