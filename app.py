@@ -41,7 +41,8 @@ except Exception as e:
 ##############################
 
 firestore_db = None
-realtime_db = None
+realtime_db_ref = None  # Changed variable name to avoid confusion
+
 try:
     # Load serviceAccountKey.json
     if 'SERVICE_ACCOUNT_KEY_JSON' in os.environ:
@@ -56,13 +57,15 @@ try:
         'databaseURL': 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app/'  
     })
     
-    realtime_db = db.reference()
-    firestore_db = firestore.client()  # This gets Firestore
+    realtime_db_ref = realtime_db.reference()  # Use the imported realtime_db module
+    firestore_db = firestore.client()
     app.logger.info("✅ Firebase initialized successfully")
+    
 except Exception as e:
     app.logger.error(f"❌ Firebase initialization failed: {e}")
-    db = None
-
+    realtime_db_ref = None
+    firestore_db = None
+    
 ###############################
 # Load Firebase config safely #
 ############################### 
@@ -708,10 +711,10 @@ def toggle_fave():
 def get_testimonials():
     """Get all testimonials"""
     try:
-        if realtime_db is None:
+        if realtime_db_ref is None:  # Changed variable name
             return jsonify({'error': 'Database not initialized'}), 500
         
-        testimonials_ref = realtime_db.child('testimonials')
+        testimonials_ref = realtime_db_ref.child('testimonials')
         testimonials = testimonials_ref.get()
         
         if testimonials is None:
