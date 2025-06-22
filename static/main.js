@@ -1251,43 +1251,80 @@ function calculatePresentValue(monthlyPayment, monthlyRate, numPayments) {
     return monthlyPayment * (numerator / denominator);
 }
 
-// ADDED: Number formatting function for inputs
+// FIXED: Number formatting function for inputs
 function formatNumberWithCommas(num) {
-    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    // Remove any existing commas first, then add them back
+    const cleanNum = num.toString().replace(/,/g, '');
+    if (cleanNum === '' || isNaN(cleanNum)) return cleanNum;
+    return parseInt(cleanNum).toLocaleString();
 }
 
-// ADDED: Remove commas and convert to number
+// FIXED: Remove commas and convert to number
 function parseNumberFromInput(value) {
-    return parseFloat(value.toString().replace(/,/g, "")) || 0;
+    if (!value) return 0;
+    return parseFloat(value.toString().replace(/,/g, '')) || 0;
 }
 
-// ADDED: Auto-format number inputs with commas
+// FIXED: Auto-format number inputs with commas
 function setupNumberFormatting() {
     const numberInputs = ['monthly-income', 'total-savings'];
     
     numberInputs.forEach(inputId => {
         const input = document.getElementById(inputId);
         if (input) {
+            // Store cursor position for better UX
+            let lastPosition = 0;
+            
             input.addEventListener('input', function(e) {
-                // Get the raw number value
-                let value = e.target.value.replace(/,/g, '');
+                // Get cursor position before formatting
+                const cursorPosition = e.target.selectionStart;
+                const oldValue = e.target.value;
+                const oldLength = oldValue.length;
                 
-                // Only process if it's a valid number
-                if (value && !isNaN(value)) {
-                    // Format with commas
-                    const formatted = formatNumberWithCommas(value);
-                    
-                    // Update the input value
-                    e.target.value = formatted;
+                // Remove all non-digit characters except for leading digits
+                let value = oldValue.replace(/[^\d]/g, '');
+                
+                // Don't format if empty
+                if (value === '') {
+                    e.target.value = '';
+                    return;
+                }
+                
+                // Format with commas
+                const formatted = formatNumberWithCommas(value);
+                
+                // Update the input value
+                e.target.value = formatted;
+                
+                // Restore cursor position accounting for added commas
+                const newLength = formatted.length;
+                const lengthDifference = newLength - oldLength;
+                const newPosition = cursorPosition + lengthDifference;
+                
+                // Set cursor position after formatting
+                setTimeout(() => {
+                    e.target.setSelectionRange(newPosition, newPosition);
+                }, 0);
+            });
+            
+            // Also format on blur to ensure consistency
+            input.addEventListener('blur', function(e) {
+                if (e.target.value) {
+                    const value = e.target.value.replace(/[^\d]/g, '');
+                    if (value) {
+                        e.target.value = formatNumberWithCommas(value);
+                    }
                 }
             });
             
-            // Format on blur (when user leaves the field)
-            input.addEventListener('blur', function(e) {
-                let value = e.target.value.replace(/,/g, '');
-                if (value && !isNaN(value)) {
-                    e.target.value = formatNumberWithCommas(value);
-                }
+            // Handle paste events
+            input.addEventListener('paste', function(e) {
+                setTimeout(() => {
+                    const value = e.target.value.replace(/[^\d]/g, '');
+                    if (value) {
+                        e.target.value = formatNumberWithCommas(value);
+                    }
+                }, 0);
             });
         }
     });
@@ -1863,7 +1900,6 @@ document.addEventListener("DOMContentLoaded", function () {
         console.log("✅ Test completed. Results:", testResults);
     }
 });
-
 /////////////////////////
 //Testimonials Logic  //
 ///////////////////////
