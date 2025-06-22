@@ -792,6 +792,40 @@ def delete_testimonial(testimonial_id):
         return jsonify({'error': 'Failed to delete testimonial'}), 500   
     
     
+    
+# OPTIONAL: Add this endpoint specifically for calculator if you want separation
+@app.route('/get_affordable_cars', methods=['GET'])
+def get_affordable_cars():
+    """Dedicated endpoint for calculator - returns only essential car data"""
+    if df.empty:
+        app.logger.error("Car data not available for calculator")
+        return jsonify({"error": "Car data not available"}), 500
+    
+    app.logger.info("🧮 Processing calculator car request")
+    
+    try:
+        max_price = request.args.get("max_price", type=int, default=3000000)
+        
+        # Filter cars by price only
+        filtered_df = df[
+            (df["Price"].notna()) &
+            (df["Price"] <= max_price)
+        ].copy()
+        
+        # Select only the columns needed for calculator display
+        calculator_columns = ['Brand', 'Model', 'Variant', 'Fuel_Type', 'Price']
+        filtered_df = filtered_df[calculator_columns]
+        
+        # Convert to JSON
+        affordable_cars = filtered_df.fillna("").to_dict(orient="records")
+        
+        app.logger.info(f"✅ Calculator returning {len(affordable_cars)} affordable cars")
+        return jsonify(affordable_cars)
+        
+    except Exception as e:
+        app.logger.error(f"Error in calculator endpoint: {e}")
+        return jsonify({"error": f"Failed to get affordable cars: {str(e)}"}), 500
+    
 ##################
 # Error handlers #
 ##################

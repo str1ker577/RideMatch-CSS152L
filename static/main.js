@@ -1223,6 +1223,12 @@ function printPopup() {
 //PRICE CALCULATOR  //
 //////////////////////
 
+// ADDED: Base URL configuration - update this to match your app's URL
+const baseUrl = window.location.origin; // Automatically gets the current domain
+
+// ADDED: Global variable to store current calculator max price
+let calculatorMaxPrice = 0;
+
 // Precision helper function to handle floating point arithmetic
 function preciseCalculation(callback) {
     // Use higher precision for financial calculations
@@ -1368,6 +1374,9 @@ function calculateAffordability() {
         calculationMethod = monthlyIncome > 0 ? "savings_limited" : "cash";
     }
     
+    // ADDED: Store the max price globally for the car display function
+    calculatorMaxPrice = maxCarPrice;
+    
     console.log("Final precise calculation:", {
         loanBasedPrice: roundedLoanPrice,
         savingsBasedPrice: roundedSavingsPrice,
@@ -1388,9 +1397,6 @@ function calculateAffordability() {
         savingsBasedPrice: roundedSavingsPrice,
         calculationDetails
     });
-    
-    // Filter cars based on calculated price
-    filterCarsByPrice(maxCarPrice);
 }
 
 // Enhanced Display calculation results with precise formatting
@@ -1525,6 +1531,186 @@ function calculateMonthlyPayment(loanAmount, annualRate, years) {
     return Math.round(monthlyPayment * 100) / 100;
 }
 
+// ADDED: New function specifically for calculator car filtering - independent from main filter
+async function fetchAffordableCars(maxPrice) {
+    console.log(`🔍 Fetching affordable cars with max price: ₱${maxPrice.toLocaleString()}`);
+    
+    try {
+        // Use the same endpoint as main filter but only with price parameter
+        const url = new URL(`${baseUrl}/get_cars`);
+        url.searchParams.append("max_price", Math.floor(maxPrice));
+        
+        console.log("📤 Sending calculator request to:", url.href);
+        
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log("📥 Received calculator cars data:", data);
+        
+        return data;
+    } catch (error) {
+        console.error("🚨 Error fetching affordable cars:", error);
+        throw error;
+    }
+}
+
+// ADDED: Function to determine affordability level based on price vs budget
+function getAffordabilityLevel(carPrice, maxBudget) {
+    const percentage = (carPrice / maxBudget) * 100;
+    
+    if (percentage <= 60) {
+        return { level: "Excellent", class: "affordability-excellent", description: "Very comfortable budget" };
+    } else if (percentage <= 75) {
+        return { level: "Good", class: "affordability-good", description: "Comfortable budget" };
+    } else if (percentage <= 90) {
+        return { level: "Fair", class: "affordability-fair", description: "Moderate budget" };
+    } else {
+        return { level: "Tight", class: "affordability-tight", description: "Maximum budget" };
+    }
+}
+
+// ADDED: Function to display calculator car results in table format
+function displayCalculatorCarResults(cars, maxBudget) {
+    const resultsContainer = document.getElementById("calculator-car-results");
+    const resultsCount = document.getElementById("calculator-results-count");
+    const carSpecs = document.getElementById("calculator-car-specs");
+    
+    if (!resultsContainer || !resultsCount || !carSpecs) {
+        console.error("Calculator results elements not found");
+        return;
+    }
+    
+    // Update results count
+    resultsCount.textContent = `${cars.length} car${cars.length !== 1 ? 's' : ''} found within your budget`;
+    
+    // Clear existing results
+    carSpecs.innerHTML = "";
+    
+    if (cars.length === 0) {
+        carSpecs.innerHTML = `
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 2rem; color: #666;">
+                    No cars found within your budget of ₱${Math.floor(maxBudget).toLocaleString()}.<br>
+                    <small>Try adjusting your income, savings, or loan parameters.</small>
+                </td>
+            </tr>
+        `;
+    } else {
+        // Sort cars by price (ascending)
+        cars.sort((a, b) => parseFloat(a.Price) - parseFloat(b.Price));
+        
+        // Generate table rows
+        cars.forEach(car => {
+            const price = parseFloat(car.Price) || 0;
+            const affordability = getAffordabilityLevel(price, maxBudget);
+            
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${car.Brand || 'N/A'}</td>
+                <td>${car.Model || 'N/A'}</td>
+                <td>${car.Variant || 'N/A'}</td>
+                <td>${car.Fuel_Type || 'N/A'}</td>
+                <td class="price-cell">₱${price.toLocaleString()}</td>
+                <td class="affordability-cell ${affordability.class}" title="${affordability.description}">
+                    ${affordability.level}
+                </td>
+            `;
+            carSpecs.appendChild(row);
+        });
+    }
+    
+    // Show the results container
+    resultsContainer.style.display = "block";
+    
+    // Scroll to results
+    setTimeout(() => {
+        resultsContainer.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 100);
+}
+
+// MODIFIED: Updated function to handle car display for calculator
+async function showAffordableCars(maxPrice) {
+    console.log(`📋 Showing affordable cars for budget: ₱${maxPrice.toLocaleString()}`);
+    
+    try {
+        // Show loading state
+        const resultsContainer = document.getElementById("calculator-car-results");
+        if (resultsContainer) {
+            resultsContainer.style.display = "block";
+            const carSpecs = document.getElementById("calculator-car-specs");
+            if (carSpecs) {
+                carSpecs.innerHTML = `
+                    <tr>
+                        <td colspan="6" style="text-align: center; padding: 2rem;">
+                            <div>Loading affordable cars...</div>
+                        </td>
+                    </tr>
+                `;
+            }
+        }
+        
+        // Fetch affordable cars
+        const cars = await fetchAffordableCars(maxPrice);
+        
+        // Display the results
+        displayCalculatorCarResults(cars, maxPrice);
+        
+    } catch (error) {
+        console.error("🚨 Error showing affordable cars:", error);
+        
+        // Show error message
+        const carSpecs = document.getElementById("calculator-car-specs");
+        if (carSpecs) {
+            carSpecs.innerHTML = `
+                <tr>
+                    <td colspan="6" style="text-align: center; padding: 2rem; color: #d32f2f;">
+                        <div>❌ Error loading cars. Please try again.</div>
+                        <small>Error: ${error.message}</small>
+                    </td>
+                </tr>
+            `;
+        }
+    }
+}
+
+// Reset calculator form
+function resetCalculator() {
+    // Reset all input fields
+    document.getElementById("monthly-income").value = "";
+    document.getElementById("total-savings").value = "";
+    document.getElementById("down-payment").value = "20";
+    document.getElementById("interest-rate").value = "6.5";
+    document.getElementById("loan-term").value = "5";
+    document.getElementById("income-ratio").value = "30";
+    
+    // Hide results
+    const resultsDiv = document.getElementById("calculator-results");
+    if (resultsDiv) {
+        resultsDiv.style.display = "none";
+        resultsDiv.innerHTML = "";
+    }
+    
+    // MODIFIED: Hide calculator car results instead of main filter results
+    const calculatorResults = document.getElementById("calculator-car-results");
+    if (calculatorResults) {
+        calculatorResults.style.display = "none";
+    }
+    
+    // Clear calculator car data
+    const carSpecs = document.getElementById("calculator-car-specs");
+    if (carSpecs) {
+        carSpecs.innerHTML = "";
+    }
+    
+    // Reset global max price
+    calculatorMaxPrice = 0;
+    
+    console.log("Calculator reset successfully");
+}
+
 // Test function to verify calculations
 function testCalculatorPrecision() {
     console.log("=== TESTING CALCULATOR PRECISION ===");
@@ -1563,103 +1749,6 @@ function testCalculatorPrecision() {
         totalCarPrice: Math.round(totalCarPrice * 100) / 100,
         downPayment: Math.round(downPayment * 100) / 100
     };
-}
-
-// Filter cars by calculated maximum price
-async function filterCarsByPrice(maxPrice) {
-    console.log(`Filtering cars with max price: ₱${maxPrice.toLocaleString()}`);
-    
-    try {
-        // Use your existing API endpoint with price filter
-        const url = new URL(`${baseUrl}/get_cars`);
-        url.searchParams.append("max_price", Math.floor(maxPrice));
-        
-        console.log("📤 Sending price filter request to:", url.href);
-        
-        const response = await fetch(url);
-        const data = await response.json();
-        
-        console.log("📥 Received affordable cars data:", data);
-        
-        if (data.length === 0) {
-            alert("No cars found within your budget. Try adjusting your parameters or consider a higher budget.");
-        } else {
-            // Update the global car data for sorting
-            currentCarData = data;
-            
-            // Display the filtered cars
-            displayFilteredCars(data);
-            
-            // Update the results frame title to show it's filtered by budget
-            const resultsFrame = document.getElementById("results-frame");
-            if (resultsFrame) {
-                const existingTitle = resultsFrame.querySelector('h2') || resultsFrame.querySelector('.results-title');
-                if (existingTitle) {
-                    existingTitle.textContent = `Cars Within Your Budget (₱${Math.floor(maxPrice).toLocaleString()} or less)`;
-                }
-            }
-            
-            defaultCarsLoaded = true;
-        }
-    } catch (error) {
-        console.error("🚨 Error fetching affordable cars:", error);
-        alert("An error occurred while fetching affordable cars. Please try again later.");
-    }
-}
-
-// Show affordable cars (called from results button)
-function showAffordableCars(maxPrice) {
-    // Scroll to results if they exist, otherwise filter cars
-    const resultsFrame = document.getElementById("results-frame");
-    
-    if (resultsFrame && resultsFrame.style.display === "block") {
-        // Results already showing, just scroll to them
-        resultsFrame.scrollIntoView({ behavior: 'smooth' });
-    } else {
-        // Filter and show cars
-        filterCarsByPrice(maxPrice);
-        
-        // Scroll to results after a short delay to allow for rendering
-        setTimeout(() => {
-            if (resultsFrame) {
-                resultsFrame.scrollIntoView({ behavior: 'smooth' });
-            }
-        }, 500);
-    }
-}
-
-// Reset calculator form
-function resetCalculator() {
-    // Reset all input fields
-    document.getElementById("monthly-income").value = "";
-    document.getElementById("total-savings").value = "";
-    document.getElementById("down-payment").value = "20";
-    document.getElementById("interest-rate").value = "6.5";
-    document.getElementById("loan-term").value = "5";
-    document.getElementById("income-ratio").value = "30";
-    
-    // Hide results
-    const resultsDiv = document.getElementById("calculator-results");
-    if (resultsDiv) {
-        resultsDiv.style.display = "none";
-        resultsDiv.innerHTML = "";
-    }
-    
-    // Clear any filtered results
-    const resultsFrame = document.getElementById("results-frame");
-    if (resultsFrame) {
-        resultsFrame.style.display = "none";
-        resultsFrame.classList.remove("active");
-    }
-    
-    // Clear car data
-    currentCarData = [];
-    const resultsBody = document.getElementById("car-specs");
-    if (resultsBody) {
-        resultsBody.innerHTML = "";
-    }
-    
-    console.log("Calculator reset successfully");
 }
 
 // Add event listeners for real-time calculation (optional)
@@ -1711,23 +1800,26 @@ function updateCalculationPreview() {
     }
 }
 
-// Initialize calculator when DOM loads (add to your existing DOMContentLoaded)
+// MODIFIED: Initialize calculator when DOM loads
 document.addEventListener("DOMContentLoaded", function () {
-    // Your existing code...
+    console.log("🚀 Calculator page initialized");
     
-    // Add calculator setup
+    // Setup calculator listeners
     setupCalculatorListeners();
     
     // Reset calculator on page load
     const calculatorForm = document.getElementById("price-calculator-form");
     if (calculatorForm) {
         resetCalculator();
+        console.log("✅ Calculator form reset on page load");
     }
     
-    // Run precision test in console
-    console.log("Running precision test...");
-    const testResults = testCalculatorPrecision();
-    console.log("Test completed. Results:", testResults);
+    // Run precision test in console (development only)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        console.log("🧪 Running precision test...");
+        const testResults = testCalculatorPrecision();
+        console.log("✅ Test completed. Results:", testResults);
+    }
 });
 
 /////////////////////////
