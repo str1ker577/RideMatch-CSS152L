@@ -1251,92 +1251,13 @@ function calculatePresentValue(monthlyPayment, monthlyRate, numPayments) {
     return monthlyPayment * (numerator / denominator);
 }
 
-// FIXED: Number formatting function for inputs
-function formatNumberWithCommas(num) {
-    // Remove any existing commas first, then add them back
-    const cleanNum = num.toString().replace(/,/g, '');
-    if (cleanNum === '' || isNaN(cleanNum)) return cleanNum;
-    return parseInt(cleanNum).toLocaleString();
-}
-
-// FIXED: Remove commas and convert to number
-function parseNumberFromInput(value) {
-    if (!value) return 0;
-    return parseFloat(value.toString().replace(/,/g, '')) || 0;
-}
-
-// FIXED: Auto-format number inputs with commas
-function setupNumberFormatting() {
-    const numberInputs = ['monthly-income', 'total-savings'];
-    
-    numberInputs.forEach(inputId => {
-        const input = document.getElementById(inputId);
-        if (input) {
-            // Store cursor position for better UX
-            let lastPosition = 0;
-            
-            input.addEventListener('input', function(e) {
-                // Get cursor position before formatting
-                const cursorPosition = e.target.selectionStart;
-                const oldValue = e.target.value;
-                const oldLength = oldValue.length;
-                
-                // Remove all non-digit characters except for leading digits
-                let value = oldValue.replace(/[^\d]/g, '');
-                
-                // Don't format if empty
-                if (value === '') {
-                    e.target.value = '';
-                    return;
-                }
-                
-                // Format with commas
-                const formatted = formatNumberWithCommas(value);
-                
-                // Update the input value
-                e.target.value = formatted;
-                
-                // Restore cursor position accounting for added commas
-                const newLength = formatted.length;
-                const lengthDifference = newLength - oldLength;
-                const newPosition = cursorPosition + lengthDifference;
-                
-                // Set cursor position after formatting
-                setTimeout(() => {
-                    e.target.setSelectionRange(newPosition, newPosition);
-                }, 0);
-            });
-            
-            // Also format on blur to ensure consistency
-            input.addEventListener('blur', function(e) {
-                if (e.target.value) {
-                    const value = e.target.value.replace(/[^\d]/g, '');
-                    if (value) {
-                        e.target.value = formatNumberWithCommas(value);
-                    }
-                }
-            });
-            
-            // Handle paste events
-            input.addEventListener('paste', function(e) {
-                setTimeout(() => {
-                    const value = e.target.value.replace(/[^\d]/g, '');
-                    if (value) {
-                        e.target.value = formatNumberWithCommas(value);
-                    }
-                }, 0);
-            });
-        }
-    });
-}
-
 // Price Calculator Function with Enhanced Precision
 function calculateAffordability() {
     console.log("Calculating affordability with enhanced precision...");
     
-    // MODIFIED: Get input values with comma parsing
-    const monthlyIncome = parseNumberFromInput(document.getElementById("monthly-income").value);
-    const totalSavings = parseNumberFromInput(document.getElementById("total-savings").value);
+    // Get input values
+    const monthlyIncome = parseFloat(document.getElementById("monthly-income").value) || 0;
+    const totalSavings = parseFloat(document.getElementById("total-savings").value) || 0;
     const downPaymentPercent = parseFloat(document.getElementById("down-payment").value) || 20;
     const interestRate = parseFloat(document.getElementById("interest-rate").value) || 6.5;
     const loanTermYears = parseInt(document.getElementById("loan-term").value) || 5;
@@ -1861,7 +1782,7 @@ function debounce(func, wait) {
 
 // Optional: Show live preview of affordability (without full calculation)
 function updateCalculationPreview() {
-    const monthlyIncome = parseNumberFromInput(document.getElementById("monthly-income").value); // MODIFIED: use parseNumberFromInput
+    const monthlyIncome = parseFloat(document.getElementById("monthly-income").value) || 0;
     const incomeRatio = parseFloat(document.getElementById("income-ratio").value) || 30;
     
     if (monthlyIncome > 0) {
@@ -1883,9 +1804,6 @@ document.addEventListener("DOMContentLoaded", function () {
     // Setup calculator listeners
     setupCalculatorListeners();
     
-    // ADDED: Setup number formatting for inputs
-    setupNumberFormatting();
-    
     // Reset calculator on page load
     const calculatorForm = document.getElementById("price-calculator-form");
     if (calculatorForm) {
@@ -1900,6 +1818,7 @@ document.addEventListener("DOMContentLoaded", function () {
         console.log("✅ Test completed. Results:", testResults);
     }
 });
+
 /////////////////////////
 //Testimonials Logic  //
 ///////////////////////
