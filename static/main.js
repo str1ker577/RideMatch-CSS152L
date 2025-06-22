@@ -1231,10 +1231,47 @@ function printPopup() {
     location.reload(); // Reload to restore event listeners
 }
 
+async function testAffordabilityAPI() {
+    try {
+        const response = await fetch('/get_affordable_cars?max_price=1000000&include_stretch=true');
+        console.log("API Response Status:", response.status);
+        const data = await response.json();
+        console.log("API Response Data:", data);
+    } catch (error) {
+        console.error("API Test Error:", error);
+    
+
 //////////////////////
 //PRICE CALCULATOR  //
 //////////////////////
 
+// More precise loan calculation with proper rounding
+function calculatePresentValue(monthlyPayment, monthlyRate, numPayments) {
+    if (monthlyRate === 0) {
+        return monthlyPayment * numPayments;
+    }
+    
+    const factor = Math.pow(1 + monthlyRate, -numPayments);
+    const numerator = 1 - factor;
+    const denominator = monthlyRate;
+    
+    return monthlyPayment * (numerator / denominator);
+}
+
+// Helper function to calculate monthly payment
+function calculateMonthlyPayment(loanAmount, annualRate, years) {
+    const monthlyRate = (annualRate / 100) / 12;
+    const numPayments = years * 12;
+    
+    if (monthlyRate === 0) {
+        return loanAmount / numPayments;
+    }
+    
+    const factor = Math.pow(1 + monthlyRate, numPayments);
+    const monthlyPayment = loanAmount * (monthlyRate * factor) / (factor - 1);
+    
+    return Math.round(monthlyPayment * 100) / 100;
+}
 // Enhanced Price Calculator Function with Affordability Table
 function calculateAffordability() {
     console.log("Calculating affordability with enhanced precision...");
