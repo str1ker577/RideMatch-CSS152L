@@ -7,6 +7,10 @@ const isLocalhost = window.location.hostname === '127.0.0.1' || window.location.
 const baseUrl = isLocalhost ? 'http://127.0.0.1:8000' : window.location.origin;
 //const baseUrl = "https://a7cbb3da-2928-4d18-ba75-ea41ce8ad0c5-00-g8eiilou0duk.sisko.replit.dev"; // Base URL for API requests
 
+
+let currentAffordabilityData = [];
+let maxAffordablePrice = 0;
+
 // Firebase initialization 
 let auth; // Global auth object
 let userName = null; // Keep your existing userName variable
@@ -69,6 +73,14 @@ document.addEventListener('click', function(event) {
         event.target.closest('.card')  // Prevent closing when clicking on car cards
     ) {
         return;
+    }
+
+    const affordabilityDropdown = document.getElementById('affordabilitySortDropdown');
+    if (affordabilityDropdown && !affordabilityDropdown.contains(event.target)) {
+        const menu = affordabilityDropdown.querySelector('.dropdown-menu');
+        if (menu) {
+            menu.classList.remove('show');
+        }
     }
 
     // Close only if clicking outside
@@ -1223,32 +1235,7 @@ function printPopup() {
 //PRICE CALCULATOR  //
 //////////////////////
 
-// Precision helper function to handle floating point arithmetic
-function preciseCalculation(callback) {
-    // Use higher precision for financial calculations
-    const originalToFixed = Number.prototype.toFixed;
-    try {
-        return callback();
-    } finally {
-        Number.prototype.toFixed = originalToFixed;
-    }
-}
-
-// More precise loan calculation with proper rounding
-function calculatePresentValue(monthlyPayment, monthlyRate, numPayments) {
-    if (monthlyRate === 0) {
-        return monthlyPayment * numPayments;
-    }
-    
-    // Use more precise calculation with proper decimal handling
-    const factor = Math.pow(1 + monthlyRate, -numPayments);
-    const numerator = 1 - factor;
-    const denominator = monthlyRate;
-    
-    return monthlyPayment * (numerator / denominator);
-}
-
-// Price Calculator Function with Enhanced Precision
+// Enhanced Price Calculator Function with Affordability Table
 function calculateAffordability() {
     console.log("Calculating affordability with enhanced precision...");
     
@@ -1281,32 +1268,23 @@ function calculateAffordability() {
     let savingsBasedPrice = 0;
     let calculationDetails = {};
     
-    // Method 1: Based on Monthly Income (Loan Calculation) - ENHANCED PRECISION
+    // Method 1: Based on Monthly Income (Loan Calculation)
     if (monthlyIncome > 0) {
         const maxMonthlyPayment = (monthlyIncome * incomeRatio) / 100;
-        
-        // Convert annual rate to precise monthly rate
         const monthlyInterestRate = (interestRate / 100) / 12;
         const totalPayments = loanTermYears * 12;
         
-        // Calculate maximum loan amount using enhanced precision
         let maxLoanAmount = 0;
         
         if (monthlyInterestRate > 0) {
-            // Use the more precise calculation
             maxLoanAmount = calculatePresentValue(maxMonthlyPayment, monthlyInterestRate, totalPayments);
         } else {
-            // If interest rate is 0
             maxLoanAmount = maxMonthlyPayment * totalPayments;
         }
         
-        // Calculate total car price (loan + down payment)
-        // If loan amount is L and down payment is D%, then:
-        // Total Price = Loan Amount / (1 - Down Payment %)
         const downPaymentDecimal = downPaymentPercent / 100;
         loanBasedPrice = maxLoanAmount / (1 - downPaymentDecimal);
         
-        // Store detailed calculation info
         calculationDetails.income = {
             maxMonthlyPayment: Math.round(maxMonthlyPayment * 100) / 100,
             monthlyInterestRate: monthlyInterestRate,
@@ -1315,44 +1293,32 @@ function calculateAffordability() {
             downPaymentAmount: Math.round((loanBasedPrice * downPaymentDecimal) * 100) / 100,
             totalCarPrice: Math.round(loanBasedPrice * 100) / 100
         };
-        
-        console.log("Enhanced loan calculation:", calculationDetails.income);
     }
     
     // Method 2: Based on Total Savings
     if (totalSavings > 0) {
         if (monthlyIncome > 0) {
-            // If both income and savings are provided, savings can be used as down payment
-            // Calculate max car price where savings covers the down payment
             savingsBasedPrice = totalSavings / (downPaymentPercent / 100);
-            
             calculationDetails.savings = {
                 totalSavings: totalSavings,
                 downPaymentPercent: downPaymentPercent,
                 maxCarPrice: Math.round(savingsBasedPrice * 100) / 100
             };
-            
-            console.log("Savings calculation (with financing):", calculationDetails.savings);
         } else {
-            // If only savings provided, assume cash purchase
             savingsBasedPrice = totalSavings;
-            
             calculationDetails.savings = {
                 totalSavings: totalSavings,
                 paymentMethod: "cash",
                 maxCarPrice: savingsBasedPrice
             };
-            
-            console.log("Savings calculation (cash only):", calculationDetails.savings);
         }
     }
     
-    // Determine final max car price and method - using rounded values for comparison
+    // Determine final max car price and method
     const roundedLoanPrice = Math.round(loanBasedPrice * 100) / 100;
     const roundedSavingsPrice = Math.round(savingsBasedPrice * 100) / 100;
     
     if (roundedLoanPrice > 0 && roundedSavingsPrice > 0) {
-        // Both methods available - use the more restrictive (lower) one
         if (roundedSavingsPrice <= roundedLoanPrice) {
             maxCarPrice = roundedSavingsPrice;
             calculationMethod = "savings_limited";
@@ -1368,7 +1334,10 @@ function calculateAffordability() {
         calculationMethod = monthlyIncome > 0 ? "savings_limited" : "cash";
     }
     
-    console.log("Final precise calculation:", {
+    // Store the max affordable price globally
+    maxAffordablePrice = maxCarPrice;
+    
+    console.log("Final calculation:", {
         loanBasedPrice: roundedLoanPrice,
         savingsBasedPrice: roundedSavingsPrice,
         maxCarPrice: maxCarPrice,
@@ -1376,7 +1345,7 @@ function calculateAffordability() {
         details: calculationDetails
     });
     
-    // Display results with enhanced precision
+    // Display results
     displayAffordabilityResults(maxCarPrice, calculationMethod, {
         monthlyIncome,
         totalSavings,
@@ -1389,11 +1358,11 @@ function calculateAffordability() {
         calculationDetails
     });
     
-    // Filter cars based on calculated price
-    filterCarsByPrice(maxCarPrice);
+    // Filter and display cars using new endpoint
+    filterCarsByAffordability(maxCarPrice);
 }
 
-// Enhanced Display calculation results with precise formatting
+// Enhanced Display calculation results
 function displayAffordabilityResults(maxPrice, method, inputs) {
     const resultsDiv = document.getElementById("calculator-results");
     
@@ -1405,11 +1374,9 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
     let methodText = "";
     let additionalInfo = "";
     let limitingFactor = "";
-    let precisionNote = "";
     
     if (method === "loan") {
         const details = inputs.calculationDetails.income;
-        
         methodText = `Based on your monthly income of ₱${inputs.monthlyIncome.toLocaleString()}`;
         additionalInfo = `
             <div class="calc-detail">
@@ -1423,18 +1390,6 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
             </div>
             <div class="calc-detail">
                 <strong>Loan Term:</strong> ${inputs.loanTermYears} years at ${inputs.interestRate}% interest
-            </div>
-        `;
-        
-        // Show precise calculation breakdown
-        precisionNote = `
-            <div class="precision-note">
-                <small><strong>Precise Calculation Breakdown:</strong><br>
-                Monthly Rate: ${(inputs.interestRate/100/12).toFixed(8)}<br>
-                PV Factor: ${((1 - Math.pow(1 + inputs.interestRate/100/12, -(inputs.loanTermYears * 12))) / (inputs.interestRate/100/12)).toFixed(6)}<br>
-                Loan Amount: ₱${details.maxLoanAmount.toFixed(2)}<br>
-                Total Car Price: ₱${details.totalCarPrice.toFixed(2)}
-                </small>
             </div>
         `;
         
@@ -1485,7 +1440,6 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
             </div>
             ${limitingFactor}
             ${additionalInfo}
-            ${precisionNote}
             <div class="comparison-info">
                 ${inputs.loanBasedPrice > 0 && inputs.savingsBasedPrice > 0 ? 
                     `<small>
@@ -1505,138 +1459,179 @@ function displayAffordabilityResults(maxPrice, method, inputs) {
         </div>
     `;
     
-    // Show the results section
     resultsDiv.style.display = "block";
 }
 
-// Enhanced Helper function to calculate monthly payment with better precision
-function calculateMonthlyPayment(loanAmount, annualRate, years) {
-    const monthlyRate = (annualRate / 100) / 12;
-    const numPayments = years * 12;
-    
-    if (monthlyRate === 0) {
-        return loanAmount / numPayments;
-    }
-    
-    // Enhanced precision calculation
-    const factor = Math.pow(1 + monthlyRate, numPayments);
-    const monthlyPayment = loanAmount * (monthlyRate * factor) / (factor - 1);
-    
-    return Math.round(monthlyPayment * 100) / 100;
-}
-
-// Test function to verify calculations
-function testCalculatorPrecision() {
-    console.log("=== TESTING CALCULATOR PRECISION ===");
-    
-    // Test Case 1 from your example
-    const testInputs = {
-        monthlyIncome: 25000,
-        incomeRatio: 20,
-        interestRate: 7,
-        loanTermYears: 5,
-        downPaymentPercent: 20
-    };
-    
-    const maxMonthlyPayment = (testInputs.monthlyIncome * testInputs.incomeRatio) / 100;
-    const monthlyRate = (testInputs.interestRate / 100) / 12;
-    const totalPayments = testInputs.loanTermYears * 12;
-    
-    console.log("Test inputs:", testInputs);
-    console.log("Max monthly payment:", maxMonthlyPayment);
-    console.log("Monthly rate:", monthlyRate);
-    console.log("Total payments:", totalPayments);
-    
-    // Calculate using enhanced precision
-    const maxLoanAmount = calculatePresentValue(maxMonthlyPayment, monthlyRate, totalPayments);
-    const totalCarPrice = maxLoanAmount / (1 - testInputs.downPaymentPercent / 100);
-    const downPayment = totalCarPrice * (testInputs.downPaymentPercent / 100);
-    
-    console.log("=== RESULTS ===");
-    console.log("Max loan amount:", maxLoanAmount);
-    console.log("Total car price:", totalCarPrice);
-    console.log("Down payment:", downPayment);
-    console.log("Verification - Loan + Down:", maxLoanAmount + downPayment);
-    
-    return {
-        maxLoanAmount: Math.round(maxLoanAmount * 100) / 100,
-        totalCarPrice: Math.round(totalCarPrice * 100) / 100,
-        downPayment: Math.round(downPayment * 100) / 100
-    };
-}
-
-// Filter cars by calculated maximum price
-async function filterCarsByPrice(maxPrice) {
+// NEW: Filter cars by affordability using new endpoint
+async function filterCarsByAffordability(maxPrice) {
     console.log(`Filtering cars with max price: ₱${maxPrice.toLocaleString()}`);
     
     try {
-        // Use your existing API endpoint with price filter
-        const url = new URL(`${baseUrl}/get_cars`);
-        url.searchParams.append("max_price", Math.floor(maxPrice));
+        // Use the new affordability endpoint
+        const url = `/get_affordable_cars?max_price=${maxPrice}&include_stretch=true`;
         
-        console.log("📤 Sending price filter request to:", url.href);
+        console.log("📤 Sending affordability request to:", url);
         
         const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const data = await response.json();
         
         console.log("📥 Received affordable cars data:", data);
         
         if (data.length === 0) {
             alert("No cars found within your budget. Try adjusting your parameters or consider a higher budget.");
-        } else {
-            // Update the global car data for sorting
-            currentCarData = data;
-            
-            // Display the filtered cars
-            displayFilteredCars(data);
-            
-            // Update the results frame title to show it's filtered by budget
-            const resultsFrame = document.getElementById("results-frame");
-            if (resultsFrame) {
-                const existingTitle = resultsFrame.querySelector('h2') || resultsFrame.querySelector('.results-title');
-                if (existingTitle) {
-                    existingTitle.textContent = `Cars Within Your Budget (₱${Math.floor(maxPrice).toLocaleString()} or less)`;
-                }
-            }
-            
-            defaultCarsLoaded = true;
+            return;
         }
+        
+        // Add affordability analysis to each car
+        const carsWithAffordability = data.map(car => {
+            const carPrice = parseFloat(car.price);
+            const affordability = calculateAffordabilityStatus(carPrice, maxPrice);
+            
+            return {
+                ...car,
+                affordabilityStatus: affordability.status,
+                affordabilityText: affordability.text,
+                affordabilityClass: affordability.class
+            };
+        });
+        
+        // Store data globally for sorting
+        currentAffordabilityData = carsWithAffordability;
+        
+        // Display the cars in affordability table
+        displayAffordableCars(carsWithAffordability);
+        
+        // Show the results frame
+        const resultsFrame = document.getElementById("affordability-results-frame");
+        if (resultsFrame) {
+            resultsFrame.style.display = "block";
+            resultsFrame.classList.add("visible");
+            
+            // Scroll to results after a short delay
+            setTimeout(() => {
+                resultsFrame.scrollIntoView({ behavior: 'smooth' });
+            }, 300);
+        }
+        
     } catch (error) {
         console.error("🚨 Error fetching affordable cars:", error);
         alert("An error occurred while fetching affordable cars. Please try again later.");
     }
 }
 
-// Show affordable cars (called from results button)
-function showAffordableCars(maxPrice) {
-    // Scroll to results if they exist, otherwise filter cars
-    const resultsFrame = document.getElementById("results-frame");
-    
-    if (resultsFrame && resultsFrame.style.display === "block") {
-        // Results already showing, just scroll to them
-        resultsFrame.scrollIntoView({ behavior: 'smooth' });
+// NEW: Calculate affordability status for each car
+function calculateAffordabilityStatus(carPrice, maxAffordablePrice) {
+    if (carPrice <= maxAffordablePrice * 0.8) {
+        return {
+            status: "excellent",
+            text: "Excellent Choice",
+            class: "affordability-excellent"
+        };
+    } else if (carPrice <= maxAffordablePrice * 0.95) {
+        return {
+            status: "comfortable",
+            text: "Comfortable",
+            class: "affordability-comfortable"
+        };
+    } else if (carPrice <= maxAffordablePrice) {
+        return {
+            status: "tight",
+            text: "Tight Budget",
+            class: "affordability-tight"
+        };
+    } else if (carPrice <= maxAffordablePrice * 1.15) {
+        return {
+            status: "stretch",
+            text: "Stretch Budget",
+            class: "affordability-stretch"
+        };
     } else {
-        // Filter and show cars
-        filterCarsByPrice(maxPrice);
-        
-        // Scroll to results after a short delay to allow for rendering
-        setTimeout(() => {
-            if (resultsFrame) {
-                resultsFrame.scrollIntoView({ behavior: 'smooth' });
-            }
-        }, 500);
+        return null; // Don't include cars that are too expensive
     }
 }
 
-// Reset calculator form
+// NEW: Display affordable cars in simplified table
+function displayAffordableCars(carsData) {
+    const tableBody = document.getElementById("affordability-car-specs");
+    
+    if (!tableBody) {
+        console.error("Affordability table body not found");
+        return;
+    }
+    
+    // Clear existing content
+    tableBody.innerHTML = "";
+    
+    // Filter out cars that are too expensive (null affordability)
+    const affordableCars = carsData.filter(car => car.affordabilityStatus !== null);
+    
+    if (affordableCars.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="7" style="text-align: center; padding: 2rem;">
+                    No cars found within your budget range.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    // Generate table rows
+    affordableCars.forEach(car => {
+        const row = document.createElement("tr");
+        
+        row.innerHTML = `
+            <td>${car.brand || 'N/A'}</td>
+            <td>${car.model || 'N/A'}</td>
+            <td>${car.variant || 'N/A'}</td>
+            <td>${car.fuel_type || 'N/A'}</td>
+            <td>₱${parseFloat(car.price).toLocaleString()}</td>
+            <td>
+                <span class="${car.affordabilityClass}">
+                    ${car.affordabilityText}
+                </span>
+            </td>
+            <td></td>
+        `;
+        
+        tableBody.appendChild(row);
+    });
+    
+    console.log(`Displayed ${affordableCars.length} affordable cars`);
+}
+
+// UPDATED: Show affordable cars (enhanced version)
+function showAffordableCars(maxPrice) {
+    const resultsFrame = document.getElementById("affordability-results-frame");
+    
+    if (resultsFrame && resultsFrame.style.display === "block") {
+        resultsFrame.scrollIntoView({ behavior: 'smooth' });
+    } else {
+        filterCarsByAffordability(maxPrice);
+    }
+}
+
+// UPDATED: Reset calculator form (enhanced version)
 function resetCalculator() {
     // Reset all input fields
-    document.getElementById("monthly-income").value = "";
-    document.getElementById("total-savings").value = "";
-    document.getElementById("down-payment").value = "20";
-    document.getElementById("interest-rate").value = "6.5";
-    document.getElementById("loan-term").value = "5";
-    document.getElementById("income-ratio").value = "30";
+    const monthlyIncomeField = document.getElementById("monthly-income");
+    const totalSavingsField = document.getElementById("total-savings");
+    const downPaymentField = document.getElementById("down-payment");
+    const interestRateField = document.getElementById("interest-rate");
+    const loanTermField = document.getElementById("loan-term");
+    const incomeRatioField = document.getElementById("income-ratio");
+    
+    if (monthlyIncomeField) monthlyIncomeField.value = "";
+    if (totalSavingsField) totalSavingsField.value = "";
+    if (downPaymentField) downPaymentField.value = "20";
+    if (interestRateField) interestRateField.value = "6.5";
+    if (loanTermField) loanTermField.value = "5";
+    if (incomeRatioField) incomeRatioField.value = "30";
     
     // Hide results
     const resultsDiv = document.getElementById("calculator-results");
@@ -1645,16 +1640,17 @@ function resetCalculator() {
         resultsDiv.innerHTML = "";
     }
     
-    // Clear any filtered results
-    const resultsFrame = document.getElementById("results-frame");
-    if (resultsFrame) {
-        resultsFrame.style.display = "none";
-        resultsFrame.classList.remove("active");
+    // Clear affordability results
+    const affordabilityFrame = document.getElementById("affordability-results-frame");
+    if (affordabilityFrame) {
+        affordabilityFrame.style.display = "none";
+        affordabilityFrame.classList.remove("visible");
     }
     
-    // Clear car data
-    currentCarData = [];
-    const resultsBody = document.getElementById("car-specs");
+    // Clear data
+    currentAffordabilityData = [];
+    maxAffordablePrice = 0;
+    const resultsBody = document.getElementById("affordability-car-specs");
     if (resultsBody) {
         resultsBody.innerHTML = "";
     }
@@ -1662,73 +1658,62 @@ function resetCalculator() {
     console.log("Calculator reset successfully");
 }
 
-// Add event listeners for real-time calculation (optional)
-function setupCalculatorListeners() {
-    const inputs = [
-        "monthly-income",
-        "total-savings", 
-        "down-payment",
-        "interest-rate",
-        "loan-term",
-        "income-ratio"
-    ];
-    
-    inputs.forEach(inputId => {
-        const element = document.getElementById(inputId);
-        if (element) {
-            element.addEventListener("input", debounce(updateCalculationPreview, 500));
-        }
-    });
-}
-
-// Debounce function to prevent too many calculations
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-// Optional: Show live preview of affordability (without full calculation)
-function updateCalculationPreview() {
-    const monthlyIncome = parseFloat(document.getElementById("monthly-income").value) || 0;
-    const incomeRatio = parseFloat(document.getElementById("income-ratio").value) || 30;
-    
-    if (monthlyIncome > 0) {
-        const maxMonthlyPayment = (monthlyIncome * incomeRatio) / 100;
-        const previewDiv = document.getElementById("calculation-preview");
-        
-        if (previewDiv) {
-            previewDiv.innerHTML = `
-                <small>Preview: Max monthly payment ≈ ₱${maxMonthlyPayment.toLocaleString()}</small>
-            `;
-        }
+// NEW: Refresh affordability results
+function refreshAffordabilityResults() {
+    if (maxAffordablePrice > 0) {
+        filterCarsByAffordability(maxAffordablePrice);
     }
 }
 
-// Initialize calculator when DOM loads (add to your existing DOMContentLoaded)
-document.addEventListener("DOMContentLoaded", function () {
-    // Your existing code...
+// NEW: Sorting functions for affordability table
+function sortAffordabilityBy(criteria) {
+    if (currentAffordabilityData.length === 0) return;
     
-    // Add calculator setup
-    setupCalculatorListeners();
+    let sortedData = [...currentAffordabilityData];
     
-    // Reset calculator on page load
-    const calculatorForm = document.getElementById("price-calculator-form");
-    if (calculatorForm) {
-        resetCalculator();
+    switch (criteria) {
+        case 'price-asc':
+            sortedData.sort((a, b) => parseFloat(a.price) - parseFloat(b.price));
+            break;
+        case 'price-desc':
+            sortedData.sort((a, b) => parseFloat(b.price) - parseFloat(a.price));
+            break;
+        case 'affordability-best':
+            const affordabilityOrder = ['excellent', 'comfortable', 'tight', 'stretch'];
+            sortedData.sort((a, b) => {
+                return affordabilityOrder.indexOf(a.affordabilityStatus) - affordabilityOrder.indexOf(b.affordabilityStatus);
+            });
+            break;
+        case 'affordability-stretch':
+            const reverseAffordabilityOrder = ['stretch', 'tight', 'comfortable', 'excellent'];
+            sortedData.sort((a, b) => {
+                return reverseAffordabilityOrder.indexOf(a.affordabilityStatus) - reverseAffordabilityOrder.indexOf(b.affordabilityStatus);
+            });
+            break;
+        case 'brand-asc':
+            sortedData.sort((a, b) => (a.brand || '').localeCompare(b.brand || ''));
+            break;
+        case 'brand-desc':
+            sortedData.sort((a, b) => (b.brand || '').localeCompare(a.brand || ''));
+            break;
     }
     
-    // Run precision test in console
-    console.log("Running precision test...");
-    const testResults = testCalculatorPrecision();
-    console.log("Test completed. Results:", testResults);
-});
+    displayAffordableCars(sortedData);
+    
+    // Close dropdown
+    const dropdown = document.querySelector('#affordabilitySortDropdown .dropdown-menu');
+    if (dropdown) {
+        dropdown.classList.remove('show');
+    }
+}
+
+// NEW: Toggle affordability dropdown
+function toggleAffordabilityDropdown() {
+    const dropdown = document.querySelector('#affordabilitySortDropdown .dropdown-menu');
+    if (dropdown) {
+        dropdown.classList.toggle('show');
+    }
+}
 
 /////////////////////////
 //Testimonials Logic  //
