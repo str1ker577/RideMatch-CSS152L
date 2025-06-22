@@ -1251,13 +1251,55 @@ function calculatePresentValue(monthlyPayment, monthlyRate, numPayments) {
     return monthlyPayment * (numerator / denominator);
 }
 
+// ADDED: Number formatting function for inputs
+function formatNumberWithCommas(num) {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+// ADDED: Remove commas and convert to number
+function parseNumberFromInput(value) {
+    return parseFloat(value.toString().replace(/,/g, "")) || 0;
+}
+
+// ADDED: Auto-format number inputs with commas
+function setupNumberFormatting() {
+    const numberInputs = ['monthly-income', 'total-savings'];
+    
+    numberInputs.forEach(inputId => {
+        const input = document.getElementById(inputId);
+        if (input) {
+            input.addEventListener('input', function(e) {
+                // Get the raw number value
+                let value = e.target.value.replace(/,/g, '');
+                
+                // Only process if it's a valid number
+                if (value && !isNaN(value)) {
+                    // Format with commas
+                    const formatted = formatNumberWithCommas(value);
+                    
+                    // Update the input value
+                    e.target.value = formatted;
+                }
+            });
+            
+            // Format on blur (when user leaves the field)
+            input.addEventListener('blur', function(e) {
+                let value = e.target.value.replace(/,/g, '');
+                if (value && !isNaN(value)) {
+                    e.target.value = formatNumberWithCommas(value);
+                }
+            });
+        }
+    });
+}
+
 // Price Calculator Function with Enhanced Precision
 function calculateAffordability() {
     console.log("Calculating affordability with enhanced precision...");
     
-    // Get input values
-    const monthlyIncome = parseFloat(document.getElementById("monthly-income").value) || 0;
-    const totalSavings = parseFloat(document.getElementById("total-savings").value) || 0;
+    // MODIFIED: Get input values with comma parsing
+    const monthlyIncome = parseNumberFromInput(document.getElementById("monthly-income").value);
+    const totalSavings = parseNumberFromInput(document.getElementById("total-savings").value);
     const downPaymentPercent = parseFloat(document.getElementById("down-payment").value) || 20;
     const interestRate = parseFloat(document.getElementById("interest-rate").value) || 6.5;
     const loanTermYears = parseInt(document.getElementById("loan-term").value) || 5;
@@ -1782,7 +1824,7 @@ function debounce(func, wait) {
 
 // Optional: Show live preview of affordability (without full calculation)
 function updateCalculationPreview() {
-    const monthlyIncome = parseFloat(document.getElementById("monthly-income").value) || 0;
+    const monthlyIncome = parseNumberFromInput(document.getElementById("monthly-income").value); // MODIFIED: use parseNumberFromInput
     const incomeRatio = parseFloat(document.getElementById("income-ratio").value) || 30;
     
     if (monthlyIncome > 0) {
@@ -1803,6 +1845,9 @@ document.addEventListener("DOMContentLoaded", function () {
     
     // Setup calculator listeners
     setupCalculatorListeners();
+    
+    // ADDED: Setup number formatting for inputs
+    setupNumberFormatting();
     
     // Reset calculator on page load
     const calculatorForm = document.getElementById("price-calculator-form");
