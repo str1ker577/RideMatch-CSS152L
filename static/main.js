@@ -1223,9 +1223,6 @@ function printPopup() {
 //PRICE CALCULATOR  //
 //////////////////////
 
-// ADDED: Base URL configuration - update this to match your app's URL
-const baseUrl = window.location.origin; // Automatically gets the current domain
-
 // ADDED: Global variable to store current calculator max price
 let calculatorMaxPrice = 0;
 
