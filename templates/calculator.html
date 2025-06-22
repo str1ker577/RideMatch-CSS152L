@@ -228,233 +228,64 @@
             </div>
         </form>
         
-        <!-- Results Section -->
+!-- Results Section -->
         <div id="calculator-results" style="display: none;"></div>
     </div>
 
-    <!-- Include your existing results table structure here -->
-    <div id="results-frame" class="results-frame" style="display: none;">
-        <!-- Your existing car results table -->
+    <!-- Affordability Results Frame (Initially Hidden) -->
+    <div id="affordability-results-frame" style="display: none;">
+        <div class="scrollable-table">
+            <div class="results-outer-frame">
+
+                <!-- Title Above Table -->
+                <div class="results-title-container">
+                    <h2 class="results-title">Cars Within Your Budget</h2>
+                    <i class="fa-solid fa-arrows-rotate refresh-icon" onclick="refreshAffordabilityResults()" title="Refresh Results"></i>
+                </div>
+
+                <!-- Table Container -->
+                <div class="table-container">
+                    <table class="results-table">
+                        <thead>
+                            <tr>
+                                <th>Brand</th>
+                                <th>Model</th>
+                                <th>Variant</th>
+                                <th>Fuel Type</th>
+                                <th>Price</th>
+                                <th>Affordability</th>
+                                <th>
+                                    <div class="dropdown" id="affordabilitySortDropdown">
+                                        <button class="dropdown-toggle" onclick="toggleAffordabilityDropdown()">
+                                            <i class="fa-solid fa-filter" style="color: #ffffff;"></i>
+                                        </button>
+                                        <div class="dropdown-menu">
+                                            <!-- Price Sorting -->
+                                            <button onclick="sortAffordabilityBy('price-asc')">Price: Low to High</button>
+                                            <button onclick="sortAffordabilityBy('price-desc')">Price: High to Low</button>
+                                            
+                                            <!-- Affordability Sorting -->
+                                            <button onclick="sortAffordabilityBy('affordability-best')">Most Affordable First</button>
+                                            <button onclick="sortAffordabilityBy('affordability-stretch')">Stretch Budget First</button>
+                                            
+                                            <!-- Brand Sorting -->
+                                            <button onclick="sortAffordabilityBy('brand-asc')">Brand: A to Z</button>
+                                            <button onclick="sortAffordabilityBy('brand-desc')">Brand: Z to A</button>
+                                        </div>
+                                    </div>
+                                </th>
+                            </tr>
+                        </thead>
+                        <tbody id="affordability-car-specs">
+                            <!-- Filtered car data will be inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+
+            </div>
+        </div>
     </div>
 
-    <style>
-        .calculator-container {
-            width: 70%; /* Adjust the width as necessary */
-            margin: 50px auto;
-            margin-top: 10%;
-            padding: 20px;
-            border: 2px solid #b49b66;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(18px);
-        }
-        
-        .calculator-title {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #b49b66;
-            font-size: 24px;
-        }
-        
-        .calculator-form {
-            display: grid;
-            gap: 1.5rem;
-        }
-        
-        .form-section {
-            background: #f8f9fa;
-            padding: 1.5rem;
-            border-radius: 8px;
-            border-left: 4px solid #b49b66;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        
-        .section-title {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 1rem;
-        }
-        
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-        
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .form-group.full-width {
-            grid-column: span 2;
-        }
-        
-        label {
-            font-weight: 600;
-            color: #555;
-            margin-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        input, select {
-            padding: 0.75rem;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 1rem;
-            transition: border-color 0.3s ease;
-        }
-        
-        input:focus, select:focus {
-            outline: none;
-            border-color: #b49b66;
-        }
-        
-        .input-group {
-            position: relative;
-        }
-        
-        .input-prefix {
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #666;
-            font-weight: bold;
-        }
-        
-        .input-with-prefix {
-            padding-left: 2rem;
-        }
-        
-        .input-suffix {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #666;
-        }
-        
-        .input-with-suffix {
-            padding-right: 2rem;
-        }
-        
-        .calculate-btn {
-            background: #b49b66;
-            color: white;
-            padding: 1rem 2rem;
-            border: none;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 1rem;
-        }
-        
-        .calculate-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(#b49b66);
-        }
-        
-        .affordability-result {
-            background: linear-gradient(135deg, #b49b66,#9e8a56);
-            color: white;
-            padding: 2rem;
-            border-radius: 12px;
-            margin-top: 2rem;
-            text-align: center;
-        }
-        
-        .main-result {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-        }
-        
-        .price-highlight {
-            font-size: 2rem;
-            font-weight: bold;
-            display: block;
-            margin-top: 0.5rem;
-        }
-        
-        .calculation-method {
-            font-size: 1.1rem;
-            margin-bottom: 1rem;
-            opacity: 0.9;
-        }
-        
-        .calc-detail {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 0.5rem 1rem;
-            margin: 0.5rem 0;
-            border-radius: 6px;
-            text-align: left;
-        }
-        
-        .action-buttons {
-            margin-top: 1.5rem;
-        }
-        
-        .view-cars-btn, .reset-calc-btn {
-            padding: 0.75rem 1.5rem;
-            margin: 0 0.5rem;
-            border: 2px solid white;
-            background: transparent;
-            color: white;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-        
-        .view-cars-btn:hover {
-            background: white;
-            color: #b49b66;
-        }
-        
-        .reset-calc-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-        
-        .info-tooltip {
-            color: #b49b66;
-            cursor: help;
-            font-size: 0.9rem;
-        }
-        
-        .calculation-preview {
-            font-style: italic;
-            color: #666;
-            margin-top: 0.5rem;
-        }
-        
-        @media (max-width: 768px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-            
-            .calculator-container {
-                margin: 1rem;
-                padding: 1rem;
-            }
-            
-            .action-buttons {
-                display: flex;
-                flex-direction: column;
-                gap: 0.5rem;
-            }
-            
-            .view-cars-btn, .reset-calc-btn {
-                margin: 0;
-            }
-        }
-    </style>
     <footer>
         <div class="footer-container">
             <div class="footer-section">
@@ -520,6 +351,8 @@
  
     <!-- Link to Main.java -->
     <script src="{{url_for('static', filename='main.js')}}"></script>
+    <!-- Link to Caclulator JS-->
+    <script src="{{ url_for('static', filename='js/calculator-script.js') }}"></script>
 
     
 </body>

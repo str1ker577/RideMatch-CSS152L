@@ -790,7 +790,95 @@ def delete_testimonial(testimonial_id):
     except Exception as e:
         app.logger.error(f"Error deleting testimonial: {e}")
         return jsonify({'error': 'Failed to delete testimonial'}), 500   
+
+#####################################
+# Affordability Calculator Endpoint #
+#####################################
+
+@app.route('/get_affordable_cars', methods=['GET'])
+def get_affordable_cars():
+    """Get cars within affordability range with stretch budget options"""
+    if df.empty:
+        app.logger.error("Car data not available for affordability filtering")
+        return jsonify({"error": "Car data not available"}), 500
     
+    app.logger.info("🔍 Processing affordability filter request")
+    app.logger.info(f"Request args: {dict(request.args)}")
+
+    try:
+        # Get affordability parameters
+        max_price = request.args.get("max_price", type=float)
+        include_stretch = request.args.get("include_stretch", type=bool, default=True)
+        
+        if max_price is None or max_price <= 0:
+            app.logger.error("Invalid or missing max_price parameter")
+            return jsonify({"error": "Valid max_price parameter required"}), 400
+
+        app.logger.info(f"Affordability filter: max_price={max_price}, include_stretch={include_stretch}")
+
+        # Calculate price ranges
+        stretch_multiplier = 1.15 if include_stretch else 1.0
+        max_stretch_price = max_price * stretch_multiplier
+
+        # Filter cars within affordability range
+        filtered_df = df[
+            (df["Price"].notna()) & 
+            (df["Price"] <= max_stretch_price)
+        ].copy()
+
+        app.logger.info(f"Found {len(filtered_df)} cars within price range (up to ₱{max_stretch_price:,.0f})")
+
+        if filtered_df.empty:
+            app.logger.info("No cars found within affordability range")
+            return jsonify([])
+
+        # Select only the columns needed for affordability table
+        columns_needed = ["Brand", "Model", "Variant", "Fuel_Type", "Price"]
+        
+        # Ensure all needed columns exist
+        missing_columns = [col for col in columns_needed if col not in filtered_df.columns]
+        if missing_columns:
+            app.logger.error(f"Missing required columns: {missing_columns}")
+            return jsonify({"error": f"Missing required columns: {missing_columns}"}), 500
+
+        # Create simplified result set
+        affordable_cars = filtered_df[columns_needed].copy()
+        
+        # Clean up the data
+        affordable_cars = affordable_cars.fillna("")
+        
+        # Convert to records for JSON response
+        cars_list = affordable_cars.to_dict(orient="records")
+        
+        # Format price as string for consistency
+        for car in cars_list:
+            car["price"] = str(int(car["Price"])) if car["Price"] else "0"
+            car["brand"] = str(car["Brand"])
+            car["model"] = str(car["Model"]) 
+            car["variant"] = str(car["Variant"])
+            car["fuel_type"] = str(car["Fuel_Type"])
+            
+            # Remove the original Price column (keep lowercase 'price')
+            car.pop("Price", None)
+            car.pop("Brand", None)
+            car.pop("Model", None)
+            car.pop("Variant", None)
+            car.pop("Fuel_Type", None)
+
+        app.logger.info(f"✅ Returning {len(cars_list)} affordable cars")
+        
+        # Log first car for debugging
+        if cars_list:
+            app.logger.info(f"Sample affordable car: {cars_list[0]}")
+            
+        return jsonify(cars_list)
+        
+    except Exception as e:
+        app.logger.error(f"Error filtering affordable cars: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to filter affordable cars: {str(e)}"}), 500    
+
     
 ##################
 # Error handlers #
