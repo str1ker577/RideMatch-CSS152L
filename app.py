@@ -792,6 +792,77 @@ def delete_testimonial(testimonial_id):
         return jsonify({'error': 'Failed to delete testimonial'}), 500   
     
     
+    
+################################
+# Affordable Cars Backend Route #
+################################
+
+@app.route('/get_affordable_cars', methods=['GET'])
+def get_affordable_cars():
+    """
+    Get cars that are affordable based on the maximum price from calculator
+    """
+    if df.empty:
+        app.logger.error("Car data not available for affordable cars")
+        return jsonify({"error": "Car data not available"}), 500
+    
+    app.logger.info("🚗 Processing affordable cars request")
+    app.logger.info(f"Request args: {dict(request.args)}")
+    
+    try:
+        # Get maximum affordable price from request
+        max_price = request.args.get("max_price", type=float)
+        
+        if not max_price or max_price <= 0:
+            app.logger.error("Invalid max_price parameter")
+            return jsonify({"error": "Valid max_price parameter required"}), 400
+        
+        app.logger.info(f"Finding cars within budget: ₱{max_price:,.2f}")
+        
+        # Filter cars within the affordable price range
+        affordable_df = df.copy()
+        
+        # Apply price filter
+        affordable_df = affordable_df[
+            (affordable_df["Price"].notna()) &
+            (affordable_df["Price"] <= max_price)
+        ]
+        
+        app.logger.info(f"Found {len(affordable_df)} cars within budget")
+        
+        # Select only the columns needed for the affordable cars table
+        columns_needed = ["Brand", "Model", "Variant", "Price"]
+        
+        # Ensure all required columns exist
+        missing_columns = [col for col in columns_needed if col not in affordable_df.columns]
+        if missing_columns:
+            app.logger.error(f"Missing required columns: {missing_columns}")
+            return jsonify({"error": f"Missing data columns: {missing_columns}"}), 500
+        
+        # Select and sort by price
+        affordable_cars = affordable_df[columns_needed].copy()
+        affordable_cars = affordable_cars.sort_values("Price", ascending=True)
+        
+        # Convert to JSON format
+        affordable_cars_list = affordable_cars.fillna("").to_dict(orient="records")
+        
+        app.logger.info(f"✅ Returning {len(affordable_cars_list)} affordable cars")
+        
+        # Log sample result if any cars found
+        if affordable_cars_list:
+            app.logger.info(f"Price range: ₱{affordable_cars_list[0]['Price']:,.2f} - ₱{affordable_cars_list[-1]['Price']:,.2f}")
+            app.logger.info(f"Sample car: {affordable_cars_list[0]}")
+        
+        return jsonify(affordable_cars_list)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting affordable cars: {e}")
+        app.logger.error(f"Exception type: {type(e)}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get affordable cars: {str(e)}"}), 500
+
+    
 ##################
 # Error handlers #
 ##################

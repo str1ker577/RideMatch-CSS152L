@@ -2144,3 +2144,171 @@ textarea:focus, input[type="text"]:focus {
 .retry-btn:hover {
     background: #0056b3;
 }
+
+
+/*********************************/
+/* Affordable Cars Frame Styling */
+/*********************************/
+
+/* Affordable Cars Frame - Initially Hidden */
+#affordable-cars-frame {
+    display: none;
+    margin-top: 30px;
+}
+
+#affordable-cars-frame.visible {
+    display: block;
+}
+
+/* Affordable Cars Table Specific Styling */
+.affordable-cars-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+/* Affordable Cars Table Header Styling */
+.affordable-cars-table thead {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    background: var(--second-color);
+    color: white;
+    font-weight: bold;
+    border-bottom: 2px solid var(--second-color);
+    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.affordable-cars-table thead th {
+    padding: 12px 8px;
+    text-align: center;
+    font-size: 14px;
+    min-height: 50px;
+    background: var(--second-color);
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    vertical-align: middle;
+}
+
+/* Affordable Cars Table Body Styling */
+.affordable-cars-table tbody {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(18px);
+}
+
+.affordable-cars-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.affordable-cars-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+    transition: all 0.2s ease;
+}
+
+/* Affordable Cars Column Widths */
+.affordable-cars-table th:nth-child(1), /* Brand */
+.affordable-cars-table td:nth-child(1) {
+    min-width: 100px;
+    width: 15%;
+}
+
+.affordable-cars-table th:nth-child(2), /* Model */
+.affordable-cars-table td:nth-child(2) {
+    min-width: 120px;
+    width: 20%;
+}
+
+.affordable-cars-table th:nth-child(3), /* Variant */
+.affordable-cars-table td:nth-child(3) {
+    min-width: 180px;
+    width: 30%;
+}
+
+.affordable-cars-table th:nth-child(4), /* Price */
+.affordable-cars-table td:nth-child(4) {
+    min-width: 120px;
+    width: 20%;
+    font-weight: bold;
+}
+
+.affordable-cars-table th:nth-child(5), /* Affordability */
+.affordable-cars-table td:nth-child(5) {
+    min-width: 150px;
+    width: 15%;
+}
+
+/* Affordable Cars Table Cell Styling */
+.affordable-cars-table td {
+    padding: 12px 8px;
+    text-align: center;
+    font-size: 14px;
+    min-height: 50px;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    vertical-align: middle;
+}
+
+/* Price Cell Special Styling */
+.affordable-cars-table .price-cell {
+    font-weight: 600;
+    color: var(--second-color);
+}
+
+/* Affordability Badge Styling */
+.affordability-badge {
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: center;
+    display: inline-block;
+    min-width: 120px;
+    color: white;
+}
+
+.affordability-badge.excellent {
+    background: linear-gradient(135deg, #4CAF50, #45a049);
+}
+
+.affordability-badge.good {
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+}
+
+.affordability-badge.moderate {
+    background: linear-gradient(135deg, #FF9800, #F57C00);
+}
+
+.affordability-badge.stretch {
+    background: linear-gradient(135deg, #f44336, #d32f2f);
+}
+
+/* No Cars Message */
+.affordable-cars-table .no-cars-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: #666;
+    font-style: italic;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Responsive Design for Affordable Cars */
+@media (max-width: 768px) {
+    .affordable-cars-table {
+        min-width: 700px; /* Smaller minimum width since fewer columns */
+    }
+    
+    .affordable-cars-table th,
+    .affordable-cars-table td {
+        font-size: 12px;
+        padding: 8px 4px;
+    }
+    
+    .affordability-badge {
+        font-size: 0.75rem;
+        padding: 4px 8px;
+        min-width: 100px;
+    }
+}

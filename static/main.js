@@ -151,10 +151,10 @@ async function initializeFirebase() {
     }
 }
 
-///////////////////////////////////////
-//Denies access to users to the User //
+/////////////////////////////////////////
+// Denies access to users to the User //
 // Profile Page, unless signed in    //
-///////////////////////////////////////
+//////////////////////////////////////
 
 function handleUserIconClick() {
     if (userName) {
@@ -188,9 +188,9 @@ function handleLogout() {
     }
 }
 
-////////////////////
-//Sing Up Function//
-////////////////////
+///////////////////////
+// Sign Up Function //
+/////////////////////
 
 function handleSignup(event) {
     event.preventDefault();
@@ -225,9 +225,10 @@ function handleSignup(event) {
         });
 }
 
-///////////////////
-//Login  Function//
-////////s//////////
+//////////////////////
+// Login  Function //
+////////////////////
+
 function handleLogin(event) {
     event.preventDefault();
     const email = document.querySelector('input[name="email"]').value;
@@ -300,10 +301,11 @@ function getFirebaseErrorMessage(errorCode) {
     }
 }
 
+////////////////////////////
+// Formats the CSV file  //
+// data to be readable  //
 /////////////////////////
-//Formats the CSV file //
-//data to be readable  //
-////////////////////////
+
 function parseCSV(data) {
     const lines = data.split('\n');
     const result = [];
@@ -321,7 +323,7 @@ function parseCSV(data) {
     return result;
 }
 
-// ✅ New function to update slider values dynamically
+// New function to update slider values dynamically
 function updateSliderValue(id, unit = "", isCurrency = false) {
     const slider = document.getElementById(id);
     const display = document.getElementById(id + "-value");
@@ -350,9 +352,9 @@ function updateSliderValue(id, unit = "", isCurrency = false) {
     }
 }
 
-//////////////////////
-//Filtering Function//
-//////////////////////
+/////////////////////////
+// Filtering Function //
+///////////////////////
 
 async function applyFilters() {
     console.log("apply filters clicked");
@@ -431,7 +433,7 @@ async function applyFilters() {
 }
 
 //////////////////////////////// 
-//Shows the filtered Results //
+// Shows the filtered Results //
 //////////////////////////////
 
 function displayFilteredCars(data) {
@@ -502,10 +504,10 @@ function displayFilteredCars(data) {
     console.log("✅ Table updated successfully!");
 }
 
-/////////////////////////////////
-//Adds corresponding Icon to  // 
-// the appropriate Car Type  //
-//////////////////////////////
+//////////////////////////////////
+// Adds corresponding Icon to  // 
+// the appropriate Car Type   //
+///////////////////////////////
 
 function getFuelTypeIcon(fuelType) {
     if (!fuelType || fuelType === "N/A") return "";
@@ -1727,6 +1729,224 @@ document.addEventListener("DOMContentLoaded", function () {
     const testResults = testCalculatorPrecision();
     console.log("Test completed. Results:", testResults);
 });
+
+
+////////////////////////////////
+// Affordable Cars Functions //
+////////////////////////////////
+
+// Global variable to store current calculator results
+let currentCalculatorResults = null;
+
+/**
+ * Get affordability rating based on car price vs max affordable price
+ */
+function getAffordabilityRating(carPrice, maxAffordablePrice) {
+    const ratio = carPrice / maxAffordablePrice;
+    
+    if (ratio <= 0.7) {
+        return { text: "Excellent Choice", class: "excellent" };
+    } else if (ratio <= 0.85) {
+        return { text: "Good Option", class: "good" };
+    } else if (ratio <= 0.95) {
+        return { text: "Moderate Stretch", class: "moderate" };
+    } else if (ratio <= 1.0) {
+        return { text: "Maximum Budget", class: "stretch" };
+    } else {
+        return { text: "Over Budget", class: "stretch" };
+    }
+}
+
+/**
+ * Format price in Philippine Peso
+ */
+function formatAffordablePrice(price) {
+    return new Intl.NumberFormat('en-PH', {
+        style: 'currency',
+        currency: 'PHP',
+        minimumFractionDigits: 0
+    }).format(price);
+}
+
+/**
+ * Display affordable cars based on calculator results
+ */
+function displayAffordableCars(maxAffordablePrice) {
+    console.log("🚗 Displaying affordable cars for budget:", maxAffordablePrice);
+
+    const affordableCarsFrame = document.getElementById("affordable-cars-frame");
+    const affordableCarsBody = document.getElementById("affordable-car-specs");
+
+    // Check if elements exist
+    if (!affordableCarsFrame || !affordableCarsBody) {
+        console.error("❌ Affordable cars elements not found!");
+        return;
+    }
+
+    // Show the affordable cars section
+    affordableCarsFrame.style.display = "block";
+    affordableCarsFrame.classList.add("visible");
+
+    // Clear the table body before inserting new data
+    affordableCarsBody.innerHTML = "";
+
+    // Fetch affordable cars from server
+    fetchAffordableCars(maxAffordablePrice)
+        .then(data => {
+            if (data.length === 0) {
+                affordableCarsBody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="no-cars-message">
+                            No cars found within your budget range. Consider increasing your budget or adjusting your criteria.
+                        </td>
+                    </tr>
+                `;
+                console.warn("⚠️ No affordable cars found for budget:", maxAffordablePrice);
+                return;
+            }
+
+            // Sort cars by price (ascending)
+            data.sort((a, b) => a.Price - b.Price);
+
+            data.forEach(car => {
+                const affordability = getAffordabilityRating(car.Price, maxAffordablePrice);
+                const row = document.createElement("tr");
+                
+                row.innerHTML = `
+                    <td><strong>${car.Brand || "Unknown"}</strong></td>
+                    <td>${car.Model || "Unknown"}</td>
+                    <td>${car.Variant || "N/A"}</td>
+                    <td class="price-cell">${formatAffordablePrice(car.Price || 0)}</td>
+                    <td>
+                        <span class="affordability-badge ${affordability.class}">
+                            ${affordability.text}
+                        </span>
+                    </td>
+                `;
+                affordableCarsBody.appendChild(row);
+            });
+
+            console.log("✅ Affordable cars table updated successfully!");
+        })
+        .catch(error => {
+            console.error("❌ Error fetching affordable cars:", error);
+            affordableCarsBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="no-cars-message">
+                        Error loading affordable cars. Please try again.
+                    </td>
+                </tr>
+            `;
+        });
+}
+
+/**
+ * Fetch affordable cars from the server
+ */
+async function fetchAffordableCars(maxAffordablePrice) {
+    try {
+        // Add 5% tolerance to include cars slightly over budget
+        const priceWithTolerance = maxAffordablePrice * 1.05;
+        
+        const response = await fetch(`/get_affordable_cars?max_price=${priceWithTolerance}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log("📊 Received affordable cars data:", data);
+        
+        return data;
+    } catch (error) {
+        console.error("❌ Error fetching affordable cars:", error);
+        throw error;
+    }
+}
+
+/**
+ * Handle "View Affordable Cars" button click
+ * This function should be called when the user clicks the button
+ */
+function handleViewAffordableCars() {
+    console.log("🔍 View Affordable Cars button clicked");
+    
+    // Get the maximum affordable price from your calculator
+    // You'll need to replace this with the actual value from your calculator
+    const maxAffordablePrice = getCurrentMaxAffordablePrice();
+    
+    if (!maxAffordablePrice || maxAffordablePrice <= 0) {
+        console.error("❌ Invalid maximum affordable price:", maxAffordablePrice);
+        alert("Please calculate your affordability first before viewing affordable cars.");
+        return;
+    }
+    
+    // Display affordable cars
+    displayAffordableCars(maxAffordablePrice);
+    
+    // Scroll to the affordable cars section
+    const affordableCarsFrame = document.getElementById("affordable-cars-frame");
+    if (affordableCarsFrame) {
+        affordableCarsFrame.scrollIntoView({ 
+            behavior: 'smooth',
+            block: 'start'
+        });
+    }
+}
+
+/**
+ * Get current maximum affordable price from calculator
+ * Replace this with your actual calculator logic
+ */
+function getCurrentMaxAffordablePrice() {
+    // This should return the calculated maximum car price from your calculator
+    // For example, if you have a global variable or can read from the DOM:
+    
+    // Option 1: If you store it in a global variable
+    if (currentCalculatorResults && currentCalculatorResults.maxCarPrice) {
+        return currentCalculatorResults.maxCarPrice;
+    }
+    
+    // Option 2: If you can read it from the DOM
+    const priceElement = document.querySelector('.maximum-car-price'); // Adjust selector as needed
+    if (priceElement) {
+        const priceText = priceElement.textContent.replace(/[₱,]/g, '');
+        return parseFloat(priceText);
+    }
+    
+    // Option 3: Default fallback (you should replace this)
+    console.warn("⚠️ Using fallback price - please implement getCurrentMaxAffordablePrice()");
+    return 631274.92; // Your example value
+}
+
+/**
+ * Store calculator results for later use
+ * Call this function when your calculator completes its calculation
+ */
+function storeCalculatorResults(results) {
+    currentCalculatorResults = results;
+    console.log("💾 Calculator results stored:", results);
+}
+
+/**
+ * Hide affordable cars section
+ */
+function hideAffordableCars() {
+    const affordableCarsFrame = document.getElementById("affordable-cars-frame");
+    if (affordableCarsFrame) {
+        affordableCarsFrame.style.display = "none";
+        affordableCarsFrame.classList.remove("visible");
+    }
+}
+
+// After your calculator finishes
+const calculatorResults = {
+    maxCarPrice: 631274.92, // Your calculated max car price
+    monthlyPayment: 10000,
+    loanAmount: 505019.94
+};
+
+storeCalculatorResults(calculatorResults);
 
 /////////////////////////
 //Testimonials Logic  //

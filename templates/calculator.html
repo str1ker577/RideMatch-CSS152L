@@ -225,17 +225,44 @@
                     Calculate What I Can Afford 🧮
                 </button>
 
+                <button onclick="handleViewAffordableCars()" class="view-affordable-btn">
+                    View Affordable Cars
+                </button>
+
             </div>
         </form>
         
-        <!-- Results Section -->
-        <div id="calculator-results" style="display: none;"></div>
-    </div>
+        <!-- Affordable Cars Section (Initially Hidden) -->
+        <div id="affordable-cars-frame" class="affordable-cars-frame">
+            <div class="scrollable-table">
+                <div class="results-outer-frame">
+                    
+                    <!-- Title Above Table -->
+                    <div class="results-title-container">
+                        <h2 class="results-title">🚗 Cars Within Your Budget</h2>
+                    </div>
 
-    <!-- Include your existing results table structure here -->
-    <div id="results-frame" class="results-frame" style="display: none;">
-        <!-- Your existing car results table -->
-    </div>
+                    <!-- Table Container -->
+                    <div class="table-container">
+                        <table class="results-table affordable-cars-table">
+                            <thead>
+                                <tr>
+                                    <th>Brand</th>
+                                    <th>Model</th>
+                                    <th>Variant</th>
+                                    <th>Price</th>
+                                    <th>Affordability</th>
+                                </tr>
+                            </thead>
+                            <tbody id="affordable-car-specs">
+                                <!-- Affordable car data will be inserted here -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                </div>
+            </div>
+        </div>
 
     <style>
         .calculator-container {
