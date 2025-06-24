@@ -2418,627 +2418,642 @@ document.addEventListener("DOMContentLoaded", function () {
 ///////////////////////
 // Forum Page Logic //
 /////////////////////
-// Forum functionality - only initialize on forum page
-class ForumManager {
-    constructor() {
-        this.currentUser = null;
-        this.posts = [];
-        this.activeTab = 'recent';
-        this.expandedPosts = new Set();
-        
-        this.init();
+// ========================================
+// FORUM FUNCTIONALITY - API-based (like testimonials)
+// Add this to your existing main.js
+// ========================================
+
+(function() {
+  'use strict';
+
+  // Private variables
+  const forumElements = {
+    form: null,
+    postsContainer: null,
+    askBtn: null,
+    tabs: null,
+    initialized: false,
+    loading: false
+  };
+
+  let currentUser = null;
+  let activeTab = 'recent';
+  let expandedPosts = new Set();
+
+  // Initialize forum elements
+  function initializeForumElements() {
+    try {
+      console.log('Initializing forum elements...');
+      
+      forumElements.form = document.getElementById('askModal');
+      forumElements.postsContainer = document.getElementById('forum-posts');
+      forumElements.askBtn = document.querySelector('.ask-btn');
+      forumElements.tabs = document.querySelectorAll('.forum-tab');
+
+      // Check if we're on the forum page
+      if (!forumElements.postsContainer) {
+        console.log('Not on forum page, skipping forum initialization');
+        return false;
+      }
+
+      forumElements.initialized = true;
+      console.log('Forum elements initialized successfully');
+      return true;
+    } catch (error) {
+      console.error('Error initializing forum elements:', error);
+      return false;
+    }
+  }
+
+  // Check authentication state (integrates with your existing auth)
+  function checkAuthState() {
+    // Use your existing auth system
+    if (typeof auth !== 'undefined' && auth && auth.currentUser) {
+      currentUser = auth.currentUser;
+      updateUIForAuthState();
     }
 
-    init() {
-        this.setupEventListeners();
-        this.loadPosts();
-        this.checkAuthState();
+    // Listen for auth changes (integrates with your existing Firebase auth)
+    if (typeof auth !== 'undefined' && auth) {
+      auth.onAuthStateChanged((user) => {
+        currentUser = user;
+        updateUIForAuthState();
+      });
     }
+  }
 
-    setupEventListeners() {
-        // Tab switching
-        const forumTabs = document.querySelectorAll('.forum-tab');
-        if (forumTabs.length > 0) {
-            forumTabs.forEach(tab => {
-                tab.addEventListener('click', (e) => {
-                    const tabType = e.target.getAttribute('data-tab');
-                    this.switchTab(tabType);
-                });
-            });
-        }
-
-        // Ask form submission
-        const askForm = document.getElementById('askForm');
-        if (askForm) {
-            askForm.addEventListener('submit', (e) => {
-                e.preventDefault();
-                this.submitQuestion();
-            });
-        }
-
-        // Close modal when clicking outside
-        const askModal = document.getElementById('askModal');
-        if (askModal) {
-            askModal.addEventListener('click', (e) => {
-                if (e.target.id === 'askModal') {
-                    this.closeAskModal();
-                }
-            });
-        }
-    }
-
-    checkAuthState() {
-        // Integrate with your existing auth system
-        if (typeof firebase !== 'undefined' && firebase.auth) {
-            firebase.auth().onAuthStateChanged((user) => {
-                this.currentUser = user;
-                this.updateUIForAuthState();
-            });
-        }
-    }
-
-    updateUIForAuthState() {
-        const askBtn = document.querySelector('.ask-btn');
-        if (!askBtn) return; // Not on forum page
-        
-        if (!this.currentUser) {
-            askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
-            askBtn.onclick = () => {
-                if (typeof togglePopup === 'function') {
-                    togglePopup('login-popup');
-                }
-            };
-        } else {
-            askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
-            askBtn.onclick = () => this.openAskModal();
-        }
-    }
-
-    switchTab(tabType) {
-        // Update active tab
-        document.querySelectorAll('.forum-tab').forEach(tab => {
-            tab.classList.remove('active');
-        });
-        const activeTab = document.querySelector(`[data-tab="${tabType}"]`);
-        if (activeTab) {
-            activeTab.classList.add('active');
-        }
-        
-        this.activeTab = tabType;
-        this.loadPosts();
-    }
-
-    async loadPosts() {
-        const postsContainer = document.getElementById('forum-posts');
-        if (!postsContainer) return; // Not on forum page
-        
-        postsContainer.innerHTML = '<div class="loading"><i class="bx bx-loader-alt"></i><p>Loading posts...</p></div>';
-
-        try {
-            // Check if Firebase is available
-            if (typeof firebase === 'undefined' || !firebase.database) {
-                throw new Error('Firebase not initialized');
-            }
-
-            // Load posts from Firebase
-            const postsRef = firebase.database().ref('forum/posts');
-            const snapshot = await postsRef.once('value');
-            const postsData = snapshot.val() || {};
-            
-            this.posts = Object.entries(postsData).map(([id, data]) => ({
-                id,
-                ...data
-            }));
-
-            this.sortPosts();
-            this.renderPosts();
-        } catch (error) {
-            console.error('Error loading posts:', error);
-            postsContainer.innerHTML = `
-                <div class="empty-state">
-                    <i class="bx bx-error"></i>
-                    <h3>Error loading posts</h3>
-                    <p>Please try refreshing the page</p>
-                </div>
-            `;
-        }
-    }
-
-    sortPosts() {
-        switch (this.activeTab) {
-            case 'recent':
-                this.posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-                break;
-            case 'popular':
-                this.posts.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
-                break;
-            case 'answered':
-                this.posts.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
-                break;
-        }
-    }
-
-    renderPosts() {
-        const postsContainer = document.getElementById('forum-posts');
-        if (!postsContainer) return;
-        
-        if (this.posts.length === 0) {
-            postsContainer.innerHTML = `
-                <div class="empty-state">
-                    <i class="bx bx-message-square"></i>
-                    <h3>No posts yet</h3>
-                    <p>Be the first to ask a question!</p>
-                </div>
-            `;
-            return;
-        }
-
-        postsContainer.innerHTML = this.posts.map(post => this.renderPost(post)).join('');
-        this.setupPostListeners();
-    }
-
-    renderPost(post) {
-        const timeAgo = this.getTimeAgo(post.createdAt);
-        const isExpanded = this.expandedPosts.has(post.id);
-        const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
-        
-        return `
-            <div class="forum-post ${isExpanded ? 'expanded' : ''}" data-post-id="${post.id}">
-                <div class="post-header" onclick="window.forumManager.togglePost('${post.id}')">
-                    <div class="post-vote">
-                        <button class="vote-btn" onclick="event.stopPropagation(); window.forumManager.vote('${post.id}', 'up')">
-                            ▲
-                        </button>
-                        <span class="vote-count">${(post.upvotes || 0) - (post.downvotes || 0)}</span>
-                        <button class="vote-btn" onclick="event.stopPropagation(); window.forumManager.vote('${post.id}', 'down')">
-                            ▼
-                        </button>
-                    </div>
-                    
-                    <div class="post-content">
-                        <h3 class="post-title">${post.title}</h3>
-                        <div class="post-meta">
-                            <span class="post-author">by ${post.authorName || 'Anonymous'}</span>
-                            <span class="post-time">${timeAgo}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="post-stats">
-                        <div class="stat-item">
-                            <i class="bx bx-message-square"></i>
-                            <span>${post.commentCount || 0}</span>
-                        </div>
-                        <div class="stat-item">
-                            <i class="bx bx-show"></i>
-                            <span>${post.views || 0}</span>
-                        </div>
-                    </div>
-                </div>
-                
-                ${isExpanded ? this.renderExpandedPost(post, tags) : ''}
-            </div>
-        `;
-    }
-
-    renderExpandedPost(post, tags) {
-        return `
-            <div class="post-body">
-                <div class="post-description">
-                    ${post.body.replace(/\n/g, '<br>')}
-                </div>
-                
-                ${tags.length > 0 ? `
-                    <div class="post-tags">
-                        ${tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
-                    </div>
-                ` : ''}
-                
-                <div class="post-actions">
-                    <div class="action-buttons">
-                        <button class="action-btn" onclick="window.forumManager.sharePost('${post.id}')">
-                            <i class="bx bx-share"></i>
-                            Share
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="comments-section">
-                    <div class="comments-header">
-                        <h4 class="comments-title">Comments (${post.commentCount || 0})</h4>
-                    </div>
-                    
-                    ${this.currentUser ? `
-                        <div class="comment-form">
-                            <textarea 
-                                class="comment-input" 
-                                id="comment-input-${post.id}"
-                                placeholder="Write your comment..."></textarea>
-                            <button 
-                                class="comment-submit" 
-                                onclick="window.forumManager.submitComment('${post.id}')">
-                                Post Comment
-                            </button>
-                        </div>
-                    ` : `
-                        <p style="text-align: center; color: #666; font-style: italic;">
-                            <a href="#" onclick="togglePopup('login-popup')">Login</a> to post a comment
-                        </p>
-                    `}
-                    
-                    <div class="comments-list" id="comments-${post.id}">
-                        ${this.renderComments(post.id)}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    renderComments(postId) {
-        this.loadComments(postId);
-        return '<div class="loading"><i class="bx bx-loader-alt"></i> Loading comments...</div>';
-    }
-
-    async loadComments(postId) {
-        try {
-            if (typeof firebase === 'undefined' || !firebase.database) return;
-            
-            const commentsRef = firebase.database().ref(`forum/comments/${postId}`);
-            const snapshot = await commentsRef.once('value');
-            const commentsData = snapshot.val() || {};
-            
-            const comments = Object.entries(commentsData).map(([id, data]) => ({
-                id,
-                ...data
-            })).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-
-            const commentsContainer = document.getElementById(`comments-${postId}`);
-            if (commentsContainer) {
-                commentsContainer.innerHTML = comments.length > 0 
-                    ? comments.map(comment => this.renderComment(comment)).join('')
-                    : '<p style="text-align: center; color: #666; font-style: italic;">No comments yet</p>';
-            }
-        } catch (error) {
-            console.error('Error loading comments:', error);
-        }
-    }
-
-    renderComment(comment) {
-        const timeAgo = this.getTimeAgo(comment.createdAt);
-        
-        return `
-            <div class="comment">
-                <div class="comment-header">
-                    <span class="comment-author">${comment.authorName || 'Anonymous'}</span>
-                    <span class="comment-time">${timeAgo}</span>
-                </div>
-                <div class="comment-text">${comment.text.replace(/\n/g, '<br>')}</div>
-            </div>
-        `;
-    }
-
-    setupPostListeners() {
-        document.querySelectorAll('.forum-post').forEach(post => {
-            const postId = post.getAttribute('data-post-id');
-            if (this.expandedPosts.has(postId)) {
-                this.incrementViews(postId);
-            }
-        });
-    }
-
-    togglePost(postId) {
-        if (this.expandedPosts.has(postId)) {
-            this.expandedPosts.delete(postId);
-        } else {
-            this.expandedPosts.add(postId);
-            this.incrementViews(postId);
-        }
-        
-        const postElement = document.querySelector(`[data-post-id="${postId}"]`);
-        if (!postElement) return;
-        
-        postElement.classList.toggle('expanded');
-        
-        if (this.expandedPosts.has(postId)) {
-            const post = this.posts.find(p => p.id === postId);
-            const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
-            postElement.innerHTML = `
-                <div class="post-header" onclick="window.forumManager.togglePost('${postId}')">
-                    <div class="post-vote">
-                        <button class="vote-btn" onclick="event.stopPropagation(); window.forumManager.vote('${postId}', 'up')">
-                            ▲
-                        </button>
-                        <span class="vote-count">${(post.upvotes || 0) - (post.downvotes || 0)}</span>
-                        <button class="vote-btn" onclick="event.stopPropagation(); window.forumManager.vote('${postId}', 'down')">
-                            ▼
-                        </button>
-                    </div>
-                    
-                    <div class="post-content">
-                        <h3 class="post-title">${post.title}</h3>
-                        <div class="post-meta">
-                            <span class="post-author">by ${post.authorName || 'Anonymous'}</span>
-                            <span class="post-time">${this.getTimeAgo(post.createdAt)}</span>
-                        </div>
-                    </div>
-                    
-                    <div class="post-stats">
-                        <div class="stat-item">
-                            <i class="bx bx-message-square"></i>
-                            <span>${post.commentCount || 0}</span>
-                        </div>
-                        <div class="stat-item">
-                            <i class="bx bx-show"></i>
-                            <span>${post.views || 0}</span>
-                        </div>
-                    </div>
-                </div>
-                ${this.renderExpandedPost(post, tags)}
-            `;
-        } else {
-            const postBody = postElement.querySelector('.post-body');
-            if (postBody) {
-                postBody.remove();
-            }
-        }
-    }
-
-    async vote(postId, direction) {
-        if (!this.currentUser) {
-            if (typeof togglePopup === 'function') {
-                togglePopup('login-popup');
-            }
-            return;
-        }
-
-        try {
-            if (typeof firebase === 'undefined' || !firebase.database) return;
-            
-            const voteRef = firebase.database().ref(`forum/votes/${postId}/${this.currentUser.uid}`);
-            const currentVoteSnapshot = await voteRef.once('value');
-            const currentVote = currentVoteSnapshot.val();
-
-            const postRef = firebase.database().ref(`forum/posts/${postId}`);
-            const postSnapshot = await postRef.once('value');
-            const post = postSnapshot.val();
-
-            let upvotes = post.upvotes || 0;
-            let downvotes = post.downvotes || 0;
-
-            if (currentVote === 'up') upvotes--;
-            if (currentVote === 'down') downvotes--;
-
-            if (currentVote !== direction) {
-                if (direction === 'up') upvotes++;
-                if (direction === 'down') downvotes++;
-                await voteRef.set(direction);
-            } else {
-                await voteRef.remove();
-            }
-
-            await postRef.update({ upvotes, downvotes });
-
-            const voteCountElement = document.querySelector(`[data-post-id="${postId}"] .vote-count`);
-            if (voteCountElement) {
-                voteCountElement.textContent = upvotes - downvotes;
-            }
-
-            const localPost = this.posts.find(p => p.id === postId);
-            if (localPost) {
-                localPost.upvotes = upvotes;
-                localPost.downvotes = downvotes;
-            }
-
-        } catch (error) {
-            console.error('Error voting:', error);
-        }
-    }
-
-    async incrementViews(postId) {
-        try {
-            if (typeof firebase === 'undefined' || !firebase.database) return;
-            
-            const postRef = firebase.database().ref(`forum/posts/${postId}/views`);
-            await postRef.transaction((currentViews) => {
-                return (currentViews || 0) + 1;
-            });
-        } catch (error) {
-            console.error('Error incrementing views:', error);
-        }
-    }
-
-    async submitComment(postId) {
-        if (!this.currentUser) {
-            if (typeof togglePopup === 'function') {
-                togglePopup('login-popup');
-            }
-            return;
-        }
-
-        const commentInput = document.getElementById(`comment-input-${postId}`);
-        if (!commentInput) return;
-        
-        const commentText = commentInput.value.trim();
-        if (!commentText) return;
-
-        try {
-            if (typeof firebase === 'undefined' || !firebase.database) return;
-            
-            const commentData = {
-                text: commentText,
-                authorId: this.currentUser.uid,
-                authorName: this.currentUser.displayName || this.currentUser.email,
-                postId: postId,
-                createdAt: new Date().toISOString()
-            };
-
-            const commentsRef = firebase.database().ref(`forum/comments/${postId}`);
-            await commentsRef.push(commentData);
-
-            const postRef = firebase.database().ref(`forum/posts/${postId}/commentCount`);
-            await postRef.transaction((currentCount) => {
-                return (currentCount || 0) + 1;
-            });
-
-            commentInput.value = '';
-            this.loadComments(postId);
-
-            const localPost = this.posts.find(p => p.id === postId);
-            if (localPost) {
-                localPost.commentCount = (localPost.commentCount || 0) + 1;
-            }
-
-            const commentCountElement = document.querySelector(`[data-post-id="${postId}"] .stat-item span`);
-            if (commentCountElement) {
-                commentCountElement.textContent = localPost.commentCount;
-            }
-
-        } catch (error) {
-            console.error('Error submitting comment:', error);
-            alert('Error posting comment. Please try again.');
-        }
-    }
-
-    openAskModal() {
-        if (!this.currentUser) {
-            if (typeof togglePopup === 'function') {
-                togglePopup('login-popup');
-            }
-            return;
-        }
-        const modal = document.getElementById('askModal');
-        if (modal) {
-            modal.style.display = 'block';
-        }
-    }
-
-    closeAskModal() {
-        const modal = document.getElementById('askModal');
-        if (modal) {
-            modal.style.display = 'none';
-        }
-        const form = document.getElementById('askForm');
-        if (form) {
-            form.reset();
-        }
-    }
-
-    async submitQuestion() {
-        if (!this.currentUser) {
-            if (typeof togglePopup === 'function') {
-                togglePopup('login-popup');
-            }
-            return;
-        }
-
-        const title = document.getElementById('question-title')?.value.trim();
-        const body = document.getElementById('question-body')?.value.trim();
-        const tags = document.getElementById('question-tags')?.value.trim();
-
-        if (!title || !body) {
-            alert('Please fill in both title and description');
-            return;
-        }
-
-        try {
-            if (typeof firebase === 'undefined' || !firebase.database) return;
-            
-            const postData = {
-                title: title,
-                body: body,
-                tags: tags,
-                authorId: this.currentUser.uid,
-                authorName: this.currentUser.displayName || this.currentUser.email,
-                createdAt: new Date().toISOString(),
-                upvotes: 0,
-                downvotes: 0,
-                views: 0,
-                commentCount: 0
-            };
-
-            const postsRef = firebase.database().ref('forum/posts');
-            await postsRef.push(postData);
-
-            this.closeAskModal();
-            this.loadPosts();
-
-        } catch (error) {
-            console.error('Error submitting question:', error);
-            alert('Error posting question. Please try again.');
-        }
-    }
-
-    sharePost(postId) {
-        const post = this.posts.find(p => p.id === postId);
-        if (post) {
-            const url = `${window.location.origin}${window.location.pathname}#post-${postId}`;
-            
-            if (navigator.share) {
-                navigator.share({
-                    title: post.title,
-                    text: post.body.substring(0, 100) + '...',
-                    url: url
-                });
-            } else {
-                navigator.clipboard.writeText(url).then(() => {
-                    alert('Link copied to clipboard!');
-                });
-            }
-        }
-    }
-
-    getTimeAgo(dateString) {
-        const now = new Date();
-        const date = new Date(dateString);
-        const diffInMinutes = Math.floor((now - date) / (1000 * 60));
-
-        if (diffInMinutes < 1) return 'just now';
-        if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-        
-        const diffInHours = Math.floor(diffInMinutes / 60);
-        if (diffInHours < 24) return `${diffInHours}h ago`;
-        
-        const diffInDays = Math.floor(diffInHours / 24);
-        if (diffInDays < 7) return `${diffInDays}d ago`;
-        
-        const diffInWeeks = Math.floor(diffInDays / 7);
-        if (diffInWeeks < 4) return `${diffInWeeks}w ago`;
-        
-        const diffInMonths = Math.floor(diffInDays / 30);
-        return `${diffInMonths}mo ago`;
-    }
-}
-
-// Global functions for onclick handlers (compatible with existing code)
-function openAskModal() {
-    if (window.forumManager) {
-        window.forumManager.openAskModal();
-    }
-}
-
-function closeAskModal() {
-    if (window.forumManager) {
-        window.forumManager.closeAskModal();
-    }
-}
-
-// Initialize forum only on forum page - ADD TO YOUR EXISTING DOMContentLoaded
-// Modify your existing DOMContentLoaded handler to include this:
-document.addEventListener('DOMContentLoaded', function() {
-    // Your existing DOMContentLoaded code here...
+  // Update UI based on auth state
+  function updateUIForAuthState() {
+    if (!forumElements.askBtn) return;
     
-    // Initialize forum only if we're on the forum page
-    if (document.getElementById('forum-posts')) {
-        window.forumManager = new ForumManager();
+    if (!currentUser) {
+      forumElements.askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
+      forumElements.askBtn.onclick = () => {
+        if (typeof togglePopup === 'function') {
+          togglePopup('login-popup');
+        }
+      };
+    } else {
+      forumElements.askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
+      forumElements.askBtn.onclick = () => openAskModal();
     }
-});
+  }
 
-// Update your existing Firebase auth handler to include these lines:
-// firebase.auth().onAuthStateChanged((user) => {
-//     // Your existing auth code...
-//     
-//     // Add these lines for forum integration:
-//     if (window.forumManager) {
-//         window.forumManager.currentUser = user;
-//         window.forumManager.updateUIForAuthState();
-//     }
-// });
+  // Load posts from API (like testimonials)
+  async function loadPosts() {
+    if (!forumElements.postsContainer) return;
+    
+    try {
+      showLoadingIndicator();
+      console.log('Loading forum posts from API...');
+      
+      const response = await fetch('/api/forum/posts');
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const posts = await response.json();
+      console.log('Forum posts loaded:', posts);
+
+      // Clear container
+      forumElements.postsContainer.innerHTML = '';
+
+      if (!posts || posts.length === 0) {
+        showEmptyState();
+        return;
+      }
+
+      // Sort posts based on active tab
+      sortPosts(posts);
+
+      // Add each post to display
+      posts.forEach(post => {
+        addPostToDisplay(post);
+      });
+
+    } catch (error) {
+      console.error('Error loading forum posts:', error);
+      showErrorState();
+    } finally {
+      hideLoadingIndicator();
+    }
+  }
+
+  // Sort posts based on active tab
+  function sortPosts(posts) {
+    switch (activeTab) {
+      case 'recent':
+        posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        break;
+      case 'popular':
+        posts.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
+        break;
+      case 'answered':
+        posts.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
+        break;
+    }
+  }
+
+  // Add post to display
+  function addPostToDisplay(post) {
+    if (!forumElements.postsContainer) return;
+
+    const timeAgo = getTimeAgo(post.createdAt);
+    const isExpanded = expandedPosts.has(post.id);
+    const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
+    
+    const postElement = document.createElement('div');
+    postElement.className = `forum-post ${isExpanded ? 'expanded' : ''}`;
+    postElement.setAttribute('data-post-id', post.id);
+    
+    postElement.innerHTML = `
+      <div class="post-header" onclick="togglePost('${post.id}')">
+        <div class="post-vote">
+          <button class="vote-btn" onclick="event.stopPropagation(); voteOnPost('${post.id}', 'up')">
+            ▲
+          </button>
+          <span class="vote-count">${(post.upvotes || 0) - (post.downvotes || 0)}</span>
+          <button class="vote-btn" onclick="event.stopPropagation(); voteOnPost('${post.id}', 'down')">
+            ▼
+          </button>
+        </div>
+        
+        <div class="post-content">
+          <h3 class="post-title">${escapeHtml(post.title)}</h3>
+          <div class="post-meta">
+            <span class="post-author">by ${escapeHtml(post.authorName || 'Anonymous')}</span>
+            <span class="post-time">${timeAgo}</span>
+          </div>
+        </div>
+        
+        <div class="post-stats">
+          <div class="stat-item">
+            <i class="bx bx-message-square"></i>
+            <span>${post.commentCount || 0}</span>
+          </div>
+          <div class="stat-item">
+            <i class="bx bx-show"></i>
+            <span>${post.views || 0}</span>
+          </div>
+        </div>
+      </div>
+      
+      ${isExpanded ? renderExpandedPost(post, tags) : ''}
+    `;
+    
+    forumElements.postsContainer.appendChild(postElement);
+  }
+
+  // Render expanded post content
+  function renderExpandedPost(post, tags) {
+    return `
+      <div class="post-body">
+        <div class="post-description">
+          ${escapeHtml(post.body).replace(/\n/g, '<br>')}
+        </div>
+        
+        ${tags.length > 0 ? `
+          <div class="post-tags">
+            ${tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
+          </div>
+        ` : ''}
+        
+        <div class="post-actions">
+          <div class="action-buttons">
+            <button class="action-btn" onclick="sharePost('${post.id}')">
+              <i class="bx bx-share"></i>
+              Share
+            </button>
+          </div>
+        </div>
+        
+        <div class="comments-section">
+          <div class="comments-header">
+            <h4 class="comments-title">Comments (${post.commentCount || 0})</h4>
+          </div>
+          
+          ${currentUser ? `
+            <div class="comment-form">
+              <textarea 
+                class="comment-input" 
+                id="comment-input-${post.id}"
+                placeholder="Write your comment..."></textarea>
+              <button 
+                class="comment-submit" 
+                onclick="submitComment('${post.id}')">
+                Post Comment
+              </button>
+            </div>
+          ` : `
+            <p style="text-align: center; color: #666; font-style: italic;">
+              <a href="#" onclick="togglePopup('login-popup')">Login</a> to post a comment
+            </p>
+          `}
+          
+          <div class="comments-list" id="comments-${post.id}">
+            <div class="loading"><i class="bx bx-loader-alt"></i> Loading comments...</div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Toggle post expansion
+  async function togglePost(postId) {
+    const postElement = document.querySelector(`[data-post-id="${postId}"]`);
+    if (!postElement) return;
+    
+    if (expandedPosts.has(postId)) {
+      expandedPosts.delete(postId);
+      postElement.classList.remove('expanded');
+      const postBody = postElement.querySelector('.post-body');
+      if (postBody) postBody.remove();
+    } else {
+      expandedPosts.add(postId);
+      postElement.classList.add('expanded');
+      
+      // Increment views
+      try {
+        await fetch(`/api/forum/posts/${postId}/views`, { method: 'POST' });
+      } catch (error) {
+        console.error('Error incrementing views:', error);
+      }
+      
+      // Re-render post to show expanded content
+      loadPosts(); // Reload to get updated data
+      
+      // Load comments
+      setTimeout(() => loadComments(postId), 100);
+    }
+  }
+
+  // Load comments for a post
+  async function loadComments(postId) {
+    const commentsContainer = document.getElementById(`comments-${postId}`);
+    if (!commentsContainer) return;
+    
+    try {
+      const response = await fetch(`/api/forum/posts/${postId}/comments`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const comments = await response.json();
+      
+      commentsContainer.innerHTML = comments.length > 0 
+        ? comments.map(comment => renderComment(comment)).join('')
+        : '<p style="text-align: center; color: #666; font-style: italic;">No comments yet</p>';
+        
+    } catch (error) {
+      console.error('Error loading comments:', error);
+      commentsContainer.innerHTML = '<p style="color: red;">Error loading comments</p>';
+    }
+  }
+
+  // Render a comment
+  function renderComment(comment) {
+    const timeAgo = getTimeAgo(comment.createdAt);
+    
+    return `
+      <div class="comment">
+        <div class="comment-header">
+          <span class="comment-author">${escapeHtml(comment.authorName || 'Anonymous')}</span>
+          <span class="comment-time">${timeAgo}</span>
+        </div>
+        <div class="comment-text">${escapeHtml(comment.text).replace(/\n/g, '<br>')}</div>
+      </div>
+    `;
+  }
+
+  // Vote on a post
+  async function voteOnPost(postId, direction) {
+    if (!currentUser) {
+      if (typeof togglePopup === 'function') {
+        togglePopup('login-popup');
+      }
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/forum/posts/${postId}/vote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ direction })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Update vote count in UI
+      const voteCountElement = document.querySelector(`[data-post-id="${postId}"] .vote-count`);
+      if (voteCountElement) {
+        voteCountElement.textContent = result.upvotes - result.downvotes;
+      }
+
+    } catch (error) {
+      console.error('Error voting:', error);
+      showErrorMessage('Failed to vote. Please try again.');
+    }
+  }
+
+  // Submit a comment
+  async function submitComment(postId) {
+    if (!currentUser) {
+      if (typeof togglePopup === 'function') {
+        togglePopup('login-popup');
+      }
+      return;
+    }
+
+    const commentInput = document.getElementById(`comment-input-${postId}`);
+    if (!commentInput) return;
+    
+    const commentText = commentInput.value.trim();
+    if (!commentText) return;
+
+    try {
+      const response = await fetch(`/api/forum/posts/${postId}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: commentText })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Clear input and reload comments
+      commentInput.value = '';
+      loadComments(postId);
+      
+      // Update comment count (reload posts to get updated count)
+      loadPosts();
+
+    } catch (error) {
+      console.error('Error submitting comment:', error);
+      showErrorMessage('Failed to post comment. Please try again.');
+    }
+  }
+
+  // Submit a new question
+  async function submitQuestion(event) {
+    if (event) event.preventDefault();
+    
+    if (!currentUser) {
+      if (typeof togglePopup === 'function') {
+        togglePopup('login-popup');
+      }
+      return;
+    }
+
+    const title = document.getElementById('question-title')?.value.trim();
+    const body = document.getElementById('question-body')?.value.trim();
+    const tags = document.getElementById('question-tags')?.value.trim();
+
+    if (!title || !body) {
+      alert('Please fill in both title and description');
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/forum/posts', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: title,
+          body: body,
+          tags: tags
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Close modal and reload posts
+      closeAskModal();
+      loadPosts();
+      showSuccessMessage('Question posted successfully!');
+
+    } catch (error) {
+      console.error('Error submitting question:', error);
+      showErrorMessage('Failed to post question. Please try again.');
+    }
+  }
+
+  // Modal functions
+  function openAskModal() {
+    const modal = document.getElementById('askModal');
+    if (modal) modal.style.display = 'block';
+  }
+
+  function closeAskModal() {
+    const modal = document.getElementById('askModal');
+    if (modal) modal.style.display = 'none';
+    
+    const form = document.getElementById('askForm');
+    if (form) form.reset();
+  }
+
+  // Tab switching
+  function switchTab(tabType) {
+    document.querySelectorAll('.forum-tab').forEach(tab => {
+      tab.classList.remove('active');
+    });
+    
+    const activeTab = document.querySelector(`[data-tab="${tabType}"]`);
+    if (activeTab) activeTab.classList.add('active');
+    
+    activeTab = tabType;
+    loadPosts();
+  }
+
+  // Bind event listeners
+  function bindEventListeners() {
+    // Tab switching
+    forumElements.tabs.forEach(tab => {
+      tab.addEventListener('click', (e) => {
+        const tabType = e.target.getAttribute('data-tab');
+        switchTab(tabType);
+      });
+    });
+
+    // Ask form submission
+    const askForm = document.getElementById('askForm');
+    if (askForm) {
+      askForm.addEventListener('submit', submitQuestion);
+    }
+
+    // Close modal when clicking outside
+    const askModal = document.getElementById('askModal');
+    if (askModal) {
+      askModal.addEventListener('click', (e) => {
+        if (e.target.id === 'askModal') {
+          closeAskModal();
+        }
+      });
+    }
+  }
+
+  // Utility functions (reuse from testimonials)
+  function showLoadingIndicator() {
+    if (!forumElements.postsContainer || forumElements.loading) return;
+    
+    forumElements.loading = true;
+    forumElements.postsContainer.innerHTML = `
+      <div class="loading">
+        <i class="bx bx-loader-alt"></i>
+        <p>Loading posts...</p>
+      </div>
+    `;
+  }
+
+  function hideLoadingIndicator() {
+    forumElements.loading = false;
+  }
+
+  function showEmptyState() {
+    if (!forumElements.postsContainer) return;
+    
+    forumElements.postsContainer.innerHTML = `
+      <div class="empty-state">
+        <i class="bx bx-message-square"></i>
+        <h3>No posts yet</h3>
+        <p>Be the first to ask a question!</p>
+      </div>
+    `;
+  }
+
+  function showErrorState() {
+    if (!forumElements.postsContainer) return;
+    
+    forumElements.postsContainer.innerHTML = `
+      <div class="empty-state">
+        <i class="bx bx-error"></i>
+        <h3>Error loading posts</h3>
+        <p>Please try refreshing the page</p>
+      </div>
+    `;
+  }
+
+  function showSuccessMessage(message) {
+    // Reuse your testimonials success message function
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'testimonial-message success';
+    messageDiv.innerHTML = `
+      <i class="fas fa-check-circle"></i>
+      <span>${message}</span>
+    `;
+    
+    document.body.appendChild(messageDiv);
+    setTimeout(() => {
+      if (messageDiv.parentNode) {
+        messageDiv.parentNode.removeChild(messageDiv);
+      }
+    }, 3000);
+  }
+
+  function showErrorMessage(message) {
+    // Reuse your testimonials error message function
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'testimonial-message error';
+    messageDiv.innerHTML = `
+      <i class="fas fa-exclamation-circle"></i>
+      <span>${message}</span>
+    `;
+    
+    document.body.appendChild(messageDiv);
+    setTimeout(() => {
+      if (messageDiv.parentNode) {
+        messageDiv.parentNode.removeChild(messageDiv);
+      }
+    }, 5000);
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  function getTimeAgo(dateString) {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+
+    if (diffInMinutes < 1) return 'just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    
+    const diffInWeeks = Math.floor(diffInDays / 7);
+    if (diffInWeeks < 4) return `${diffInWeeks}w ago`;
+    
+    const diffInMonths = Math.floor(diffInDays / 30);
+    return `${diffInMonths}mo ago`;
+  }
+
+  function sharePost(postId) {
+    const url = `${window.location.origin}${window.location.pathname}#post-${postId}`;
+    
+    if (navigator.share) {
+      navigator.share({
+        title: 'Check out this forum post',
+        url: url
+      });
+    } else {
+      navigator.clipboard.writeText(url).then(() => {
+        showSuccessMessage('Link copied to clipboard!');
+      });
+    }
+  }
+
+  // Initialize forum
+  function initializeForum() {
+    console.log('Initializing forum functionality');
+    
+    if (!initializeForumElements()) {
+      return; // Not on forum page or failed to initialize
+    }
+    
+    // Wait a bit for your testimonials pattern
+    setTimeout(() => {
+      bindEventListeners();
+      checkAuthState();
+      loadPosts();
+      console.log('Forum system initialized successfully');
+    }, 100);
+  }
+
+  // Auto-initialize when DOM is loaded (like testimonials)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeForum);
+  } else {
+    initializeForum();
+  }
+
+  // Global functions for onclick handlers
+  window.togglePost = togglePost;
+  window.voteOnPost = voteOnPost;
+  window.submitComment = submitComment;
+  window.sharePost = sharePost;
+  window.openAskModal = openAskModal;
+  window.closeAskModal = closeAskModal;
+
+})();
