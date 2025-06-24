@@ -2512,8 +2512,10 @@ document.addEventListener("DOMContentLoaded", function () {
 
   let currentUser = null;
   let activeTab = 'recent';
+  let activeTagFilter = '';
   let expandedPosts = new Set();
-  let currentForumPosts = []; // Store posts globally for optimizations
+  let expandedComments = new Set();
+  let currentForumPosts = [];
 
   // Initialize forum elements
   function initializeForumElements() {
@@ -2525,7 +2527,6 @@ document.addEventListener("DOMContentLoaded", function () {
       forumElements.askBtn = document.querySelector('.ask-btn');
       forumElements.tabs = document.querySelectorAll('.forum-tab');
 
-      // Check if we're on the forum page
       if (!forumElements.postsContainer) {
         console.log('Not on forum page, skipping forum initialization');
         return false;
@@ -2540,11 +2541,10 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Check authentication state (integrates with your existing auth)
+  // Check authentication state
   function checkAuthState() {
     console.log('Forum: Checking auth state...');
     
-    // Use your existing auth system
     if (typeof auth !== 'undefined' && auth && auth.currentUser) {
       console.log('Forum: Found existing user:', auth.currentUser.email);
       currentUser = auth.currentUser;
@@ -2553,7 +2553,6 @@ document.addEventListener("DOMContentLoaded", function () {
       console.log('Forum: No current user found');
     }
 
-    // Listen for auth changes (integrates with your existing Firebase auth)
     const setupAuthListener = () => {
       if (typeof auth !== 'undefined' && auth) {
         console.log('Forum: Setting up auth listener');
@@ -2575,7 +2574,6 @@ document.addEventListener("DOMContentLoaded", function () {
   function updateUIForAuthState() {
     console.log('Forum: Updating UI, currentUser:', currentUser ? currentUser.email : 'none');
     
-    // Find the ask button directly (don't rely on forumElements)
     const askBtn = document.querySelector('.ask-btn');
     
     if (!askBtn) {
@@ -2587,7 +2585,6 @@ document.addEventListener("DOMContentLoaded", function () {
       console.log('Forum: Setting up login prompt');
       askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
       askBtn.onclick = () => {
-        console.log('Forum: Login button clicked');
         if (typeof togglePopup === 'function') {
           togglePopup('login-popup');
         }
@@ -2596,18 +2593,16 @@ document.addEventListener("DOMContentLoaded", function () {
       console.log('Forum: Setting up ask question button');
       askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
       askBtn.onclick = () => {
-        console.log('Forum: Ask question button clicked');
         openAskModal();
       };
     }
     
-    // Also update forumElements.askBtn if it exists
     if (typeof forumElements !== 'undefined' && forumElements) {
       forumElements.askBtn = askBtn;
     }
   }
 
-  // OPTIMIZED: Load posts from API with global storage
+  // ENHANCED: Load posts with tag filtering
   async function loadPosts() {
     if (!forumElements.postsContainer) return;
     
@@ -2624,23 +2619,31 @@ document.addEventListener("DOMContentLoaded", function () {
       const posts = await response.json();
       console.log('Forum posts loaded:', posts);
 
-      // Store posts globally for other functions to use
       currentForumPosts = posts;
-      window.currentForumPosts = posts; // Also make it globally accessible
+      window.currentForumPosts = posts;
 
-      // Clear container
+      // Filter posts by tag if active
+      let filteredPosts = posts;
+      if (activeTagFilter) {
+        filteredPosts = posts.filter(post => {
+          const postTags = post.tags ? post.tags.toLowerCase().split(',').map(tag => tag.trim()) : [];
+          return postTags.some(tag => tag.includes(activeTagFilter.toLowerCase()));
+        });
+      }
+
       forumElements.postsContainer.innerHTML = '';
 
-      if (!posts || posts.length === 0) {
-        showEmptyState();
+      if (!filteredPosts || filteredPosts.length === 0) {
+        if (activeTagFilter) {
+          showEmptyFilterState(activeTagFilter);
+        } else {
+          showEmptyState();
+        }
         return;
       }
 
-      // Sort posts based on active tab
-      sortPosts(posts);
-
-      // Add each post to display
-      posts.forEach(post => {
+      sortPosts(filteredPosts);
+      filteredPosts.forEach(post => {
         addPostToDisplay(post);
       });
 
@@ -2667,13 +2670,16 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Add post to display
+  // ENHANCED: Add post to display with expand arrow and anonymous option
   function addPostToDisplay(post) {
     if (!forumElements.postsContainer) return;
 
     const timeAgo = getTimeAgo(post.createdAt);
     const isExpanded = expandedPosts.has(post.id);
     const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
+    
+    // FEATURE 3: Handle anonymous posts
+    const authorName = post.isAnonymous ? 'Anonymous' : (post.authorName || 'Anonymous');
     
     const postElement = document.createElement('div');
     postElement.className = `forum-post ${isExpanded ? 'expanded' : ''}`;
@@ -2694,7 +2700,7 @@ document.addEventListener("DOMContentLoaded", function () {
         <div class="post-content">
           <h3 class="post-title">${escapeHtml(post.title)}</h3>
           <div class="post-meta">
-            <span class="post-author">by ${escapeHtml(post.authorName || 'Anonymous')}</span>
+            <span class="post-author">by ${escapeHtml(authorName)}</span>
             <span class="post-time">${timeAgo}</span>
           </div>
         </div>
@@ -2708,6 +2714,10 @@ document.addEventListener("DOMContentLoaded", function () {
             <i class="bx bx-show"></i>
             <span>${post.views || 0}</span>
           </div>
+          <!-- FEATURE 1: Expand/Collapse Arrow -->
+          <div class="expand-arrow">
+            <i class="bx ${isExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}"></i>
+          </div>
         </div>
       </div>
       
@@ -2717,8 +2727,10 @@ document.addEventListener("DOMContentLoaded", function () {
     forumElements.postsContainer.appendChild(postElement);
   }
 
-  // Render expanded post content
+  // ENHANCED: Render expanded post with "Tags:" label
   function renderExpandedPost(post, tags) {
+    const authorName = post.isAnonymous ? 'Anonymous' : (post.authorName || 'Anonymous');
+    
     return `
       <div class="post-body">
         <div class="post-description">
@@ -2727,6 +2739,8 @@ document.addEventListener("DOMContentLoaded", function () {
         
         ${tags.length > 0 ? `
           <div class="post-tags">
+            <!-- FEATURE 2: Add "Tags:" label -->
+            <span class="tags-label">Tags: </span>
             ${tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
           </div>
         ` : ''}
@@ -2751,11 +2765,17 @@ document.addEventListener("DOMContentLoaded", function () {
                 class="comment-input" 
                 id="comment-input-${post.id}"
                 placeholder="Write your comment..."></textarea>
-              <button 
-                class="comment-submit" 
-                onclick="submitComment('${post.id}')">
-                Post Comment
-              </button>
+              <div class="comment-form-actions">
+                <label class="anonymous-toggle">
+                  <input type="checkbox" id="anonymous-comment-${post.id}">
+                  <span>Post anonymously</span>
+                </label>
+                <button 
+                  class="comment-submit" 
+                  onclick="submitComment('${post.id}')">
+                  Post Comment
+                </button>
+              </div>
             </div>
           ` : `
             <p style="text-align: center; color: #666; font-style: italic;">
@@ -2771,51 +2791,57 @@ document.addEventListener("DOMContentLoaded", function () {
     `;
   }
 
-  // OPTIMIZED: Toggle post expansion without full reload
+  // ENHANCED: Toggle post with arrow animation
   async function togglePost(postId) {
     const postElement = document.querySelector(`[data-post-id="${postId}"]`);
     if (!postElement) return;
     
+    // FEATURE 1: Update arrow direction
+    const arrow = postElement.querySelector('.expand-arrow i');
+    
     if (expandedPosts.has(postId)) {
-      // Collapse post
       expandedPosts.delete(postId);
       postElement.classList.remove('expanded');
       const postBody = postElement.querySelector('.post-body');
       if (postBody) postBody.remove();
+      
+      // Update arrow to point down
+      if (arrow) {
+        arrow.className = 'bx bx-chevron-down';
+      }
     } else {
-      // Expand post
       expandedPosts.add(postId);
       postElement.classList.add('expanded');
       
-      // Increment views
+      // Update arrow to point up
+      if (arrow) {
+        arrow.className = 'bx bx-chevron-up';
+      }
+      
       try {
         await fetch(`/api/forum/posts/${postId}/views`, { method: 'POST' });
       } catch (error) {
         console.error('Error incrementing views:', error);
       }
       
-      // Find the post data from our stored posts instead of reloading
       const post = currentForumPosts.find(p => p.id === postId);
       if (post) {
         const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
         
-        // Add expanded content directly
         const expandedContent = document.createElement('div');
         expandedContent.innerHTML = renderExpandedPost(post, tags);
         postElement.appendChild(expandedContent.firstElementChild);
         
-        // Load comments for this specific post
         setTimeout(() => loadComments(postId), 100);
       }
     }
   }
 
-  // OPTIMIZED: Load comments with better loading states
+  // ENHANCED: Load comments with voting and replies
   async function loadComments(postId) {
     const commentsContainer = document.getElementById(`comments-${postId}`);
     if (!commentsContainer) return;
     
-    // Don't show loading if we already have comments (to avoid flicker)
     const hasComments = commentsContainer.children.length > 0 && 
                        !commentsContainer.querySelector('.loading');
     
@@ -2835,8 +2861,11 @@ document.addEventListener("DOMContentLoaded", function () {
       const comments = await response.json();
       console.log('Comments loaded:', comments.length);
       
-      commentsContainer.innerHTML = comments.length > 0 
-        ? comments.map(comment => renderComment(comment)).join('')
+      // FEATURE 6: Organize comments by parent/child relationships
+      const organizedComments = organizeComments(comments);
+      
+      commentsContainer.innerHTML = organizedComments.length > 0 
+        ? organizedComments.map(comment => renderComment(comment, postId)).join('')
         : '<p style="text-align: center; color: #666; font-style: italic;">No comments yet</p>';
         
     } catch (error) {
@@ -2845,19 +2874,199 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Render a comment
-  function renderComment(comment) {
-    const timeAgo = getTimeAgo(comment.createdAt);
+  // FEATURE 6: Organize comments with replies
+  function organizeComments(comments) {
+    const commentMap = new Map();
+    const rootComments = [];
     
-    return `
-      <div class="comment">
-        <div class="comment-header">
-          <span class="comment-author">${escapeHtml(comment.authorName || 'Anonymous')}</span>
-          <span class="comment-time">${timeAgo}</span>
+    // First pass: create map of all comments
+    comments.forEach(comment => {
+      comment.replies = [];
+      commentMap.set(comment.id, comment);
+    });
+    
+    // Second pass: organize parent-child relationships
+    comments.forEach(comment => {
+      if (comment.parentId && commentMap.has(comment.parentId)) {
+        commentMap.get(comment.parentId).replies.push(comment);
+      } else {
+        rootComments.push(comment);
+      }
+    });
+    
+    return rootComments;
+  }
+
+  // ENHANCED: Render comment with voting and reply functionality
+  function renderComment(comment, postId, isReply = false) {
+    const timeAgo = getTimeAgo(comment.createdAt);
+    const authorName = comment.isAnonymous ? 'Anonymous' : (comment.authorName || 'Anonymous');
+    const indentClass = isReply ? 'comment-reply' : '';
+    
+    let html = `
+      <div class="comment ${indentClass}" data-comment-id="${comment.id}">
+        <div class="comment-content">
+          <!-- FEATURE 5: Comment voting -->
+          <div class="comment-vote">
+            <button class="vote-btn comment-vote-btn" onclick="voteOnComment('${postId}', '${comment.id}', 'up')">
+              ▲
+            </button>
+            <span class="vote-count">${(comment.upvotes || 0) - (comment.downvotes || 0)}</span>
+            <button class="vote-btn comment-vote-btn" onclick="voteOnComment('${postId}', '${comment.id}', 'down')">
+              ▼
+            </button>
+          </div>
+          
+          <div class="comment-main">
+            <div class="comment-header">
+              <span class="comment-author">${escapeHtml(authorName)}</span>
+              <span class="comment-time">${timeAgo}</span>
+            </div>
+            <div class="comment-text">${escapeHtml(comment.text).replace(/\n/g, '<br>')}</div>
+            
+            <!-- FEATURE 6: Reply button -->
+            ${currentUser ? `
+              <div class="comment-actions">
+                <button class="reply-btn" onclick="toggleReplyForm('${postId}', '${comment.id}')">
+                  <i class="bx bx-reply"></i> Reply
+                </button>
+              </div>
+              
+              <!-- Reply form (hidden by default) -->
+              <div class="reply-form" id="reply-form-${comment.id}" style="display: none;">
+                <textarea 
+                  class="reply-input" 
+                  id="reply-input-${comment.id}"
+                  placeholder="Write your reply..."></textarea>
+                <div class="reply-form-actions">
+                  <label class="anonymous-toggle">
+                    <input type="checkbox" id="anonymous-reply-${comment.id}">
+                    <span>Reply anonymously</span>
+                  </label>
+                  <button class="reply-submit" onclick="submitReply('${postId}', '${comment.id}')">
+                    Post Reply
+                  </button>
+                  <button class="reply-cancel" onclick="toggleReplyForm('${postId}', '${comment.id}')">
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ` : ''}
+          </div>
         </div>
-        <div class="comment-text">${escapeHtml(comment.text).replace(/\n/g, '<br>')}</div>
+        
+        <!-- FEATURE 6: Render replies -->
+        ${comment.replies && comment.replies.length > 0 ? `
+          <div class="comment-replies">
+            ${comment.replies.map(reply => renderComment(reply, postId, true)).join('')}
+          </div>
+        ` : ''}
       </div>
     `;
+    
+    return html;
+  }
+
+  // FEATURE 5: Vote on comments
+  async function voteOnComment(postId, commentId, direction) {
+    if (!currentUser) {
+      if (typeof togglePopup === 'function') {
+        togglePopup('login-popup');
+      }
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/forum/comments/${commentId}/vote`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ direction })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Update vote count in UI
+      const voteCountElement = document.querySelector(`[data-comment-id="${commentId}"] .vote-count`);
+      if (voteCountElement) {
+        voteCountElement.textContent = result.upvotes - result.downvotes;
+      }
+
+    } catch (error) {
+      console.error('Error voting on comment:', error);
+      showErrorMessage('Failed to vote on comment. Please try again.');
+    }
+  }
+
+  // FEATURE 6: Toggle reply form
+  function toggleReplyForm(postId, commentId) {
+    const replyForm = document.getElementById(`reply-form-${commentId}`);
+    if (!replyForm) return;
+    
+    const isHidden = replyForm.style.display === 'none';
+    replyForm.style.display = isHidden ? 'block' : 'none';
+    
+    if (isHidden) {
+      const replyInput = document.getElementById(`reply-input-${commentId}`);
+      if (replyInput) {
+        setTimeout(() => replyInput.focus(), 100);
+      }
+    }
+  }
+
+  // FEATURE 6: Submit reply to comment
+  async function submitReply(postId, parentCommentId) {
+    if (!currentUser) {
+      if (typeof togglePopup === 'function') {
+        togglePopup('login-popup');
+      }
+      return;
+    }
+
+    const replyInput = document.getElementById(`reply-input-${parentCommentId}`);
+    const anonymousCheckbox = document.getElementById(`anonymous-reply-${parentCommentId}`);
+    
+    if (!replyInput) return;
+    
+    const replyText = replyInput.value.trim();
+    if (!replyText) return;
+
+    const isAnonymous = anonymousCheckbox ? anonymousCheckbox.checked : false;
+
+    try {
+      const response = await fetch(`/api/forum/posts/${postId}/comments`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          text: replyText,
+          parentId: parentCommentId,
+          isAnonymous: isAnonymous
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      // Clear reply form and reload comments
+      replyInput.value = '';
+      if (anonymousCheckbox) anonymousCheckbox.checked = false;
+      toggleReplyForm(postId, parentCommentId);
+      
+      loadComments(postId);
+      updateCommentCount(postId, 1);
+
+    } catch (error) {
+      console.error('Error submitting reply:', error);
+      showErrorMessage('Failed to post reply. Please try again.');
+    }
   }
 
   // Vote on a post
@@ -2884,13 +3093,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
       const result = await response.json();
       
-      // Update vote count in UI immediately
       const voteCountElement = document.querySelector(`[data-post-id="${postId}"] .vote-count`);
       if (voteCountElement) {
         voteCountElement.textContent = result.upvotes - result.downvotes;
       }
 
-      // Update local post data
       const localPost = currentForumPosts.find(p => p.id === postId);
       if (localPost) {
         localPost.upvotes = result.upvotes;
@@ -2903,7 +3110,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // OPTIMIZED: Submit comment with immediate UI updates
+  // ENHANCED: Submit comment with anonymous option
   async function submitComment(postId) {
     if (!currentUser) {
       if (typeof togglePopup === 'function') {
@@ -2913,14 +3120,15 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
     const commentInput = document.getElementById(`comment-input-${postId}`);
+    const anonymousCheckbox = document.getElementById(`anonymous-comment-${postId}`);
+    
     if (!commentInput) return;
     
     const commentText = commentInput.value.trim();
     if (!commentText) return;
 
-    console.log('Submitting comment for post:', postId);
+    const isAnonymous = anonymousCheckbox ? anonymousCheckbox.checked : false;
 
-    // Show loading state on submit button
     const submitBtn = commentInput.parentElement.querySelector('.comment-submit');
     const originalText = submitBtn ? submitBtn.textContent : '';
     if (submitBtn) {
@@ -2934,30 +3142,26 @@ document.addEventListener("DOMContentLoaded", function () {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ text: commentText })
+        body: JSON.stringify({ 
+          text: commentText,
+          isAnonymous: isAnonymous
+        })
       });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const newComment = await response.json();
-      console.log('Comment submitted successfully:', newComment);
-
-      // Clear input immediately
       commentInput.value = '';
-
-      // Add the comment to the UI immediately (optimistic update)
-      addCommentToUI(postId, newComment);
+      if (anonymousCheckbox) anonymousCheckbox.checked = false;
       
-      // Update comment count in the post header immediately
+      loadComments(postId);
       updateCommentCount(postId, 1);
 
     } catch (error) {
       console.error('Error submitting comment:', error);
       showErrorMessage('Failed to post comment. Please try again.');
     } finally {
-      // Reset button state
       if (submitBtn) {
         submitBtn.textContent = originalText;
         submitBtn.disabled = false;
@@ -2965,31 +3169,8 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Helper function to add comment to UI immediately
-  function addCommentToUI(postId, comment) {
-    const commentsContainer = document.getElementById(`comments-${postId}`);
-    if (!commentsContainer) return;
-
-    // Create comment element
-    const commentElement = document.createElement('div');
-    commentElement.className = 'comment';
-    commentElement.innerHTML = renderComment(comment);
-
-    // Add to the end of comments list
-    commentsContainer.appendChild(commentElement);
-
-    // Remove "no comments" message if it exists
-    const noCommentsMsg = commentsContainer.querySelector('p[style*="font-style: italic"]');
-    if (noCommentsMsg && noCommentsMsg.textContent.includes('No comments yet')) {
-      noCommentsMsg.remove();
-    }
-
-    console.log('Comment added to UI immediately');
-  }
-
-  // Helper function to update comment count immediately
+  // Helper function to update comment count
   function updateCommentCount(postId, increment) {
-    // Update in the post stats
     const postElement = document.querySelector(`[data-post-id="${postId}"]`);
     if (postElement) {
       const commentCountElement = postElement.querySelector('.stat-item span');
@@ -2998,30 +3179,24 @@ document.addEventListener("DOMContentLoaded", function () {
         const newCount = currentCount + increment;
         commentCountElement.textContent = newCount;
 
-        // Also update in the comments header
         const commentsTitle = postElement.querySelector('.comments-title');
         if (commentsTitle) {
           commentsTitle.textContent = `Comments (${newCount})`;
         }
 
-        // Update local post data
         const localPost = currentForumPosts.find(p => p.id === postId);
         if (localPost) {
           localPost.commentCount = newCount;
         }
       }
     }
-
-    console.log('Comment count updated in UI');
   }
 
-  // Submit a new question
+  // ENHANCED: Submit question with anonymous option
   async function submitQuestion(event) {
-    console.log('Submit question called');
     if (event) event.preventDefault();
     
     if (!currentUser) {
-      console.log('No current user, redirecting to login');
       if (typeof togglePopup === 'function') {
         togglePopup('login-popup');
       }
@@ -3031,55 +3206,57 @@ document.addEventListener("DOMContentLoaded", function () {
     const title = document.getElementById('question-title')?.value.trim();
     const body = document.getElementById('question-body')?.value.trim();
     const tags = document.getElementById('question-tags')?.value.trim();
-
-    console.log('Form data:', { title, body, tags });
+    const isAnonymous = document.getElementById('anonymous-post')?.checked || false;
 
     if (!title || !body) {
       alert('Please fill in both title and description');
       return;
     }
 
-    const requestData = {
-      title: title,
-      body: body,
-      tags: tags
-    };
-
-    console.log('Sending request data:', requestData);
-
     try {
-      console.log('Making POST request to /api/forum/posts');
-      
       const response = await fetch('/api/forum/posts', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(requestData)
+        body: JSON.stringify({
+          title: title,
+          body: body,
+          tags: tags,
+          isAnonymous: isAnonymous
+        })
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response ok:', response.ok);
-
       if (!response.ok) {
-        // Try to get the error message from the response
         const errorText = await response.text();
-        console.error('Server error response:', errorText);
         throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
       }
 
-      const result = await response.json();
-      console.log('Success response:', result);
-
-      // Close modal and reload posts
       closeAskModal();
       loadPosts();
       showSuccessMessage('Question posted successfully!');
 
     } catch (error) {
       console.error('Error submitting question:', error);
-      showErrorMessage('Failed to post question. Please try again. Error: ' + error.message);
+      showErrorMessage('Failed to post question. Please try again.');
     }
+  }
+
+  // FEATURE 4: Filter posts by tag
+  function filterByTag() {
+    const tagFilter = document.getElementById('tag-filter');
+    if (!tagFilter) return;
+    
+    activeTagFilter = tagFilter.value.trim();
+    loadPosts();
+  }
+
+  // Clear tag filter
+  function clearTagFilter() {
+    activeTagFilter = '';
+    const tagFilter = document.getElementById('tag-filter');
+    if (tagFilter) tagFilter.value = '';
+    loadPosts();
   }
 
   // Modal functions
@@ -3111,7 +3288,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   // Bind event listeners
   function bindEventListeners() {
-    // Tab switching
     forumElements.tabs.forEach(tab => {
       tab.addEventListener('click', (e) => {
         const tabType = e.target.getAttribute('data-tab');
@@ -3119,13 +3295,11 @@ document.addEventListener("DOMContentLoaded", function () {
       });
     });
 
-    // Ask form submission
     const askForm = document.getElementById('askForm');
     if (askForm) {
       askForm.addEventListener('submit', submitQuestion);
     }
 
-    // Close modal when clicking outside
     const askModal = document.getElementById('askModal');
     if (askModal) {
       askModal.addEventListener('click', (e) => {
@@ -3134,9 +3308,15 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       });
     }
+
+    // FEATURE 4: Tag filter event listener
+    const tagFilter = document.getElementById('tag-filter');
+    if (tagFilter) {
+      tagFilter.addEventListener('input', filterByTag);
+    }
   }
 
-  // Utility functions (reuse from testimonials)
+  // Utility functions
   function showLoadingIndicator() {
     if (!forumElements.postsContainer || forumElements.loading) return;
     
@@ -3165,6 +3345,19 @@ document.addEventListener("DOMContentLoaded", function () {
     `;
   }
 
+  function showEmptyFilterState(tag) {
+    if (!forumElements.postsContainer) return;
+    
+    forumElements.postsContainer.innerHTML = `
+      <div class="empty-state">
+        <i class="bx bx-filter"></i>
+        <h3>No posts found</h3>
+        <p>No posts found with tag "${tag}"</p>
+        <button onclick="clearTagFilter()" class="clear-filter-btn">Clear Filter</button>
+      </div>
+    `;
+  }
+
   function showErrorState() {
     if (!forumElements.postsContainer) return;
     
@@ -3178,7 +3371,6 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function showSuccessMessage(message) {
-    // Reuse your testimonials success message function
     const messageDiv = document.createElement('div');
     messageDiv.className = 'testimonial-message success';
     messageDiv.innerHTML = `
@@ -3195,7 +3387,6 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   function showErrorMessage(message) {
-    // Reuse your testimonials error message function
     const messageDiv = document.createElement('div');
     messageDiv.className = 'testimonial-message error';
     messageDiv.innerHTML = `
@@ -3259,10 +3450,9 @@ document.addEventListener("DOMContentLoaded", function () {
     console.log('Initializing forum functionality');
     
     if (!initializeForumElements()) {
-      return; // Not on forum page or failed to initialize
+      return;
     }
     
-    // Wait a bit for your testimonials pattern
     setTimeout(() => {
       bindEventListeners();
       checkAuthState();
@@ -3271,7 +3461,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 100);
   }
 
-  // Auto-initialize when DOM is loaded (like testimonials)
+  // Auto-initialize when DOM is loaded
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initializeForum);
   } else {
@@ -3281,9 +3471,14 @@ document.addEventListener("DOMContentLoaded", function () {
   // Global functions for onclick handlers
   window.togglePost = togglePost;
   window.voteOnPost = voteOnPost;
+  window.voteOnComment = voteOnComment;
   window.submitComment = submitComment;
+  window.submitReply = submitReply;
+  window.toggleReplyForm = toggleReplyForm;
   window.sharePost = sharePost;
   window.openAskModal = openAskModal;
   window.closeAskModal = closeAskModal;
+  window.filterByTag = filterByTag;
+  window.clearTagFilter = clearTagFilter;
 
 })();

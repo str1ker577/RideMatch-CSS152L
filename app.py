@@ -834,7 +834,7 @@ def get_affordable_cars():
 
 @app.route('/api/forum/posts', methods=['GET'])
 def get_forum_posts():
-    """Get all forum posts"""
+    """Get all forum posts (unchanged - supports filtering on frontend)"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
     
@@ -858,7 +858,7 @@ def get_forum_posts():
 
 @app.route('/api/forum/posts', methods=['POST'])
 def create_forum_post():
-    """Create a new forum post"""
+    """Create a new forum post with anonymous option"""
     if 'user' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
@@ -874,12 +874,17 @@ def create_forum_post():
         if not data.get('title') or not data.get('body'):
             return jsonify({'error': 'Title and body are required'}), 400
         
+        # FEATURE 3: Handle anonymous posting
+        is_anonymous = data.get('isAnonymous', False)
+        author_name = 'Anonymous' if is_anonymous else user_email
+        
         post_data = {
             'title': data.get('title'),
             'body': data.get('body'),
             'tags': data.get('tags', ''),
             'authorId': user_id,
-            'authorName': user_email,
+            'authorName': author_name,
+            'isAnonymous': is_anonymous,  # Store anonymous flag
             'createdAt': datetime.utcnow().isoformat() + 'Z',
             'upvotes': 0,
             'downvotes': 0,
@@ -899,9 +904,89 @@ def create_forum_post():
         app.logger.error(f"Error creating forum post: {e}")
         return jsonify({'error': 'Failed to create post'}), 500
 
+
+@app.route('/api/forum/comments/<comment_id>/vote', methods=['POST'])
+def vote_on_comment(comment_id):
+    """Vote on a comment"""
+    if 'user' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        data = request.json
+        direction = data.get('direction')  # 'up' or 'down'
+        user_id = session['user']
+        
+        if direction not in ['up', 'down']:
+            return jsonify({'error': 'Invalid vote direction'}), 400
+        
+        # Find the comment in all posts (we need to search since we don't know the post_id)
+        posts_ref = realtime_db_ref.child('forum').child('posts')
+        posts_data = posts_ref.get() or {}
+        
+        comment_ref = None
+        post_id = None
+        
+        # Search for the comment across all posts
+        for pid, post_data in posts_data.items():
+            comments_ref = realtime_db_ref.child('forum').child('comments').child(pid)
+            comments_data = comments_ref.get() or {}
+            
+            if comment_id in comments_data:
+                comment_ref = comments_ref.child(comment_id)
+                post_id = pid
+                break
+        
+        if not comment_ref:
+            return jsonify({'error': 'Comment not found'}), 404
+        
+        # Check current vote
+        vote_ref = realtime_db_ref.child('forum').child('comment_votes').child(comment_id).child(user_id)
+        current_vote = vote_ref.get()
+        
+        # Get current comment data
+        comment_data = comment_ref.get()
+        upvotes = comment_data.get('upvotes', 0)
+        downvotes = comment_data.get('downvotes', 0)
+        
+        # Remove previous vote if exists
+        if current_vote == 'up':
+            upvotes -= 1
+        elif current_vote == 'down':
+            downvotes -= 1
+        
+        # Add new vote if different from current
+        if current_vote != direction:
+            if direction == 'up':
+                upvotes += 1
+            else:
+                downvotes += 1
+            vote_ref.set(direction)
+        else:
+            # Remove vote if same as current
+            vote_ref.delete()
+        
+        # Update comment vote counts
+        comment_ref.update({
+            'upvotes': upvotes,
+            'downvotes': downvotes
+        })
+        
+        return jsonify({
+            'upvotes': upvotes,
+            'downvotes': downvotes,
+            'userVote': direction if current_vote != direction else None
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error voting on comment: {e}")
+        return jsonify({'error': 'Failed to vote on comment'}), 500
+
 @app.route('/api/forum/posts/<post_id>/vote', methods=['POST'])
 def vote_on_post(post_id):
-    """Vote on a forum post"""
+    """Vote on a forum post (unchanged)"""
     if 'user' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
@@ -963,9 +1048,10 @@ def vote_on_post(post_id):
         app.logger.error(f"Error voting on post: {e}")
         return jsonify({'error': 'Failed to vote'}), 500
 
+
 @app.route('/api/forum/posts/<post_id>/comments', methods=['GET'])
 def get_post_comments(post_id):
-    """Get comments for a specific post"""
+    """Get comments for a specific post (unchanged - supports replies)"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
     
@@ -989,7 +1075,7 @@ def get_post_comments(post_id):
 
 @app.route('/api/forum/posts/<post_id>/comments', methods=['POST'])
 def create_comment(post_id):
-    """Create a comment on a post"""
+    """Create a comment on a post with anonymous option and reply support"""
     if 'user' not in session:
         return jsonify({'error': 'Not authenticated'}), 401
     
@@ -1005,13 +1091,25 @@ def create_comment(post_id):
         if not data.get('text'):
             return jsonify({'error': 'Comment text is required'}), 400
         
+        # FEATURE 3: Handle anonymous commenting
+        is_anonymous = data.get('isAnonymous', False)
+        author_name = 'Anonymous' if is_anonymous else user_email
+        
         comment_data = {
             'text': data.get('text'),
             'authorId': user_id,
-            'authorName': user_email,
+            'authorName': author_name,
+            'isAnonymous': is_anonymous,
             'postId': post_id,
-            'createdAt': datetime.utcnow().isoformat() + 'Z'
+            'createdAt': datetime.utcnow().isoformat() + 'Z',
+            'upvotes': 0,
+            'downvotes': 0
         }
+        
+        # FEATURE 6: Handle replies to comments
+        parent_id = data.get('parentId')
+        if parent_id:
+            comment_data['parentId'] = parent_id
         
         # Add comment to database
         comments_ref = realtime_db_ref.child('forum').child('comments').child(post_id)
@@ -1034,7 +1132,7 @@ def create_comment(post_id):
 
 @app.route('/api/forum/posts/<post_id>/views', methods=['POST'])
 def increment_post_views(post_id):
-    """Increment view count for a post"""
+    """Increment view count for a post (unchanged)"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
     

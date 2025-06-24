@@ -166,31 +166,38 @@
 
   <!-- Ask Question Modal -->
   <div id="askModal" class="modal">
-    <div class="modal-content">
-      <span class="close-btn" onclick="closeAskModal()">&times;</span>
-      <h2>Ask a Question</h2>
-      <form id="askForm">
-        <div class="form-group">
-          <label for="question-title">Title:</label>
-          <input type="text" id="question-title" placeholder="What's your car-related question?" required>
-        </div>
-        
-        <div class="form-group">
-          <label for="question-body">Details:</label>
-          <textarea id="question-body" rows="5" placeholder="Provide more details about your question..." required></textarea>
-        </div>
-        
-        <div class="form-group">
-          <label for="question-tags">Tags (optional):</label>
-          <input type="text" id="question-tags" placeholder="e.g., maintenance, buying-advice, repairs">
-          <small>Separate tags with commas</small>
-        </div>
-        
-        <button type="submit" class="submit-btn">Post Question</button>
-      </form>
-    </div>
+  <div class="modal-content">
+    <span class="close-btn" onclick="closeAskModal()">&times;</span>
+    <h2>Ask a Question</h2>
+    <form id="askForm">
+      <div class="form-group">
+        <label for="question-title">Title:</label>
+        <input type="text" id="question-title" placeholder="What's your car-related question?" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="question-body">Details:</label>
+        <textarea id="question-body" rows="5" placeholder="Provide more details about your question..." required></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label for="question-tags">Tags (optional):</label>
+        <input type="text" id="question-tags" placeholder="e.g., maintenance, buying-advice, repairs">
+        <small>Separate tags with commas</small>
+      </div>
+      
+      <!-- FEATURE 3: Anonymous posting option -->
+      <div class="form-group">
+        <label class="anonymous-toggle">
+          <input type="checkbox" id="anonymous-post">
+          <span>Post anonymously</span>
+        </label>
+      </div>
+      
+      <button type="submit" class="submit-btn">Post Question</button>
+    </form>
   </div>
-
+</div>
   
 </body>
 
