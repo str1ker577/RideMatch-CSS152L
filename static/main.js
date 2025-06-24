@@ -3243,14 +3243,23 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // FEATURE 4: Filter posts by tag
-  function filterByTag() {
-    const tagFilter = document.getElementById('tag-filter');
-    if (!tagFilter) return;
+    function filterByTagName(tagName) {
+    console.log('Filtering by clicked tag:', tagName);
     
-    activeTagFilter = tagFilter.value.trim();
+    // Set the filter input value
+    const tagFilter = document.getElementById('tag-filter');
+    if (tagFilter) {
+        tagFilter.value = tagName;
+    }
+    
+    // Apply the filter
+    activeTagFilter = tagName;
     loadPosts();
-  }
+    }
 
+    // Make it globally available
+    window.filterByTagName = filterByTagName;
+    
   // Clear tag filter
   function clearTagFilter() {
     activeTagFilter = '';

@@ -128,6 +128,16 @@
         <button class="forum-tab" data-tab="popular">Most Popular</button>
         <button class="forum-tab" data-tab="answered">Most Answered</button>
       </div>
+
+    <div class="tag-filter-container">
+      <input 
+        type="text" 
+        id="tag-filter" 
+        placeholder="Filter by tag (e.g., maintenance, advice)"
+        class="tag-filter-input">
+      <button onclick="clearTagFilter()" class="clear-filter-btn">Clear</button>
+    </div>
+    
       <button class="ask-btn" onclick="openAskModal()">
         <i class='bx bx-plus'></i>
         Ask a Question
