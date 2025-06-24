@@ -24,21 +24,27 @@ let currentCarData = []; // Global variable to store current car data for sortin
 let defaultCarsLoaded = false;
 
 function updateUIForAuthState() {
-    // Update forum UI if we're on forum page
-    const askBtn = document.querySelector('.ask-btn');
-    if (!askBtn) return; // Not on forum page
-    
-    if (!currentUser) {
-        askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
-        askBtn.onclick = () => {
-            if (typeof togglePopup === 'function') {
-                togglePopup('login-popup');
-            }
-        };
-    } else {
-        askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
-        askBtn.onclick = () => openAskModal();
-    }
+  console.log('Forum: Updating UI for auth state, currentUser:', currentUser ? currentUser.email : 'none');
+  
+  const askBtn = document.querySelector('.ask-btn');
+  if (!askBtn) {
+    console.log('Forum: Ask button not found, not on forum page');
+    return; // Not on forum page
+  }
+  
+  if (!currentUser) {
+    console.log('Forum: User not logged in, showing login prompt');
+    askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
+    askBtn.onclick = () => {
+      if (typeof togglePopup === 'function') {
+        togglePopup('login-popup');
+      }
+    };
+  } else {
+    console.log('Forum: User logged in, showing ask question button');
+    askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
+    askBtn.onclick = () => openAskModal();
+  }
 }
 
 //////////////////////
@@ -2489,39 +2495,72 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // Check authentication state (integrates with your existing auth)
-  function checkAuthState() {
-    // Use your existing auth system
-    if (typeof auth !== 'undefined' && auth && auth.currentUser) {
-      currentUser = auth.currentUser;
-      updateUIForAuthState();
-    }
+// Check authentication state (integrates with your existing auth)
+function checkAuthState() {
+  console.log('Forum: Checking auth state...');
+  
+  // Use your existing auth system
+  if (typeof auth !== 'undefined' && auth && auth.currentUser) {
+    console.log('Forum: Found existing user:', auth.currentUser.email);
+    currentUser = auth.currentUser;
+    updateUIForAuthState();
+  } else {
+    console.log('Forum: No current user found');
+  }
 
-    // Listen for auth changes (integrates with your existing Firebase auth)
+  // Listen for auth changes (integrates with your existing Firebase auth)
+  const setupAuthListener = () => {
     if (typeof auth !== 'undefined' && auth) {
+      console.log('Forum: Setting up auth listener');
       auth.onAuthStateChanged((user) => {
+        console.log('Forum: Auth state changed:', user ? user.email : 'no user');
         currentUser = user;
         updateUIForAuthState();
       });
-    }
-  }
-
-  // Update UI based on auth state
-  function updateUIForAuthState() {
-    if (!forumElements.askBtn) return;
-    
-    if (!currentUser) {
-      forumElements.askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
-      forumElements.askBtn.onclick = () => {
-        if (typeof togglePopup === 'function') {
-          togglePopup('login-popup');
-        }
-      };
     } else {
-      forumElements.askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
-      forumElements.askBtn.onclick = () => openAskModal();
+      console.log('Forum: Auth not ready, retrying in 500ms...');
+      setTimeout(setupAuthListener, 500);
     }
+  };
+  
+  setupAuthListener();
+}
+
+// Update UI based on auth state
+function updateUIForAuthState() {
+  console.log('Forum: Updating UI, currentUser:', currentUser ? currentUser.email : 'none');
+  
+  // Find the ask button directly (don't rely on forumElements)
+  const askBtn = document.querySelector('.ask-btn');
+  
+  if (!askBtn) {
+    console.log('Forum: Ask button not found - not on forum page or not ready yet');
+    return;
   }
+  
+  if (!currentUser) {
+    console.log('Forum: Setting up login prompt');
+    askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
+    askBtn.onclick = () => {
+      console.log('Forum: Login button clicked');
+      if (typeof togglePopup === 'function') {
+        togglePopup('login-popup');
+      }
+    };
+  } else {
+    console.log('Forum: Setting up ask question button');
+    askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
+    askBtn.onclick = () => {
+      console.log('Forum: Ask question button clicked');
+      openAskModal();
+    };
+  }
+  
+  // Also update forumElements.askBtn if it exists
+  if (typeof forumElements !== 'undefined' && forumElements) {
+    forumElements.askBtn = askBtn;
+  }
+}
 
   // Load posts from API (like testimonials)
   async function loadPosts() {
