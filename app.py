@@ -792,9 +792,6 @@ def delete_testimonial(testimonial_id):
         app.logger.error(f"Error deleting testimonial: {e}")
         return jsonify({'error': 'Failed to delete testimonial'}), 500   
     
-    
-    
-# OPTIONAL: Add this endpoint specifically for calculator if you want separation
 @app.route('/get_affordable_cars', methods=['GET'])
 def get_affordable_cars():
     """Dedicated endpoint for calculator - returns only essential car data"""
