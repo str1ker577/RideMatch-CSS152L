@@ -2868,52 +2868,71 @@ function updateUIForAuthState() {
   }
 
   // Submit a new question
-  async function submitQuestion(event) {
-    if (event) event.preventDefault();
-    
-    if (!currentUser) {
-      if (typeof togglePopup === 'function') {
-        togglePopup('login-popup');
-      }
-      return;
+async function submitQuestion(event) {
+  console.log('Submit question called');
+  if (event) event.preventDefault();
+  
+  if (!currentUser) {
+    console.log('No current user, redirecting to login');
+    if (typeof togglePopup === 'function') {
+      togglePopup('login-popup');
     }
-
-    const title = document.getElementById('question-title')?.value.trim();
-    const body = document.getElementById('question-body')?.value.trim();
-    const tags = document.getElementById('question-tags')?.value.trim();
-
-    if (!title || !body) {
-      alert('Please fill in both title and description');
-      return;
-    }
-
-    try {
-      const response = await fetch('/api/forum/posts', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: title,
-          body: body,
-          tags: tags
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      // Close modal and reload posts
-      closeAskModal();
-      loadPosts();
-      showSuccessMessage('Question posted successfully!');
-
-    } catch (error) {
-      console.error('Error submitting question:', error);
-      showErrorMessage('Failed to post question. Please try again.');
-    }
+    return;
   }
+
+  const title = document.getElementById('question-title')?.value.trim();
+  const body = document.getElementById('question-body')?.value.trim();
+  const tags = document.getElementById('question-tags')?.value.trim();
+
+  console.log('Form data:', { title, body, tags });
+
+  if (!title || !body) {
+    alert('Please fill in both title and description');
+    return;
+  }
+
+  const requestData = {
+    title: title,
+    body: body,
+    tags: tags
+  };
+
+  console.log('Sending request data:', requestData);
+
+  try {
+    console.log('Making POST request to /api/forum/posts');
+    
+    const response = await fetch('/api/forum/posts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestData)
+    });
+
+    console.log('Response status:', response.status);
+    console.log('Response ok:', response.ok);
+
+    if (!response.ok) {
+      // Try to get the error message from the response
+      const errorText = await response.text();
+      console.error('Server error response:', errorText);
+      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+    }
+
+    const result = await response.json();
+    console.log('Success response:', result);
+
+    // Close modal and reload posts
+    closeAskModal();
+    loadPosts();
+    showSuccessMessage('Question posted successfully!');
+
+  } catch (error) {
+    console.error('Error submitting question:', error);
+    showErrorMessage('Failed to post question. Please try again. Error: ' + error.message);
+  }
+}
 
   // Modal functions
   function openAskModal() {
