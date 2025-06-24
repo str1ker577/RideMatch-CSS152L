@@ -10,6 +10,7 @@ const baseUrl = isLocalhost ? 'http://127.0.0.1:8000' : window.location.origin;
 // Firebase initialization 
 let auth; // Global auth object
 let userName = null; // Keep your existing userName variable
+let currentUser = null;
 
 // Function to get current user name
 function getCurrentUserName() {
