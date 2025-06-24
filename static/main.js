@@ -2414,3 +2414,631 @@ document.addEventListener("DOMContentLoaded", function () {
   };
 
 })();
+
+///////////////////////
+// Forum Page Logic //
+/////////////////////
+// Forum functionality - only initialize on forum page
+class ForumManager {
+    constructor() {
+        this.currentUser = null;
+        this.posts = [];
+        this.activeTab = 'recent';
+        this.expandedPosts = new Set();
+        
+        this.init();
+    }
+
+    init() {
+        this.setupEventListeners();
+        this.loadPosts();
+        this.checkAuthState();
+    }
+
+    setupEventListeners() {
+        // Tab switching
+        const forumTabs = document.querySelectorAll('.forum-tab');
+        if (forumTabs.length > 0) {
+            forumTabs.forEach(tab => {
+                tab.addEventListener('click', (e) => {
+                    const tabType = e.target.getAttribute('data-tab');
+                    this.switchTab(tabType);
+                });
+            });
+        }
+
+        // Ask form submission
+        const askForm = document.getElementById('askForm');
+        if (askForm) {
+            askForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.submitQuestion();
+            });
+        }
+
+        // Close modal when clicking outside
+        const askModal = document.getElementById('askModal');
+        if (askModal) {
+            askModal.addEventListener('click', (e) => {
+                if (e.target.id === 'askModal') {
+                    this.closeAskModal();
+                }
+            });
+        }
+    }
+
+    checkAuthState() {
+        // Integrate with your existing auth system
+        if (typeof firebase !== 'undefined' && firebase.auth) {
+            firebase.auth().onAuthStateChanged((user) => {
+                this.currentUser = user;
+                this.updateUIForAuthState();
+            });
+        }
+    }
+
+    updateUIForAuthState() {
+        const askBtn = document.querySelector('.ask-btn');
+        if (!askBtn) return; // Not on forum page
+        
+        if (!this.currentUser) {
+            askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
+            askBtn.onclick = () => {
+                if (typeof togglePopup === 'function') {
+                    togglePopup('login-popup');
+                }
+            };
+        } else {
+            askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
+            askBtn.onclick = () => this.openAskModal();
+        }
+    }
+
+    switchTab(tabType) {
+        // Update active tab
+        document.querySelectorAll('.forum-tab').forEach(tab => {
+            tab.classList.remove('active');
+        });
+        const activeTab = document.querySelector(`[data-tab="${tabType}"]`);
+        if (activeTab) {
+            activeTab.classList.add('active');
+        }
+        
+        this.activeTab = tabType;
+        this.loadPosts();
+    }
+
+    async loadPosts() {
+        const postsContainer = document.getElementById('forum-posts');
+        if (!postsContainer) return; // Not on forum page
+        
+        postsContainer.innerHTML = '<div class="loading"><i class="bx bx-loader-alt"></i><p>Loading posts...</p></div>';
+
+        try {
+            // Check if Firebase is available
+            if (typeof firebase === 'undefined' || !firebase.database) {
+                throw new Error('Firebase not initialized');
+            }
+
+            // Load posts from Firebase
+            const postsRef = firebase.database().ref('forum/posts');
+            const snapshot = await postsRef.once('value');
+            const postsData = snapshot.val() || {};
+            
+            this.posts = Object.entries(postsData).map(([id, data]) => ({
+                id,
+                ...data
+            }));
+
+            this.sortPosts();
+            this.renderPosts();
+        } catch (error) {
+            console.error('Error loading posts:', error);
+            postsContainer.innerHTML = `
+                <div class="empty-state">
+                    <i class="bx bx-error"></i>
+                    <h3>Error loading posts</h3>
+                    <p>Please try refreshing the page</p>
+                </div>
+            `;
+        }
+    }
+
+    sortPosts() {
+        switch (this.activeTab) {
+            case 'recent':
+                this.posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+                break;
+            case 'popular':
+                this.posts.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
+                break;
+            case 'answered':
+                this.posts.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
+                break;
+        }
+    }
+
+    renderPosts() {
+        const postsContainer = document.getElementById('forum-posts');
+        if (!postsContainer) return;
+        
+        if (this.posts.length === 0) {
+            postsContainer.innerHTML = `
+                <div class="empty-state">
+                    <i class="bx bx-message-square"></i>
+                    <h3>No posts yet</h3>
+                    <p>Be the first to ask a question!</p>
+                </div>
+            `;
+            return;
+        }
+
+        postsContainer.innerHTML = this.posts.map(post => this.renderPost(post)).join('');
+        this.setupPostListeners();
+    }
+
+    renderPost(post) {
+        const timeAgo = this.getTimeAgo(post.createdAt);
+        const isExpanded = this.expandedPosts.has(post.id);
+        const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
+        
+        return `
+            <div class="forum-post ${isExpanded ? 'expanded' : ''}" data-post-id="${post.id}">
+                <div class="post-header" onclick="window.forumManager.togglePost('${post.id}')">
+                    <div class="post-vote">
+                        <button class="vote-btn" onclick="event.stopPropagation(); window.forumManager.vote('${post.id}', 'up')">
+                            ▲
+                        </button>
+                        <span class="vote-count">${(post.upvotes || 0) - (post.downvotes || 0)}</span>
+                        <button class="vote-btn" onclick="event.stopPropagation(); window.forumManager.vote('${post.id}', 'down')">
+                            ▼
+                        </button>
+                    </div>
+                    
+                    <div class="post-content">
+                        <h3 class="post-title">${post.title}</h3>
+                        <div class="post-meta">
+                            <span class="post-author">by ${post.authorName || 'Anonymous'}</span>
+                            <span class="post-time">${timeAgo}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="post-stats">
+                        <div class="stat-item">
+                            <i class="bx bx-message-square"></i>
+                            <span>${post.commentCount || 0}</span>
+                        </div>
+                        <div class="stat-item">
+                            <i class="bx bx-show"></i>
+                            <span>${post.views || 0}</span>
+                        </div>
+                    </div>
+                </div>
+                
+                ${isExpanded ? this.renderExpandedPost(post, tags) : ''}
+            </div>
+        `;
+    }
+
+    renderExpandedPost(post, tags) {
+        return `
+            <div class="post-body">
+                <div class="post-description">
+                    ${post.body.replace(/\n/g, '<br>')}
+                </div>
+                
+                ${tags.length > 0 ? `
+                    <div class="post-tags">
+                        ${tags.map(tag => `<span class="tag">${tag}</span>`).join('')}
+                    </div>
+                ` : ''}
+                
+                <div class="post-actions">
+                    <div class="action-buttons">
+                        <button class="action-btn" onclick="window.forumManager.sharePost('${post.id}')">
+                            <i class="bx bx-share"></i>
+                            Share
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="comments-section">
+                    <div class="comments-header">
+                        <h4 class="comments-title">Comments (${post.commentCount || 0})</h4>
+                    </div>
+                    
+                    ${this.currentUser ? `
+                        <div class="comment-form">
+                            <textarea 
+                                class="comment-input" 
+                                id="comment-input-${post.id}"
+                                placeholder="Write your comment..."></textarea>
+                            <button 
+                                class="comment-submit" 
+                                onclick="window.forumManager.submitComment('${post.id}')">
+                                Post Comment
+                            </button>
+                        </div>
+                    ` : `
+                        <p style="text-align: center; color: #666; font-style: italic;">
+                            <a href="#" onclick="togglePopup('login-popup')">Login</a> to post a comment
+                        </p>
+                    `}
+                    
+                    <div class="comments-list" id="comments-${post.id}">
+                        ${this.renderComments(post.id)}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    renderComments(postId) {
+        this.loadComments(postId);
+        return '<div class="loading"><i class="bx bx-loader-alt"></i> Loading comments...</div>';
+    }
+
+    async loadComments(postId) {
+        try {
+            if (typeof firebase === 'undefined' || !firebase.database) return;
+            
+            const commentsRef = firebase.database().ref(`forum/comments/${postId}`);
+            const snapshot = await commentsRef.once('value');
+            const commentsData = snapshot.val() || {};
+            
+            const comments = Object.entries(commentsData).map(([id, data]) => ({
+                id,
+                ...data
+            })).sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+            const commentsContainer = document.getElementById(`comments-${postId}`);
+            if (commentsContainer) {
+                commentsContainer.innerHTML = comments.length > 0 
+                    ? comments.map(comment => this.renderComment(comment)).join('')
+                    : '<p style="text-align: center; color: #666; font-style: italic;">No comments yet</p>';
+            }
+        } catch (error) {
+            console.error('Error loading comments:', error);
+        }
+    }
+
+    renderComment(comment) {
+        const timeAgo = this.getTimeAgo(comment.createdAt);
+        
+        return `
+            <div class="comment">
+                <div class="comment-header">
+                    <span class="comment-author">${comment.authorName || 'Anonymous'}</span>
+                    <span class="comment-time">${timeAgo}</span>
+                </div>
+                <div class="comment-text">${comment.text.replace(/\n/g, '<br>')}</div>
+            </div>
+        `;
+    }
+
+    setupPostListeners() {
+        document.querySelectorAll('.forum-post').forEach(post => {
+            const postId = post.getAttribute('data-post-id');
+            if (this.expandedPosts.has(postId)) {
+                this.incrementViews(postId);
+            }
+        });
+    }
+
+    togglePost(postId) {
+        if (this.expandedPosts.has(postId)) {
+            this.expandedPosts.delete(postId);
+        } else {
+            this.expandedPosts.add(postId);
+            this.incrementViews(postId);
+        }
+        
+        const postElement = document.querySelector(`[data-post-id="${postId}"]`);
+        if (!postElement) return;
+        
+        postElement.classList.toggle('expanded');
+        
+        if (this.expandedPosts.has(postId)) {
+            const post = this.posts.find(p => p.id === postId);
+            const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
+            postElement.innerHTML = `
+                <div class="post-header" onclick="window.forumManager.togglePost('${postId}')">
+                    <div class="post-vote">
+                        <button class="vote-btn" onclick="event.stopPropagation(); window.forumManager.vote('${postId}', 'up')">
+                            ▲
+                        </button>
+                        <span class="vote-count">${(post.upvotes || 0) - (post.downvotes || 0)}</span>
+                        <button class="vote-btn" onclick="event.stopPropagation(); window.forumManager.vote('${postId}', 'down')">
+                            ▼
+                        </button>
+                    </div>
+                    
+                    <div class="post-content">
+                        <h3 class="post-title">${post.title}</h3>
+                        <div class="post-meta">
+                            <span class="post-author">by ${post.authorName || 'Anonymous'}</span>
+                            <span class="post-time">${this.getTimeAgo(post.createdAt)}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="post-stats">
+                        <div class="stat-item">
+                            <i class="bx bx-message-square"></i>
+                            <span>${post.commentCount || 0}</span>
+                        </div>
+                        <div class="stat-item">
+                            <i class="bx bx-show"></i>
+                            <span>${post.views || 0}</span>
+                        </div>
+                    </div>
+                </div>
+                ${this.renderExpandedPost(post, tags)}
+            `;
+        } else {
+            const postBody = postElement.querySelector('.post-body');
+            if (postBody) {
+                postBody.remove();
+            }
+        }
+    }
+
+    async vote(postId, direction) {
+        if (!this.currentUser) {
+            if (typeof togglePopup === 'function') {
+                togglePopup('login-popup');
+            }
+            return;
+        }
+
+        try {
+            if (typeof firebase === 'undefined' || !firebase.database) return;
+            
+            const voteRef = firebase.database().ref(`forum/votes/${postId}/${this.currentUser.uid}`);
+            const currentVoteSnapshot = await voteRef.once('value');
+            const currentVote = currentVoteSnapshot.val();
+
+            const postRef = firebase.database().ref(`forum/posts/${postId}`);
+            const postSnapshot = await postRef.once('value');
+            const post = postSnapshot.val();
+
+            let upvotes = post.upvotes || 0;
+            let downvotes = post.downvotes || 0;
+
+            if (currentVote === 'up') upvotes--;
+            if (currentVote === 'down') downvotes--;
+
+            if (currentVote !== direction) {
+                if (direction === 'up') upvotes++;
+                if (direction === 'down') downvotes++;
+                await voteRef.set(direction);
+            } else {
+                await voteRef.remove();
+            }
+
+            await postRef.update({ upvotes, downvotes });
+
+            const voteCountElement = document.querySelector(`[data-post-id="${postId}"] .vote-count`);
+            if (voteCountElement) {
+                voteCountElement.textContent = upvotes - downvotes;
+            }
+
+            const localPost = this.posts.find(p => p.id === postId);
+            if (localPost) {
+                localPost.upvotes = upvotes;
+                localPost.downvotes = downvotes;
+            }
+
+        } catch (error) {
+            console.error('Error voting:', error);
+        }
+    }
+
+    async incrementViews(postId) {
+        try {
+            if (typeof firebase === 'undefined' || !firebase.database) return;
+            
+            const postRef = firebase.database().ref(`forum/posts/${postId}/views`);
+            await postRef.transaction((currentViews) => {
+                return (currentViews || 0) + 1;
+            });
+        } catch (error) {
+            console.error('Error incrementing views:', error);
+        }
+    }
+
+    async submitComment(postId) {
+        if (!this.currentUser) {
+            if (typeof togglePopup === 'function') {
+                togglePopup('login-popup');
+            }
+            return;
+        }
+
+        const commentInput = document.getElementById(`comment-input-${postId}`);
+        if (!commentInput) return;
+        
+        const commentText = commentInput.value.trim();
+        if (!commentText) return;
+
+        try {
+            if (typeof firebase === 'undefined' || !firebase.database) return;
+            
+            const commentData = {
+                text: commentText,
+                authorId: this.currentUser.uid,
+                authorName: this.currentUser.displayName || this.currentUser.email,
+                postId: postId,
+                createdAt: new Date().toISOString()
+            };
+
+            const commentsRef = firebase.database().ref(`forum/comments/${postId}`);
+            await commentsRef.push(commentData);
+
+            const postRef = firebase.database().ref(`forum/posts/${postId}/commentCount`);
+            await postRef.transaction((currentCount) => {
+                return (currentCount || 0) + 1;
+            });
+
+            commentInput.value = '';
+            this.loadComments(postId);
+
+            const localPost = this.posts.find(p => p.id === postId);
+            if (localPost) {
+                localPost.commentCount = (localPost.commentCount || 0) + 1;
+            }
+
+            const commentCountElement = document.querySelector(`[data-post-id="${postId}"] .stat-item span`);
+            if (commentCountElement) {
+                commentCountElement.textContent = localPost.commentCount;
+            }
+
+        } catch (error) {
+            console.error('Error submitting comment:', error);
+            alert('Error posting comment. Please try again.');
+        }
+    }
+
+    openAskModal() {
+        if (!this.currentUser) {
+            if (typeof togglePopup === 'function') {
+                togglePopup('login-popup');
+            }
+            return;
+        }
+        const modal = document.getElementById('askModal');
+        if (modal) {
+            modal.style.display = 'block';
+        }
+    }
+
+    closeAskModal() {
+        const modal = document.getElementById('askModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+        const form = document.getElementById('askForm');
+        if (form) {
+            form.reset();
+        }
+    }
+
+    async submitQuestion() {
+        if (!this.currentUser) {
+            if (typeof togglePopup === 'function') {
+                togglePopup('login-popup');
+            }
+            return;
+        }
+
+        const title = document.getElementById('question-title')?.value.trim();
+        const body = document.getElementById('question-body')?.value.trim();
+        const tags = document.getElementById('question-tags')?.value.trim();
+
+        if (!title || !body) {
+            alert('Please fill in both title and description');
+            return;
+        }
+
+        try {
+            if (typeof firebase === 'undefined' || !firebase.database) return;
+            
+            const postData = {
+                title: title,
+                body: body,
+                tags: tags,
+                authorId: this.currentUser.uid,
+                authorName: this.currentUser.displayName || this.currentUser.email,
+                createdAt: new Date().toISOString(),
+                upvotes: 0,
+                downvotes: 0,
+                views: 0,
+                commentCount: 0
+            };
+
+            const postsRef = firebase.database().ref('forum/posts');
+            await postsRef.push(postData);
+
+            this.closeAskModal();
+            this.loadPosts();
+
+        } catch (error) {
+            console.error('Error submitting question:', error);
+            alert('Error posting question. Please try again.');
+        }
+    }
+
+    sharePost(postId) {
+        const post = this.posts.find(p => p.id === postId);
+        if (post) {
+            const url = `${window.location.origin}${window.location.pathname}#post-${postId}`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: post.title,
+                    text: post.body.substring(0, 100) + '...',
+                    url: url
+                });
+            } else {
+                navigator.clipboard.writeText(url).then(() => {
+                    alert('Link copied to clipboard!');
+                });
+            }
+        }
+    }
+
+    getTimeAgo(dateString) {
+        const now = new Date();
+        const date = new Date(dateString);
+        const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+
+        if (diffInMinutes < 1) return 'just now';
+        if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+        
+        const diffInHours = Math.floor(diffInMinutes / 60);
+        if (diffInHours < 24) return `${diffInHours}h ago`;
+        
+        const diffInDays = Math.floor(diffInHours / 24);
+        if (diffInDays < 7) return `${diffInDays}d ago`;
+        
+        const diffInWeeks = Math.floor(diffInDays / 7);
+        if (diffInWeeks < 4) return `${diffInWeeks}w ago`;
+        
+        const diffInMonths = Math.floor(diffInDays / 30);
+        return `${diffInMonths}mo ago`;
+    }
+}
+
+// Global functions for onclick handlers (compatible with existing code)
+function openAskModal() {
+    if (window.forumManager) {
+        window.forumManager.openAskModal();
+    }
+}
+
+function closeAskModal() {
+    if (window.forumManager) {
+        window.forumManager.closeAskModal();
+    }
+}
+
+// Initialize forum only on forum page - ADD TO YOUR EXISTING DOMContentLoaded
+// Modify your existing DOMContentLoaded handler to include this:
+document.addEventListener('DOMContentLoaded', function() {
+    // Your existing DOMContentLoaded code here...
+    
+    // Initialize forum only if we're on the forum page
+    if (document.getElementById('forum-posts')) {
+        window.forumManager = new ForumManager();
+    }
+});
+
+// Update your existing Firebase auth handler to include these lines:
+// firebase.auth().onAuthStateChanged((user) => {
+//     // Your existing auth code...
+//     
+//     // Add these lines for forum integration:
+//     if (window.forumManager) {
+//         window.forumManager.currentUser = user;
+//         window.forumManager.updateUIForAuthState();
+//     }
+// });

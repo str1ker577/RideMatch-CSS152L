@@ -16,195 +16,6 @@
   <!-- Link to Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      font-family: 'Segoe UI', sans-serif;
-      background: #f0f0f0;
-    }
-
-    .layout {
-      margin-top: 120px;
-      display: flex;
-      justify-content: center;
-      gap: 20px;
-      padding: 0 50px;
-    }
-
-    .forum-main-box,
-    .forum-sidebar-box {
-      background: rgba(255, 255, 255, 0.2);
-      backdrop-filter: blur(18px);
-      border: 2px solid #b49b66;
-      border-radius: 10px;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      padding: 25px;
-    }
-
-    .forum-main-box {
-      flex: 7;
-      max-width: 65%;
-    }
-
-    .forum-sidebar-box {
-      flex: 3;
-      max-width: 25%;
-    }
-
-    .forum-header-row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      flex-wrap: wrap;
-    }
-
-    .forum-subheader {
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }
-
-    .forum-tab {
-      padding: 8px 16px;
-      background-color: white;
-      border: 1px solid #b49b66;
-      border-radius: 5px;
-      font-weight: 500;
-      cursor: pointer;
-      transition: background-color 0.2s ease;
-    }
-
-    .forum-tab:hover {
-      background-color: #f7f7f7;
-    }
-
-    .forum-tab.active {
-      background-color: #b49b66;
-      color: white;
-    }
-
-    .ask-btn {
-      padding: 10px 18px;
-      background-color: #b49b66;
-      color: white;
-      border: none;
-      border-radius: 5px;
-      font-weight: bold;
-      cursor: pointer;
-    }
-
-    .ask-btn:hover {
-      background-color: #a0864d;
-    }
-
-    .forum-post {
-      margin-bottom: 20px;
-      padding: 20px;
-      border: 2px solid #b49b66;
-      border-radius: 10px;
-      background: rgba(255, 255, 255, 0.3);
-      backdrop-filter: blur(12px);
-      box-shadow: 0 0 8px rgba(0, 0, 0, 0.05);
-    }
-
-    h2, h3 {
-      margin-top: 0;
-      color: #333;
-    }
-
-    p {
-      font-size: 0.95rem;
-    }
-
-    .modal {
-      display: none;
-      position: fixed;
-      z-index: 999;
-      left: 0;
-      top: 0;
-      width: 100%;
-      height: 100%;
-      overflow: auto;
-      background: rgba(0,0,0,0.5);
-      backdrop-filter: blur(4px);
-    }
-
-    .modal-content {
-      background: white;
-      margin: 10% auto;
-      padding: 25px;
-      border-radius: 10px;
-      border: 2px solid #b49b66;
-      width: 40%;
-      min-width: 300px;
-    }
-
-    .close-btn {
-      float: right;
-      font-size: 24px;
-      font-weight: bold;
-      cursor: pointer;
-      color: #b49b66;
-    }
-
-    .modal-content input,
-    .modal-content textarea {
-      width: 100%;
-      padding: 10px;
-      margin-bottom: 15px;
-      border: 1px solid #ccc;
-      border-radius: 6px;
-      font-size: 1rem;
-    }
-
-    .forum-actions {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-top: 15px;
-    }
-
-    .vote-buttons {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .vote-buttons button {
-      background: none;
-      border: none;
-      font-size: 1.2rem;
-      cursor: pointer;
-      color: #b49b66;
-    }
-
-    .vote-buttons button:hover {
-      color: #8a753a;
-    }
-
-    .vote-count {
-      font-weight: 500;
-      margin: 0 5px;
-    }
-
-    .comment-btn {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      background: none;
-      border: none;
-      font-size: 1rem;
-      color: #444;
-      cursor: pointer;
-    }
-
-    .comment-btn i {
-      font-size: 1.1rem;
-      color: #b49b66;
-    }
-  </style>
 </head>
 <body>
 
@@ -306,148 +117,81 @@
   </div>
 </div>
   </header>
-  <body>
-  <div class="layout">
-    <div class="forum-main-box">
-      <div class="forum-header-row">
-        <div class="forum-subheader">
-          <button class="forum-tab active">Recent Questions</button>
-          <button class="forum-tab">Most Answered</button>
-          <button class="forum-tab">Most Visited</button>
-          <button class="forum-tab">...</button>
-        </div>
-        <button class="ask-btn" onclick="openModal()">Ask a Question</button>
-      </div>
 
-      <div id="forum-posts">
-        <!-- Dynamic posts will go here -->
+  <body>
+
+<!-- Forum Content -->
+  <div class="forum-container">
+    <div class="forum-header">
+      <div class="forum-tabs">
+        <button class="forum-tab active" data-tab="recent">Recent Questions</button>
+        <button class="forum-tab" data-tab="popular">Most Popular</button>
+        <button class="forum-tab" data-tab="answered">Most Answered</button>
       </div>
+      <button class="ask-btn" onclick="openAskModal()">
+        <i class='bx bx-plus'></i>
+        Ask a Question
+      </button>
     </div>
 
-    <div class="forum-sidebar-box">
-      <h3>Sidebar</h3>
-      <p>Put ideas here</p>
+    <div class="forum-main">
+      <div class="forum-posts" id="forum-posts">
+        <!-- Posts will be loaded here -->
+      </div>
+
+      <div class="forum-sidebar">
+        <div class="sidebar-section">
+          <h3>Forum Guidelines</h3>
+          <ul>
+            <li>Be respectful to other users</li>
+            <li>Search before asking a question</li>
+            <li>Provide clear and detailed information</li>
+            <li>Stay on topic about cars and automotive</li>
+          </ul>
+        </div>
+        
+        <div class="sidebar-section">
+          <h3>Popular Tags</h3>
+          <div class="tag-cloud">
+            <span class="tag">maintenance</span>
+            <span class="tag">buying-advice</span>
+            <span class="tag">repairs</span>
+            <span class="tag">financing</span>
+            <span class="tag">insurance</span>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Ask Modal -->
+  <!-- Ask Question Modal -->
   <div id="askModal" class="modal">
     <div class="modal-content">
-      <span class="close-btn" onclick="closeModal()">&times;</span>
+      <span class="close-btn" onclick="closeAskModal()">&times;</span>
       <h2>Ask a Question</h2>
-      <form onsubmit="submitQuestion(event)">
-        <label for="question-title">Title:</label>
-        <input type="text" id="question-title" required>
-        <label for="question-body">Body:</label>
-        <textarea id="question-body" rows="5" required></textarea>
-        <button type="submit" class="ask-btn" style="width: 100%;">Submit</button>
+      <form id="askForm">
+        <div class="form-group">
+          <label for="question-title">Title:</label>
+          <input type="text" id="question-title" placeholder="What's your car-related question?" required>
+        </div>
+        
+        <div class="form-group">
+          <label for="question-body">Details:</label>
+          <textarea id="question-body" rows="5" placeholder="Provide more details about your question..." required></textarea>
+        </div>
+        
+        <div class="form-group">
+          <label for="question-tags">Tags (optional):</label>
+          <input type="text" id="question-tags" placeholder="e.g., maintenance, buying-advice, repairs">
+          <small>Separate tags with commas</small>
+        </div>
+        
+        <button type="submit" class="submit-btn">Post Question</button>
       </form>
     </div>
   </div>
 
-  <!-- Comment Modal -->
-  <div id="commentModal" class="modal">
-    <div class="modal-content">
-      <span class="close-btn" onclick="closeCommentModal()">&times;</span>
-      <h3>Comments</h3>
-      <div id="comment-list" style="max-height: 200px; overflow-y: auto; margin-bottom: 15px;"></div>
-      <textarea id="new-comment" placeholder="Write your comment..." rows="3"></textarea>
-      <button onclick="submitComment()" style="margin-top: 10px;" class="ask-btn">Post Comment</button>
-    </div>
-  </div>
-
-  <script>
-    let postIdCounter = 1;
-    let commentsPerPost = {};
-    let activePostId = null;
-
-    function openModal() {
-      document.getElementById("askModal").style.display = "block";
-    }
-
-    function closeModal() {
-      document.getElementById("askModal").style.display = "none";
-    }
-
-    function submitQuestion(event) {
-      event.preventDefault();
-      const title = document.getElementById("question-title").value;
-      const body = document.getElementById("question-body").value;
-
-      const id = `post-${postIdCounter++}`;
-      commentsPerPost[id] = [];
-
-      const post = document.createElement("div");
-      post.className = "forum-post";
-      post.id = id;
-
-      post.innerHTML = `
-        <h3>${title}</h3>
-        <p>${body}</p>
-        <div class="forum-actions">
-          <div class="vote-buttons">
-            <button onclick="upvote('${id}')">👍</button>
-            <span class="vote-count" id="upvote-count-${id}">0</span>
-            <button onclick="downvote('${id}')">👎</button>
-            <span class="vote-count" id="downvote-count-${id}">0</span>
-          </div>
-          <button class="comment-btn" onclick="openCommentModal('${id}')">
-            <i class='bx bx-message-square-dots'></i>
-            <span id="comment-count-${id}">0</span> Comments
-          </button>
-        </div>
-      `;
-
-      document.getElementById("forum-posts").prepend(post);
-      document.getElementById("question-title").value = "";
-      document.getElementById("question-body").value = "";
-      closeModal();
-    }
-
-    function upvote(postId) {
-      const upCount = document.getElementById(`upvote-count-${postId}`);
-      upCount.textContent = parseInt(upCount.textContent) + 1;
-    }
-
-    function downvote(postId) {
-      const downCount = document.getElementById(`downvote-count-${postId}`);
-      downCount.textContent = parseInt(downCount.textContent) + 1;
-    }
-
-    function openCommentModal(postId) {
-      activePostId = postId;
-      document.getElementById("commentModal").style.display = "block";
-      renderComments(postId);
-    }
-
-    function closeCommentModal() {
-      document.getElementById("commentModal").style.display = "none";
-      document.getElementById("new-comment").value = "";
-      document.getElementById("comment-list").innerHTML = "";
-    }
-
-    function submitComment() {
-      const commentText = document.getElementById("new-comment").value.trim();
-      if (!commentText) return;
-
-      commentsPerPost[activePostId].push(commentText);
-      document.getElementById(`comment-count-${activePostId}`).textContent = commentsPerPost[activePostId].length;
-      renderComments(activePostId);
-      document.getElementById("new-comment").value = "";
-    }
-
-    function renderComments(postId) {
-      const list = commentsPerPost[postId] || [];
-      const container = document.getElementById("comment-list");
-      container.innerHTML = "";
-
-      list.forEach(comment => {
-        const p = document.createElement("p");
-        p.textContent = `• ${comment}`;
-        container.appendChild(p);
-      });
-    }
-  </script>
+  
 </body>
 
 
