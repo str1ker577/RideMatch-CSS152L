@@ -1073,4 +1073,12 @@ if __name__ == "__main__":
     app.logger.info(f"Starting app on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
     
-    
+@app.route('/debug/session')
+def debug_session():
+    return jsonify({
+        'session_data': dict(session),
+        'has_user': 'user' in session,
+        'user_id': session.get('user'),
+        'email': session.get('email'),
+        'session_keys': list(session.keys())
+    })

@@ -278,6 +278,8 @@ function handleLogin(event) {
             
             // Get the ID token and send to your backend for session creation
             user.getIdToken().then((idToken) => {
+                console.log('Sending token to backend for session creation...');
+                
                 return fetch('/verify-token', {
                     method: 'POST',
                     headers: {
@@ -288,30 +290,76 @@ function handleLogin(event) {
                         email: user.email
                     })
                 });
-            }).then(response => response.json())
+            }).then(response => {
+                console.log('Backend response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`Backend authentication failed: ${response.status}`);
+                }
+                
+                return response.json();
+            })
             .then(data => {
+                console.log('Backend response data:', data);
+                
                 if (data.status === 'success') {
+                    console.log('✅ Backend session created successfully');
+                    
                     // Update UI (keep your existing UI logic)
                     userName = user.email;
                     const welcomeMessageElement = document.querySelector('.welcome-title');
-                    welcomeMessageElement.textContent = `Welcome, ${userName}!`;
-                    document.querySelector('.error-message12').textContent = '';
-                    document.querySelector('.error-message').textContent = '';
+                    if (welcomeMessageElement) {
+                        welcomeMessageElement.textContent = `Welcome, ${userName}!`;
+                    }
+                    
+                    // Clear error messages
+                    const errorMsg = document.querySelector('.error-message');
+                    const errorMsg12 = document.querySelector('.error-message12');
+                    if (errorMsg) errorMsg.textContent = '';
+                    if (errorMsg12) errorMsg12.textContent = '';
+                    
+                    // Close popup and update UI
                     togglePopup('login-popup');
-                    sidebar.classList.remove('open');
-                    menuButton.style.display = 'block'; 
-                    closeButton.style.display = 'none';
+                    
+                    // Update sidebar if elements exist
+                    if (typeof sidebar !== 'undefined' && sidebar) {
+                        sidebar.classList.remove('open');
+                    }
+                    if (typeof menuButton !== 'undefined' && menuButton) {
+                        menuButton.style.display = 'block';
+                    }
+                    if (typeof closeButton !== 'undefined' && closeButton) {
+                        closeButton.style.display = 'none';
+                    }
+                } else {
+                    console.error('❌ Backend authentication failed:', data);
+                    throw new Error(data.message || 'Backend authentication failed');
                 }
+            })
+            .catch(backendError => {
+                console.error('Backend session creation failed:', backendError);
+                
+                // Show error to user
+                const errorElement = document.querySelector('.error-message');
+                if (errorElement) {
+                    errorElement.textContent = 'Login succeeded but session creation failed. Please try again.';
+                }
+                
+                // Sign out from Firebase since backend session failed
+                auth.signOut();
             });
         })
         .catch((error) => {
-            console.error('Login error:', error);
-            document.querySelector('.success-message').textContent = '';
-            document.querySelector('.error-message').textContent = getFirebaseErrorMessage(error.code);
+            console.error('Firebase login error:', error);
+            const successElement = document.querySelector('.success-message');
+            const errorElement = document.querySelector('.error-message');
+            
+            if (successElement) successElement.textContent = '';
+            if (errorElement) errorElement.textContent = getFirebaseErrorMessage(error.code);
         });
 }
 
-// Helper function for user-friendly error messages
+// Helper function for user-friendly error messages (keep your existing one)
 function getFirebaseErrorMessage(errorCode) {
     switch (errorCode) {
         case 'auth/user-not-found':
