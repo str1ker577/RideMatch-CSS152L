@@ -2600,13 +2600,12 @@ textarea:focus, input[type="text"]:focus {
   border: 2px solid #b49b66;
   border-radius: 10px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  gap: 20px;
 }
 
 .forum-tabs {
   display: flex;
   gap: 10px;
-  flex: 1;
+  flex: 0 1 auto; 
 }
 
 .forum-tab {
