@@ -173,7 +173,8 @@ def get_firebase_config():
 
 @app.route('/verify-token', methods=['POST'])
 def verify_token():
-    if not db:
+    # FIXED: Changed 'db' to 'firestore_db' to match your variable names
+    if not firestore_db:
         app.logger.error("Database not available for token verification")
         return jsonify({"status": "error", "message": "Database not available"}), 500
     
@@ -190,9 +191,11 @@ def verify_token():
             app.logger.error("No token provided in request")
             return jsonify({"status": "error", "message": "No token provided"}), 400
         
+        # Verify token with Firebase Admin
         decoded_token = auth.verify_id_token(id_token)
         uid = decoded_token['uid']
         
+        # Set session
         session['user'] = uid
         session['email'] = email
         session['idToken'] = id_token
