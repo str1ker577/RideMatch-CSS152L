@@ -2580,7 +2580,6 @@ textarea:focus, input[type="text"]:focus {
 /*************************/
 /* Forum-specific styles */
 /*************************/
-
 .forum-container {
   margin-top: 120px;
   max-width: 1200px;
@@ -2602,24 +2601,10 @@ textarea:focus, input[type="text"]:focus {
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
-.forum-tabs {
-  display: flex;
-  gap: 10px;
-}
-
-.forum-tab {
-  padding: 10px 20px;
-  background-color: white;
-  border: 1px solid #b49b66;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  font-size: 14px;
-}
-
+/* UPDATED: Perfect centering for forum header */
 .forum-header-centered {
   display: flex;
+  justify-content: center;
   align-items: center;
   margin-bottom: 30px;
   padding: 20px;
@@ -2634,12 +2619,48 @@ textarea:focus, input[type="text"]:focus {
 .forum-header-centered .forum-tabs {
   display: flex;
   gap: 10px;
-  margin: 0 auto; /* Center the tabs */
 }
 
 .forum-header-centered .ask-btn {
   position: absolute;
   right: 20px;
+}
+
+/* Alternative: Everything truly centered */
+.forum-header-truly-centered {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 30px;
+  margin-bottom: 30px;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(18px);
+  border: 2px solid #b49b66;
+  border-radius: 10px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.forum-header-truly-centered .forum-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.forum-tabs {
+  display: flex;
+  gap: 10px;
+}
+
+.forum-tab {
+  padding: 10px 20px;
+  background-color: white;
+  border: 1px solid #b49b66;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 14px;
+  white-space: nowrap;
 }
 
 .forum-tab:hover {
@@ -2663,6 +2684,8 @@ textarea:focus, input[type="text"]:focus {
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .ask-btn:hover {
@@ -2777,6 +2800,7 @@ textarea:focus, input[type="text"]:focus {
 
 .post-stats {
   display: flex;
+  align-items: center;
   gap: 15px;
   margin-left: auto;
 }
@@ -2791,6 +2815,20 @@ textarea:focus, input[type="text"]:focus {
 
 .stat-item i {
   color: #b49b66;
+}
+
+/* FEATURE 1: Expand Arrow Styles */
+.expand-arrow {
+  display: flex;
+  align-items: center;
+  margin-left: 10px;
+  color: #b49b66;
+  font-size: 16px;
+  transition: transform 0.2s ease;
+}
+
+.forum-post:hover .expand-arrow {
+  color: #8a753a;
 }
 
 /* Expanded Post */
@@ -2812,11 +2850,19 @@ textarea:focus, input[type="text"]:focus {
   margin-bottom: 20px;
 }
 
+/* FEATURE 2: Tags with Label Styles */
 .post-tags {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-bottom: 20px;
   flex-wrap: wrap;
+}
+
+.tags-label {
+  font-weight: 600;
+  color: #666;
+  margin-right: 8px;
 }
 
 .tag {
@@ -2892,8 +2938,38 @@ textarea:focus, input[type="text"]:focus {
   min-height: 80px;
 }
 
-.comment-submit {
+/* FEATURE 3: Anonymous Toggle Styles */
+.anonymous-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.anonymous-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #b49b66;
+}
+
+.anonymous-toggle span {
+  color: #666;
+}
+
+.comment-form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-top: 10px;
+}
+
+.comment-form-actions .anonymous-toggle {
+  font-size: 12px;
+}
+
+.comment-submit {
   padding: 8px 16px;
   background: #b49b66;
   color: white;
@@ -2913,11 +2989,54 @@ textarea:focus, input[type="text"]:focus {
   gap: 12px;
 }
 
+/* FEATURE 5: Comment Voting Styles */
 .comment {
+  margin-bottom: 15px;
   padding: 12px;
   background: rgba(255, 255, 255, 0.4);
   border-radius: 6px;
   border-left: 3px solid #b49b66;
+}
+
+.comment-content {
+  display: flex;
+  gap: 10px;
+}
+
+.comment-vote {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 30px;
+}
+
+.comment-vote-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  color: #b49b66;
+  padding: 2px 4px;
+  border-radius: 3px;
+  transition: all 0.2s ease;
+}
+
+.comment-vote-btn:hover {
+  background: rgba(180, 155, 102, 0.1);
+  color: #8a753a;
+}
+
+.comment-vote .vote-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: #333;
+  min-width: 20px;
+  text-align: center;
+}
+
+.comment-main {
+  flex: 1;
 }
 
 .comment-header {
@@ -2942,6 +3061,101 @@ textarea:focus, input[type="text"]:focus {
   font-size: 13px;
   line-height: 1.5;
   color: #444;
+  margin-bottom: 8px;
+}
+
+/* FEATURE 6: Reply Styles */
+.comment-actions {
+  margin-top: 8px;
+}
+
+.reply-btn {
+  background: none;
+  border: none;
+  color: #b49b66;
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.reply-btn:hover {
+  background: rgba(180, 155, 102, 0.1);
+  color: #8a753a;
+}
+
+.reply-form {
+  margin-top: 10px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  border: 1px solid rgba(180, 155, 102, 0.3);
+}
+
+.reply-input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+  resize: vertical;
+  min-height: 60px;
+}
+
+.reply-form-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 8px;
+  gap: 10px;
+}
+
+.reply-submit, .reply-cancel {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.reply-submit {
+  background: #b49b66;
+  color: white;
+  border: none;
+}
+
+.reply-submit:hover {
+  background: #a0864d;
+}
+
+.reply-cancel {
+  background: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+}
+
+.reply-cancel:hover {
+  background: #e5e5e5;
+}
+
+.reply-form-actions .anonymous-toggle {
+  font-size: 11px;
+}
+
+/* Comment Replies Indentation */
+.comment-reply {
+  margin-left: 20px;
+  margin-top: 10px;
+  border-left-color: #d4b976;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.comment-replies {
+  margin-top: 10px;
 }
 
 /* Sidebar */
@@ -3126,10 +3340,16 @@ textarea:focus, input[type="text"]:focus {
     padding: 0 10px;
   }
   
-  .forum-header {
+  .forum-header,
+  .forum-header-centered,
+  .forum-header-truly-centered {
     flex-direction: column;
     gap: 15px;
     align-items: stretch;
+  }
+  
+  .forum-header-centered .ask-btn {
+    position: static;
   }
   
   .forum-tabs {
@@ -3169,305 +3389,6 @@ textarea:focus, input[type="text"]:focus {
     width: 95%;
     margin: 10% auto;
     padding: 20px;
-  }
-}
-
-/* FEATURE 4: Tag Filter Styles */
-.tag-filter-container {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0 20px;
-}
-
-.tag-filter-input {
-  padding: 8px 12px;
-  border: 1px solid #b49b66;
-  border-radius: 6px;
-  font-size: 14px;
-  min-width: 200px;
-}
-
-.tag-filter-input:focus {
-  outline: none;
-  border-color: #8a753a;
-  box-shadow: 0 0 0 2px rgba(180, 155, 102, 0.2);
-}
-
-.clear-filter-btn {
-  padding: 8px 12px;
-  background: #f5f5f5;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  transition: background-color 0.2s ease;
-}
-
-.clear-filter-btn:hover {
-  background: #e5e5e5;
-}
-
-/* FEATURE 1: Expand Arrow Styles */
-.expand-arrow {
-  display: flex;
-  align-items: center;
-  margin-left: 10px;
-  color: #b49b66;
-  font-size: 16px;
-  transition: transform 0.2s ease;
-}
-
-.forum-post:hover .expand-arrow {
-  color: #8a753a;
-}
-
-/* FEATURE 2: Tags Label Styles */
-.tags-label {
-  font-weight: 600;
-  color: #666;
-  margin-right: 8px;
-}
-
-.post-tags {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-
-/* FEATURE 3: Anonymous Toggle Styles */
-.anonymous-toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  cursor: pointer;
-  user-select: none;
-}
-
-.anonymous-toggle input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: #b49b66;
-}
-
-.anonymous-toggle span {
-  color: #666;
-}
-
-.comment-form-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 10px;
-}
-
-.comment-form-actions .anonymous-toggle {
-  font-size: 12px;
-}
-
-/* FEATURE 5: Comment Voting Styles */
-.comment {
-  margin-bottom: 15px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.4);
-  border-radius: 6px;
-  border-left: 3px solid #b49b66;
-}
-
-.comment-content {
-  display: flex;
-  gap: 10px;
-}
-
-.comment-vote {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  min-width: 30px;
-}
-
-.comment-vote-btn {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 12px;
-  color: #b49b66;
-  padding: 2px 4px;
-  border-radius: 3px;
-  transition: all 0.2s ease;
-}
-
-.comment-vote-btn:hover {
-  background: rgba(180, 155, 102, 0.1);
-  color: #8a753a;
-}
-
-.comment-vote .vote-count {
-  font-size: 11px;
-  font-weight: 600;
-  color: #333;
-  min-width: 20px;
-  text-align: center;
-}
-
-.comment-main {
-  flex: 1;
-}
-
-.comment-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.comment-author {
-  font-size: 12px;
-  font-weight: 600;
-  color: #333;
-}
-
-.comment-time {
-  font-size: 11px;
-  color: #999;
-}
-
-.comment-text {
-  font-size: 13px;
-  line-height: 1.5;
-  color: #444;
-  margin-bottom: 8px;
-}
-
-/* FEATURE 6: Reply Styles */
-.comment-actions {
-  margin-top: 8px;
-}
-
-.reply-btn {
-  background: none;
-  border: none;
-  color: #b49b66;
-  cursor: pointer;
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.reply-btn:hover {
-  background: rgba(180, 155, 102, 0.1);
-  color: #8a753a;
-}
-
-.reply-form {
-  margin-top: 10px;
-  padding: 10px;
-  background: rgba(255, 255, 255, 0.6);
-  border-radius: 6px;
-  border: 1px solid rgba(180, 155, 102, 0.3);
-}
-
-.reply-input {
-  width: 100%;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 12px;
-  resize: vertical;
-  min-height: 60px;
-}
-
-.reply-form-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 8px;
-  gap: 10px;
-}
-
-.reply-submit, .reply-cancel {
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-size: 11px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.reply-submit {
-  background: #b49b66;
-  color: white;
-  border: none;
-}
-
-.reply-submit:hover {
-  background: #a0864d;
-}
-
-.reply-cancel {
-  background: #f5f5f5;
-  color: #666;
-  border: 1px solid #ddd;
-}
-
-.reply-cancel:hover {
-  background: #e5e5e5;
-}
-
-.reply-form-actions .anonymous-toggle {
-  font-size: 11px;
-}
-
-/* Comment Replies Indentation */
-.comment-reply {
-  margin-left: 20px;
-  margin-top: 10px;
-  border-left-color: #d4b976;
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.comment-replies {
-  margin-top: 10px;
-}
-
-/* Empty State for Filtered Results */
-.empty-state .clear-filter-btn {
-  margin-top: 15px;
-  padding: 10px 20px;
-  background: #b49b66;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-}
-
-.empty-state .clear-filter-btn:hover {
-  background: #a0864d;
-}
-
-/* Responsive Design for New Features */
-@media (max-width: 768px) {
-  .forum-header {
-    flex-direction: column;
-    gap: 15px;
-    align-items: stretch;
-  }
-  
-  .tag-filter-container {
-    margin: 0;
-    justify-content: center;
-  }
-  
-  .tag-filter-input {
-    min-width: 150px;
   }
   
   .comment-content {
