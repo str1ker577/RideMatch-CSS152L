@@ -2600,11 +2600,13 @@ textarea:focus, input[type="text"]:focus {
   border: 2px solid #b49b66;
   border-radius: 10px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  gap: 20px;
 }
 
 .forum-tabs {
   display: flex;
   gap: 10px;
+  flex: 1;
 }
 
 .forum-tab {
@@ -2616,6 +2618,7 @@ textarea:focus, input[type="text"]:focus {
   cursor: pointer;
   transition: all 0.2s ease;
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .forum-tab:hover {
@@ -2639,6 +2642,8 @@ textarea:focus, input[type="text"]:focus {
   font-weight: 600;
   cursor: pointer;
   transition: background-color 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .ask-btn:hover {
@@ -3145,6 +3150,24 @@ textarea:focus, input[type="text"]:focus {
     width: 95%;
     margin: 10% auto;
     padding: 20px;
+  }
+  .ask-btn {
+    align-self: center;
+  }
+}
+
+@media (min-width: 769px) {
+  .forum-header {
+    justify-content: center;
+  }
+  
+  .forum-tabs {
+    flex: none; /* Remove flex: 1 to center tabs */
+  }
+  
+  .ask-btn {
+    position: absolute;
+    right: 20px;
   }
 }
 

@@ -2512,7 +2512,6 @@ document.addEventListener("DOMContentLoaded", function () {
 
   let currentUser = null;
   let activeTab = 'recent';
-  let activeTagFilter = '';
   let expandedPosts = new Set();
   let expandedComments = new Set();
   let currentForumPosts = [];
@@ -2602,7 +2601,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // ENHANCED: Load posts with tag filtering
+  // CLEANED: Load posts (removed tag filtering)
   async function loadPosts() {
     if (!forumElements.postsContainer) return;
     
@@ -2622,28 +2621,15 @@ document.addEventListener("DOMContentLoaded", function () {
       currentForumPosts = posts;
       window.currentForumPosts = posts;
 
-      // Filter posts by tag if active
-      let filteredPosts = posts;
-      if (activeTagFilter) {
-        filteredPosts = posts.filter(post => {
-          const postTags = post.tags ? post.tags.toLowerCase().split(',').map(tag => tag.trim()) : [];
-          return postTags.some(tag => tag.includes(activeTagFilter.toLowerCase()));
-        });
-      }
-
       forumElements.postsContainer.innerHTML = '';
 
-      if (!filteredPosts || filteredPosts.length === 0) {
-        if (activeTagFilter) {
-          showEmptyFilterState(activeTagFilter);
-        } else {
-          showEmptyState();
-        }
+      if (!posts || posts.length === 0) {
+        showEmptyState();
         return;
       }
 
-      sortPosts(filteredPosts);
-      filteredPosts.forEach(post => {
+      sortPosts(posts);
+      posts.forEach(post => {
         addPostToDisplay(post);
       });
 
@@ -2670,7 +2656,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // ENHANCED: Add post to display with expand arrow and anonymous option
+  // Add post to display with expand arrow and anonymous option
   function addPostToDisplay(post) {
     if (!forumElements.postsContainer) return;
 
@@ -2678,7 +2664,7 @@ document.addEventListener("DOMContentLoaded", function () {
     const isExpanded = expandedPosts.has(post.id);
     const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
     
-    // FEATURE 3: Handle anonymous posts
+    // Handle anonymous posts
     const authorName = post.isAnonymous ? 'Anonymous' : (post.authorName || 'Anonymous');
     
     const postElement = document.createElement('div');
@@ -2714,7 +2700,7 @@ document.addEventListener("DOMContentLoaded", function () {
             <i class="bx bx-show"></i>
             <span>${post.views || 0}</span>
           </div>
-          <!-- FEATURE 1: Expand/Collapse Arrow -->
+          <!-- Expand/Collapse Arrow -->
           <div class="expand-arrow">
             <i class="bx ${isExpanded ? 'bx-chevron-up' : 'bx-chevron-down'}"></i>
           </div>
@@ -2727,7 +2713,7 @@ document.addEventListener("DOMContentLoaded", function () {
     forumElements.postsContainer.appendChild(postElement);
   }
 
-  // ENHANCED: Render expanded post with "Tags:" label
+  // Render expanded post with "Tags:" label
   function renderExpandedPost(post, tags) {
     const authorName = post.isAnonymous ? 'Anonymous' : (post.authorName || 'Anonymous');
     
@@ -2739,7 +2725,6 @@ document.addEventListener("DOMContentLoaded", function () {
         
         ${tags.length > 0 ? `
           <div class="post-tags">
-            <!-- FEATURE 2: Add "Tags:" label -->
             <span class="tags-label">Tags: </span>
             ${tags.map(tag => `<span class="tag">${escapeHtml(tag)}</span>`).join('')}
           </div>
@@ -2791,12 +2776,12 @@ document.addEventListener("DOMContentLoaded", function () {
     `;
   }
 
-  // ENHANCED: Toggle post with arrow animation
+  // Toggle post with arrow animation
   async function togglePost(postId) {
     const postElement = document.querySelector(`[data-post-id="${postId}"]`);
     if (!postElement) return;
     
-    // FEATURE 1: Update arrow direction
+    // Update arrow direction
     const arrow = postElement.querySelector('.expand-arrow i');
     
     if (expandedPosts.has(postId)) {
@@ -2837,7 +2822,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // ENHANCED: Load comments with voting and replies
+  // Load comments with voting and replies
   async function loadComments(postId) {
     const commentsContainer = document.getElementById(`comments-${postId}`);
     if (!commentsContainer) return;
@@ -2861,7 +2846,7 @@ document.addEventListener("DOMContentLoaded", function () {
       const comments = await response.json();
       console.log('Comments loaded:', comments.length);
       
-      // FEATURE 6: Organize comments by parent/child relationships
+      // Organize comments by parent/child relationships
       const organizedComments = organizeComments(comments);
       
       commentsContainer.innerHTML = organizedComments.length > 0 
@@ -2874,7 +2859,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // FEATURE 6: Organize comments with replies
+  // Organize comments with replies
   function organizeComments(comments) {
     const commentMap = new Map();
     const rootComments = [];
@@ -2897,7 +2882,7 @@ document.addEventListener("DOMContentLoaded", function () {
     return rootComments;
   }
 
-  // ENHANCED: Render comment with voting and reply functionality
+  // Render comment with voting and reply functionality
   function renderComment(comment, postId, isReply = false) {
     const timeAgo = getTimeAgo(comment.createdAt);
     const authorName = comment.isAnonymous ? 'Anonymous' : (comment.authorName || 'Anonymous');
@@ -2906,7 +2891,7 @@ document.addEventListener("DOMContentLoaded", function () {
     let html = `
       <div class="comment ${indentClass}" data-comment-id="${comment.id}">
         <div class="comment-content">
-          <!-- FEATURE 5: Comment voting -->
+          <!-- Comment voting -->
           <div class="comment-vote">
             <button class="vote-btn comment-vote-btn" onclick="voteOnComment('${postId}', '${comment.id}', 'up')">
               ▲
@@ -2924,7 +2909,7 @@ document.addEventListener("DOMContentLoaded", function () {
             </div>
             <div class="comment-text">${escapeHtml(comment.text).replace(/\n/g, '<br>')}</div>
             
-            <!-- FEATURE 6: Reply button -->
+            <!-- Reply button -->
             ${currentUser ? `
               <div class="comment-actions">
                 <button class="reply-btn" onclick="toggleReplyForm('${postId}', '${comment.id}')">
@@ -2955,7 +2940,7 @@ document.addEventListener("DOMContentLoaded", function () {
           </div>
         </div>
         
-        <!-- FEATURE 6: Render replies -->
+        <!-- Render replies -->
         ${comment.replies && comment.replies.length > 0 ? `
           <div class="comment-replies">
             ${comment.replies.map(reply => renderComment(reply, postId, true)).join('')}
@@ -2967,7 +2952,7 @@ document.addEventListener("DOMContentLoaded", function () {
     return html;
   }
 
-  // FEATURE 5: Vote on comments
+  // Vote on comments
   async function voteOnComment(postId, commentId, direction) {
     if (!currentUser) {
       if (typeof togglePopup === 'function') {
@@ -3003,7 +2988,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // FEATURE 6: Toggle reply form
+  // Toggle reply form
   function toggleReplyForm(postId, commentId) {
     const replyForm = document.getElementById(`reply-form-${commentId}`);
     if (!replyForm) return;
@@ -3019,7 +3004,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // FEATURE 6: Submit reply to comment
+  // Submit reply to comment
   async function submitReply(postId, parentCommentId) {
     if (!currentUser) {
       if (typeof togglePopup === 'function') {
@@ -3110,7 +3095,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // ENHANCED: Submit comment with anonymous option
+  // Submit comment with anonymous option
   async function submitComment(postId) {
     if (!currentUser) {
       if (typeof togglePopup === 'function') {
@@ -3192,7 +3177,7 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // ENHANCED: Submit question with anonymous option
+  // Submit question with anonymous option
   async function submitQuestion(event) {
     if (event) event.preventDefault();
     
@@ -3241,7 +3226,6 @@ document.addEventListener("DOMContentLoaded", function () {
       showErrorMessage('Failed to post question. Please try again.');
     }
   }
-
 
   // Modal functions
   function openAskModal() {
