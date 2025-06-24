@@ -121,49 +121,50 @@
   <body>
 
 <!-- Forum Content -->
-  <div class="forum-container">
-    <div class="forum-header-centered">
-      <div class="forum-tabs">
-        <button class="forum-tab active" data-tab="recent">Recent Questions</button>
-        <button class="forum-tab" data-tab="popular">Most Popular</button>
-        <button class="forum-tab" data-tab="answered">Most Answered</button>
-      </div>
-
-      <button class="ask-btn" onclick="openAskModal()">
-        <i class='bx bx-plus'></i>
-        Ask a Question
-      </button>
+<div class="forum-container">
+  <div class="forum-header-centered">
+    <div class="forum-tabs">
+      <button class="forum-tab active" data-tab="recent">Recent Questions</button>
+      <button class="forum-tab" data-tab="popular">Most Popular</button>
+      <button class="forum-tab" data-tab="answered">Most Answered</button>
+      <button class="forum-tab" data-tab="trending">Trending</button>
     </div>
 
-    <div class="forum-main">
-      <div class="forum-posts" id="forum-posts">
-        <!-- Posts will be loaded here -->
-      </div>
+    <button class="ask-btn" onclick="openAskModal()">
+      <i class='bx bx-plus'></i>
+      Ask a Question
+    </button>
+  </div>
 
-      <div class="forum-sidebar">
-        <div class="sidebar-section">
-          <h3>Forum Guidelines</h3>
-          <ul>
-            <li>• Be respectful to other users</li>
-            <li>• Search before asking a question</li>
-            <li>• Provide clear and detailed information</li>
-            <li>• Stay on topic about cars and automotive</li>
-          </ul>
-        </div>
-        
-        <div class="sidebar-section">
-          <h3>Popular Tags</h3>
-          <div class="tag-cloud">
-            <span class="tag">maintenance</span>
-            <span class="tag">buying-advice</span>
-            <span class="tag">repairs</span>
-            <span class="tag">financing</span>
-            <span class="tag">insurance</span>
-          </div>
+  <div class="forum-main">
+    <div class="forum-posts" id="forum-posts">
+      <!-- Posts will be loaded here -->
+    </div>
+
+    <div class="forum-sidebar">
+      <div class="sidebar-section">
+        <h3>Forum Guidelines</h3>
+        <ul>
+          <li>• Be respectful to other users</li>
+          <li>• Search before asking a question</li>
+          <li>• Provide clear and detailed information</li>
+          <li>• Stay on topic about cars and automotive</li>
+        </ul>
+      </div>
+      
+      <div class="sidebar-section">
+        <h3>Popular Tags</h3>
+        <div class="tag-cloud">
+          <span class="tag">maintenance</span>
+          <span class="tag">buying-advice</span>
+          <span class="tag">repairs</span>
+          <span class="tag">financing</span>
+          <span class="tag">insurance</span>
         </div>
       </div>
     </div>
   </div>
+</div>
 
   <!-- Ask Question Modal -->
   <div id="askModal" class="modal">
