@@ -22,6 +22,23 @@ function getCurrentUserName() {
 let currentCarData = []; // Global variable to store current car data for sorting
 let defaultCarsLoaded = false;
 
+function updateUIForAuthState() {
+    // Update forum UI if we're on forum page
+    const askBtn = document.querySelector('.ask-btn');
+    if (!askBtn) return; // Not on forum page
+    
+    if (!currentUser) {
+        askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
+        askBtn.onclick = () => {
+            if (typeof togglePopup === 'function') {
+                togglePopup('login-popup');
+            }
+        };
+    } else {
+        askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
+        askBtn.onclick = () => openAskModal();
+    }
+}
 
 //////////////////////
 //Side Menu Function//
@@ -111,6 +128,10 @@ async function initializeFirebase() {
                 const profilePic = document.getElementById('profile-pic');      // <img>
                 const profileIcon = document.getElementById('profile-icon');    // <i>
 
+                currentUser = user;
+
+                updateUIForAuthState()
+
                 if (user.photoURL) {
                     // User has uploaded a real photo
                     if (profileIcon) profileIcon.style.display = 'none';
@@ -140,6 +161,8 @@ async function initializeFirebase() {
                 const profileContainer = document.getElementById('profile-container');
                 if (loginBtn) loginBtn.style.display = 'block';
                 if (profileContainer) profileContainer.style.display = 'none';
+
+                currentUser = null;
 
                 console.log('User is signed out');
             }
