@@ -2642,19 +2642,30 @@ document.addEventListener("DOMContentLoaded", function () {
   }
 
   // Sort posts based on active tab
-  function sortPosts(posts) {
-    switch (activeTab) {
-      case 'recent':
-        posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        break;
-      case 'popular':
-        posts.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
-        break;
-      case 'answered':
-        posts.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
-        break;
-    }
+function sortPosts(posts) {
+  switch (activeTab) {
+    case 'recent':
+      posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      break;
+    case 'popular':
+      posts.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
+      break;
+    case 'answered':
+      posts.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
+      break;
+    case 'trending':
+      // NEW: Sort by activity score (views + comments + votes)
+      posts.sort((a, b) => {
+        const scoreA = (a.views || 0) + (a.commentCount || 0) + (a.upvotes || 0);
+        const scoreB = (b.views || 0) + (b.commentCount || 0) + (b.upvotes || 0);
+        return scoreB - scoreA;
+      });
+      break;
+    default:
+      // Default to recent if unknown tab
+      posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
+}
 
   // Add post to display with expand arrow and anonymous option
   function addPostToDisplay(post) {

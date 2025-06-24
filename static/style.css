@@ -2601,10 +2601,9 @@ textarea:focus, input[type="text"]:focus {
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
 
-/* UPDATED: Perfect centering for forum header */
 .forum-header-centered {
   display: flex;
-  justify-content: center;
+  justify-content: space-between; /* CHANGED: Use space-between instead of center */
   align-items: center;
   margin-bottom: 30px;
   padding: 20px;
@@ -2613,17 +2612,21 @@ textarea:focus, input[type="text"]:focus {
   border: 2px solid #b49b66;
   border-radius: 10px;
   box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-  position: relative;
+  min-height: 60px; /* ADDED: Ensure minimum height */
 }
 
 .forum-header-centered .forum-tabs {
   display: flex;
-  gap: 10px;
+  gap: 8px; /* REDUCED: Smaller gap to prevent overflow */
+  flex-wrap: wrap; /* ADDED: Allow wrapping if needed */
+  flex: 1; /* ADDED: Take available space */
+  justify-content: center; /* ADDED: Center the tabs within their container */
+  margin-right: 20px; /* ADDED: Space before the button */
 }
 
 .forum-header-centered .ask-btn {
-  position: absolute;
-  right: 20px;
+  flex-shrink: 0; /* ADDED: Prevent button from shrinking */
+  /* REMOVED: position: absolute - this was causing overlap */
 }
 
 /* Alternative: Everything truly centered */
@@ -2652,15 +2655,16 @@ textarea:focus, input[type="text"]:focus {
 }
 
 .forum-tab {
-  padding: 10px 20px;
+  padding: 8px 16px; /* REDUCED: Smaller padding to fit better */
   background-color: white;
   border: 1px solid #b49b66;
   border-radius: 6px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.2s ease;
-  font-size: 14px;
+  font-size: 13px; /* REDUCED: Smaller font to fit better */
   white-space: nowrap;
+  min-width: 0; /* ADDED: Allow text truncation if needed */
 }
 
 .forum-tab:hover {
@@ -2675,8 +2679,8 @@ textarea:focus, input[type="text"]:focus {
 .ask-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
+  gap: 6px; /* REDUCED: Smaller gap */
+  padding: 10px 16px; /* REDUCED: Smaller padding */
   background-color: #b49b66;
   color: white;
   border: none;
@@ -2685,13 +2689,12 @@ textarea:focus, input[type="text"]:focus {
   cursor: pointer;
   transition: background-color 0.2s ease;
   white-space: nowrap;
-  flex-shrink: 0;
+  font-size: 13px; /* ADDED: Consistent font size */
 }
 
 .ask-btn:hover {
   background-color: #a0864d;
 }
-
 .forum-main {
   display: flex;
   gap: 30px;
@@ -3341,15 +3344,37 @@ textarea:focus, input[type="text"]:focus {
   }
   
   .forum-header,
-  .forum-header-centered,
   .forum-header-truly-centered {
     flex-direction: column;
     gap: 15px;
     align-items: stretch;
   }
   
+    .forum-header-centered {
+    flex-direction: column;
+    gap: 15px;
+    align-items: stretch;
+  }
+  
+  .forum-header-centered .forum-tabs {
+    margin-right: 0;
+    justify-content: center;
+    order: 1;
+  }
+  
   .forum-header-centered .ask-btn {
-    position: static;
+    order: 2;
+    align-self: center;
+  }
+  
+  .forum-tab {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+  
+  .ask-btn {
+    padding: 12px 20px;
+    font-size: 14px;
   }
   
   .forum-tabs {
