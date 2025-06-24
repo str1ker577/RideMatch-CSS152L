@@ -3242,31 +3242,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }
   }
 
-  // FEATURE 4: Filter posts by tag
-    function filterByTagName(tagName) {
-    console.log('Filtering by clicked tag:', tagName);
-    
-    // Set the filter input value
-    const tagFilter = document.getElementById('tag-filter');
-    if (tagFilter) {
-        tagFilter.value = tagName;
-    }
-    
-    // Apply the filter
-    activeTagFilter = tagName;
-    loadPosts();
-    }
-
-    // Make it globally available
-    window.filterByTagName = filterByTagName;
-    
-  // Clear tag filter
-  function clearTagFilter() {
-    activeTagFilter = '';
-    const tagFilter = document.getElementById('tag-filter');
-    if (tagFilter) tagFilter.value = '';
-    loadPosts();
-  }
 
   // Modal functions
   function openAskModal() {
@@ -3317,12 +3292,6 @@ document.addEventListener("DOMContentLoaded", function () {
         }
       });
     }
-
-    // FEATURE 4: Tag filter event listener
-    const tagFilter = document.getElementById('tag-filter');
-    if (tagFilter) {
-      tagFilter.addEventListener('input', filterByTag);
-    }
   }
 
   // Utility functions
@@ -3350,19 +3319,6 @@ document.addEventListener("DOMContentLoaded", function () {
         <i class="bx bx-message-square"></i>
         <h3>No posts yet</h3>
         <p>Be the first to ask a question!</p>
-      </div>
-    `;
-  }
-
-  function showEmptyFilterState(tag) {
-    if (!forumElements.postsContainer) return;
-    
-    forumElements.postsContainer.innerHTML = `
-      <div class="empty-state">
-        <i class="bx bx-filter"></i>
-        <h3>No posts found</h3>
-        <p>No posts found with tag "${tag}"</p>
-        <button onclick="clearTagFilter()" class="clear-filter-btn">Clear Filter</button>
       </div>
     `;
   }
@@ -3487,7 +3443,5 @@ document.addEventListener("DOMContentLoaded", function () {
   window.sharePost = sharePost;
   window.openAskModal = openAskModal;
   window.closeAskModal = closeAskModal;
-  window.filterByTag = filterByTag;
-  window.clearTagFilter = clearTagFilter;
 
 })();
