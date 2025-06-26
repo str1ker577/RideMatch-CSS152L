@@ -353,89 +353,89 @@ def profile():
 #################################
 @app.route('/toggle-fave', methods=['POST'])
 def toggle_fave():
-    """Toggle favorite status using Firebase Realtime Database"""
-    if 'user' not in session:
-        app.logger.warning("Unauthorized access to toggle-fave")
-        return jsonify({"error": "User not logged in"}), 401
-    
-    if not realtime_db_ref:
-        app.logger.error("Database not available for toggle-fave")
-        return jsonify({"error": "Database not available"}), 500
+    """Debug version of toggle favorite"""
+    app.logger.info("=== DEBUG: toggle-fave endpoint called ===")
     
     try:
+        # Check session
+        app.logger.info(f"Session keys: {list(session.keys())}")
+        app.logger.info(f"User in session: {'user' in session}")
+        
+        if 'user' not in session:
+            app.logger.warning("No user in session")
+            return jsonify({"error": "User not logged in"}), 401
+        
         user_id = session['user']
+        app.logger.info(f"User ID: {user_id}")
+        
+        # Check database
+        app.logger.info(f"realtime_db_ref available: {realtime_db_ref is not None}")
+        
+        if not realtime_db_ref:
+            app.logger.error("Database not available")
+            return jsonify({"error": "Database not available"}), 500
+        
+        # Check request data
+        app.logger.info(f"Request content type: {request.content_type}")
+        app.logger.info(f"Request data: {request.get_data()}")
+        
         data = request.get_json()
+        app.logger.info(f"Parsed JSON data: {data}")
         
         if not data:
-            app.logger.error("No JSON data received for toggle-fave")
+            app.logger.error("No JSON data received")
             return jsonify({"error": "No data provided"}), 400
             
         variant = data.get('variant')
         liked = data.get('liked')
+        
+        app.logger.info(f"Variant: {variant}, Liked: {liked}")
 
         if not variant:
-            app.logger.error("No variant specified for toggle-fave")
+            app.logger.error("No variant specified")
             return jsonify({"error": "Variant required"}), 400
 
-        # Use Firebase Realtime Database (same as testimonials/forum)
+        # Try database operation
+        app.logger.info("Attempting database operation...")
+        
         favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+        app.logger.info(f"Created favorites_ref: {favorites_ref}")
+        
         existing_fave = favorites_ref.child(variant).get()
+        app.logger.info(f"Existing favorite: {existing_fave}")
 
         if liked:
-            # Add to favorites
+            app.logger.info("Adding to favorites...")
             favorite_data = {
                 'variant': variant,
                 'timestamp': int(time.time() * 1000),
                 'dateAdded': datetime.utcnow().isoformat() + 'Z',
                 'userEmail': session.get('email', 'Unknown')
             }
-            favorites_ref.child(variant).set(favorite_data)
-            app.logger.info(f"Added favorite: {variant} for user {user_id}")
+            app.logger.info(f"Favorite data: {favorite_data}")
+            
+            result = favorites_ref.child(variant).set(favorite_data)
+            app.logger.info(f"Set result: {result}")
+            
+            app.logger.info(f"Successfully added favorite: {variant}")
             return jsonify({"status": "added", "variant": variant, "liked": True}), 200
         else:
-            # Remove from favorites
+            app.logger.info("Removing from favorites...")
             if existing_fave:
-                favorites_ref.child(variant).delete()
-                app.logger.info(f"Removed favorite: {variant} for user {user_id}")
+                result = favorites_ref.child(variant).delete()
+                app.logger.info(f"Delete result: {result}")
+                app.logger.info(f"Successfully removed favorite: {variant}")
                 return jsonify({"status": "removed", "variant": variant, "liked": False}), 200
             else:
+                app.logger.info("Favorite not found, nothing to remove")
                 return jsonify({"status": "not_found", "variant": variant, "liked": False}), 200
             
     except Exception as e:
-        app.logger.error(f"Error toggling favorite: {e}")
+        app.logger.error(f"Exception in toggle-fave: {e}")
+        app.logger.error(f"Exception type: {type(e)}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
-
-@app.route('/get-faves', methods=['POST'])
-def get_faves():
-    """Get user's favorites using Firebase Realtime Database"""
-    if 'user' not in session:
-        app.logger.warning("Unauthorized access to favorites")
-        return jsonify({"error": "Not logged in"}), 401
-    
-    if not realtime_db_ref:
-        app.logger.error("Database not available for get-faves")
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        user_id = session['user']
-        
-        # Get favorites from Firebase Realtime Database (same as testimonials/forum)
-        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
-        favorites_data = favorites_ref.get() or {}
-
-        # Convert to list format
-        favorite_variants = []
-        for variant_key, variant_data in favorites_data.items():
-            if isinstance(variant_data, dict):
-                variant_data['variant'] = variant_key
-                favorite_variants.append(variant_data)
-
-        app.logger.info(f"Retrieved {len(favorite_variants)} favorites for user {user_id}")
-        return jsonify(favorite_variants), 200
-        
-    except Exception as e:
-        app.logger.error(f"Error retrieving favorites: {e}")
-        return jsonify({"error": f"Failed to retrieve favorites: {str(e)}"}), 500
     
 #########################
 # Filter Function Logic #
@@ -718,7 +718,33 @@ def get_specs():
 ##########################
 # Favorite/Like Function #
 ##########################
-    
+@app.route('/test-firebase', methods=['GET'])
+def test_firebase():
+    """Test Firebase connection"""
+    try:
+        app.logger.info("Testing Firebase connection...")
+        
+        if not realtime_db_ref:
+            return jsonify({"error": "realtime_db_ref is None"}), 500
+        
+        # Try to write and read a test value
+        test_ref = realtime_db_ref.child('test')
+        test_data = {'message': 'Hello Firebase!', 'timestamp': int(time.time())}
+        
+        app.logger.info(f"Writing test data: {test_data}")
+        test_ref.set(test_data)
+        
+        app.logger.info("Reading test data back...")
+        result = test_ref.get()
+        
+        app.logger.info(f"Test successful, got back: {result}")
+        return jsonify({"status": "success", "data": result}), 200
+        
+    except Exception as e:
+        app.logger.error(f"Firebase test failed: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": str(e)}), 500
     
 ###############################
 # Testimonials Function Logic #
