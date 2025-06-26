@@ -658,52 +658,6 @@ def get_specs():
 ##########################
 # Favorite/Like Function #
 ##########################
-
-@app.route('/toggle-fave', methods=['POST'])
-def toggle_fave():
-    if not db:
-        app.logger.error("Database not available for toggle-fave")
-        return jsonify({"error": "Database not available"}), 500
-    
-    if 'user' in session:
-        user_id = session['user']
-        data = request.get_json()
-        
-        if not data:
-            app.logger.error("No JSON data received for toggle-fave")
-            return jsonify({"error": "No data provided"}), 400
-            
-        variant = data.get('variant')
-        liked = data.get('liked')
-
-        if not variant:
-            app.logger.error("No variant specified for toggle-fave")
-            return jsonify({"error": "Variant required"}), 400
-
-        try:
-            favorites_ref = db.collection('users').document(user_id).collection('favorites')
-            existing_fave = favorites_ref.where('variant', '==', variant).get()
-
-            if existing_fave:
-                if not liked:
-                    for fave in existing_fave:
-                        favorites_ref.document(fave.id).delete()
-                    app.logger.info(f"Removed favorite: {variant}")
-                    return jsonify({"status": "removed", "variant": variant, "liked": False}), 200
-            else:
-                if liked:
-                    favorites_ref.add({'variant': variant})
-                    app.logger.info(f"Added favorite: {variant}")
-                    return jsonify({"status": "added", "variant": variant, "liked": True}), 200
-
-            return jsonify({"status": "no change", "variant": variant, "liked": liked}), 200
-            
-        except Exception as e:
-            app.logger.error(f"Error toggling favorite: {e}")
-            return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
-    else:
-        app.logger.warning("Unauthorized access to toggle-fave")
-        return jsonify({"error": "User not logged in"}), 401
     
     
 ###############################

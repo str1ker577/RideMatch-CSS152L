@@ -1081,9 +1081,8 @@ async function populateVariants() {
 //FAVOURITES Function//
 //////////////////////
 async function addToFave(event, variant) {
-    // Check if user is authenticated
-    const user = auth.currentUser;
-    if (!user) {
+    // Check if user is authenticated (using your existing auth pattern)
+    if (!auth || !auth.currentUser) {
         alert('Please sign in to save favorites');
         return;
     }
@@ -1092,15 +1091,17 @@ async function addToFave(event, variant) {
     const likedStatus = !isLiked;
 
     try {
-        const userId = user.uid;
-        const favoriteRef = ref(database, `favorites/${userId}/${variant}`);
+        const userId = auth.currentUser.uid;
+        const database = firebase.database();
+        const favoriteRef = database.ref(`favorites/${userId}/${variant}`);
 
         if (likedStatus) {
             // Add to favorites
-            await set(favoriteRef, {
+            await favoriteRef.set({
                 variant: variant,
-                timestamp: Date.now(),
-                dateAdded: new Date().toISOString()
+                timestamp: firebase.database.ServerValue.TIMESTAMP,
+                dateAdded: new Date().toISOString(),
+                userEmail: auth.currentUser.email
             });
             
             // Change to solid icon
@@ -1108,7 +1109,7 @@ async function addToFave(event, variant) {
             console.log('Added to favorites:', variant);
         } else {
             // Remove from favorites
-            await remove(favoriteRef);
+            await favoriteRef.remove();
             
             // Change to outline icon
             event.target.classList.remove('fa-solid');
@@ -1129,16 +1130,18 @@ async function loadFavorites() {
     console.log("Loading favorites...");
 
     // Check if user is authenticated
-    const user = auth.currentUser;
-    if (!user) {
+    if (!auth || !auth.currentUser) {
         console.log('User not authenticated');
         return;
     }
 
     try {
-        const userId = user.uid;
-        const favoritesRef = ref(database, `favorites/${userId}`);
-        const snapshot = await get(favoritesRef);
+        const userId = auth.currentUser.uid;
+        const database = firebase.database();
+        const favoritesRef = database.ref(`favorites/${userId}`);
+        
+        // Use Firebase v8 syntax
+        const snapshot = await favoritesRef.once('value');
 
         // Check if favorites list element exists before trying to use it
         const favoritesList = document.getElementById("favorites-items");
@@ -1179,9 +1182,17 @@ async function loadFavorites() {
                 card.innerHTML = `
                     <img src="${variantData.Image}" alt="${variantData.Model}">
                     <div class="name">${variantData.Brand} ${variantData.Model}</div>
+                    <div class="favorite-actions">
+                        <button class="remove-favorite-btn" onclick="removeFavoriteFromDisplay('${car.variant}', this)">
+                            <i class="fas fa-heart-broken"></i> Remove
+                        </button>
+                    </div>
                 `;
 
-                card.addEventListener("click", function () {
+                card.addEventListener("click", function (e) {
+                    // Don't trigger popup if remove button was clicked
+                    if (e.target.closest('.remove-favorite-btn')) return;
+                    
                     console.log("Card clicked - Populating popup");
                     console.log(variantData);
                     
@@ -1228,27 +1239,27 @@ async function loadFavorites() {
             }
         } else {
             console.log('No favorites found');
-            cardContainer.innerHTML = '<p>No favorite cars yet. Start adding some!</p>';
+            cardContainer.innerHTML = '<div class="no-favorites"><i class="fas fa-heart"></i><p>No favorite cars yet. Start adding some!</p></div>';
         }
     } catch (error) {
         console.error("Error loading favorites:", error);
         // Optionally show user-friendly error message
         const favoritesList = document.getElementById("favorites-items");
         if (favoritesList) {
-            favoritesList.innerHTML = '<p>Error loading favorites. Please try again later.</p>';
+            favoritesList.innerHTML = '<p style="color: red;">Error loading favorites. Please try again later.</p>';
         }
     }
 }
 
 // Function to check if a car is already favorited (useful for setting heart icon state)
 async function isCarFavorited(variant) {
-    const user = auth.currentUser;
-    if (!user) return false;
+    if (!auth || !auth.currentUser) return false;
 
     try {
-        const userId = user.uid;
-        const favoriteRef = ref(database, `favorites/${userId}/${variant}`);
-        const snapshot = await get(favoriteRef);
+        const userId = auth.currentUser.uid;
+        const database = firebase.database();
+        const favoriteRef = database.ref(`favorites/${userId}/${variant}`);
+        const snapshot = await favoriteRef.once('value');
         return snapshot.exists();
     } catch (error) {
         console.error('Error checking favorite status:', error);
@@ -1256,16 +1267,52 @@ async function isCarFavorited(variant) {
     }
 }
 
+// Function to remove favorite from display (for favorites page)
+async function removeFavoriteFromDisplay(variant, buttonElement) {
+    if (!auth || !auth.currentUser) return;
+
+    try {
+        const userId = auth.currentUser.uid;
+        const database = firebase.database();
+        const favoriteRef = database.ref(`favorites/${userId}/${variant}`);
+        
+        await favoriteRef.remove();
+        
+        // Remove the card from display
+        const card = buttonElement.closest('.card');
+        if (card) {
+            card.remove();
+        }
+        
+        // Update any heart icons on other pages
+        const heartIcons = document.querySelectorAll(`[onclick*="${variant}"]`);
+        heartIcons.forEach(icon => {
+            icon.classList.remove('fa-solid');
+        });
+        
+        console.log('Removed from favorites:', variant);
+        
+        // Check if no more favorites and show empty state
+        const cardContainer = document.getElementById("card-container");
+        if (cardContainer && cardContainer.children.length === 0) {
+            cardContainer.innerHTML = '<div class="no-favorites"><i class="fas fa-heart"></i><p>No favorite cars yet. Start adding some!</p></div>';
+        }
+        
+    } catch (error) {
+        console.error('Error removing favorite:', error);
+        alert('Error removing favorite. Please try again.');
+    }
+}
+
 // Function to initialize heart icons when page loads
 async function initializeFavoriteIcons() {
-    const user = auth.currentUser;
-    if (!user) return;
+    if (!auth || !auth.currentUser) return;
 
     // Find all heart icons on the page
     const heartIcons = document.querySelectorAll('[onclick*="addToFave"]');
     
     for (const icon of heartIcons) {
-        // Extract variant from onclick attribute or data attribute
+        // Extract variant from onclick attribute
         const onclickAttr = icon.getAttribute('onclick');
         const variantMatch = onclickAttr.match(/addToFave\([^,]+,\s*['"]([^'"]+)['"]\)/);
         
@@ -1282,27 +1329,79 @@ async function initializeFavoriteIcons() {
     }
 }
 
-// Listen for authentication state changes
-onAuthStateChanged(auth, (user) => {
-    if (user) {
-        console.log('User is signed in:', user.uid);
-        // Initialize favorite icons when user signs in
-        initializeFavoriteIcons();
-    } else {
-        console.log('User is signed out');
-        // Clear all heart icons when user signs out
-        const heartIcons = document.querySelectorAll('.fa-solid');
-        heartIcons.forEach(icon => icon.classList.remove('fa-solid'));
+// Enhanced version that works with your existing Firebase auth setup
+function initializeFavoritesSystem() {
+    console.log('Initializing favorites system...');
+    
+    // Only initialize if we're on a page with favorites functionality
+    const favoritesList = document.getElementById("favorites-items");
+    const cardContainer = document.getElementById("card-container");
+    const heartIcons = document.querySelectorAll('[onclick*="addToFave"]');
+    
+    if (favoritesList || cardContainer || heartIcons.length > 0) {
+        // Wait for auth to be ready
+        const checkAuthAndInit = () => {
+            if (auth && auth.currentUser) {
+                console.log('Auth ready, initializing favorites for user:', auth.currentUser.email);
+                
+                // Initialize heart icons if we're on a car listing page
+                if (heartIcons.length > 0) {
+                    initializeFavoriteIcons();
+                }
+                
+                // Load favorites if we're on the favorites page
+                if (favoritesList || cardContainer) {
+                    loadFavorites();
+                }
+            } else if (auth) {
+                // Auth is initialized but no user signed in
+                console.log('Auth ready but no user signed in');
+                
+                // Clear heart icons
+                heartIcons.forEach(icon => icon.classList.remove('fa-solid'));
+            }
+        };
+        
+        // If auth is already initialized
+        if (typeof auth !== 'undefined' && auth) {
+            if (auth.currentUser) {
+                checkAuthAndInit();
+            } else {
+                // Listen for auth state changes
+                auth.onAuthStateChanged((user) => {
+                    if (user) {
+                        console.log('Favorites: User signed in:', user.email);
+                        initializeFavoriteIcons();
+                        
+                        // Load favorites if we're on the favorites page
+                        if (favoritesList || cardContainer) {
+                            loadFavorites();
+                        }
+                    } else {
+                        console.log('Favorites: User signed out');
+                        // Clear all heart icons
+                        const allHeartIcons = document.querySelectorAll('.fa-solid');
+                        allHeartIcons.forEach(icon => icon.classList.remove('fa-solid'));
+                    }
+                });
+            }
+        } else {
+            // Wait for Firebase to be initialized
+            setTimeout(initializeFavoritesSystem, 500);
+        }
     }
-});
+}
 
-// Call this when the favorites page loads
-document.addEventListener('DOMContentLoaded', function() {
-    // Only load favorites if we're on the favorites page
-    if (document.getElementById('favorites-items') || document.getElementById('card-container')) {
-        loadFavorites();
-    }
-})
+// Auto-initialize when the page loads
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeFavoritesSystem);
+} else {
+    // DOM is already loaded
+    initializeFavoritesSystem();
+}
+
+// Make functions globally available for onclick handlers
+window.removeFavoriteFromDisplay = removeFavoriteFromDisplay;
 
 //////////////////////////////
 // Allows users to change  //
