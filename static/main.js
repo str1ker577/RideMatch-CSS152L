@@ -111,12 +111,28 @@ async function initializeFirebase() {
         const response = await fetch('/firebase-config');
         const firebaseConfig = await response.json();
         
-        // Add the correct database URL for your Asia Southeast region
+        // IMPORTANT: Always use the correct database URL for your Asia Southeast region
         firebaseConfig.databaseURL = 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app';
         
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
+        console.log('Firebase config with correct database URL:', firebaseConfig);
+        
+        // Initialize Firebase only if not already initialized
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+            console.log('Firebase initialized successfully');
+        } else {
+            console.log('Firebase already initialized');
+        }
+        
         auth = firebase.auth();
+        
+        // Test database connection
+        try {
+            const testRef = firebase.database().ref('test');
+            console.log('✅ Firebase database connection successful');
+        } catch (dbError) {
+            console.error('❌ Firebase database connection failed:', dbError);
+        }
         
         // Monitor authentication state
         auth.onAuthStateChanged((user) => {
@@ -177,7 +193,6 @@ async function initializeFirebase() {
             }
         });
         
-        console.log('Firebase initialized successfully');
     } catch (error) {
         console.error('Firebase initialization failed:', error);
     }
