@@ -111,6 +111,9 @@ async function initializeFirebase() {
         const response = await fetch('/firebase-config');
         const firebaseConfig = await response.json();
         
+        // Add the correct database URL for your Asia Southeast region
+        firebaseConfig.databaseURL = 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app';
+        
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         auth = firebase.auth();
@@ -1093,11 +1096,7 @@ async function addToFave(event, variant) {
     try {
         const userId = auth.currentUser.uid;
         
-        // Make sure Firebase database is available
-        if (typeof firebase === 'undefined' || !firebase.database) {
-            throw new Error('Firebase database not available');
-        }
-        
+        // Use Firebase database (now properly configured with correct URL)
         const favoriteRef = firebase.database().ref(`favorites/${userId}/${variant}`);
 
         if (likedStatus) {
@@ -1142,12 +1141,6 @@ async function loadFavorites() {
 
     try {
         const userId = auth.currentUser.uid;
-        
-        // Make sure Firebase database is available
-        if (typeof firebase === 'undefined' || !firebase.database) {
-            throw new Error('Firebase database not available');
-        }
-        
         const favoritesRef = firebase.database().ref(`favorites/${userId}`);
         const snapshot = await favoritesRef.once('value');
 
@@ -1259,37 +1252,12 @@ async function loadFavorites() {
     }
 }
 
-// Function to check if a car is already favorited (useful for setting heart icon state)
-async function isCarFavorited(variant) {
-    if (!auth || !auth.currentUser) return false;
-
-    try {
-        const userId = auth.currentUser.uid;
-        
-        if (typeof firebase === 'undefined' || !firebase.database) {
-            return false;
-        }
-        
-        const favoriteRef = firebase.database().ref(`favorites/${userId}/${variant}`);
-        const snapshot = await favoriteRef.once('value');
-        return snapshot.exists();
-    } catch (error) {
-        console.error('Error checking favorite status:', error);
-        return false;
-    }
-}
-
 // Function to remove favorite from display (for favorites page)
 async function removeFavoriteFromDisplay(variant, buttonElement) {
     if (!auth || !auth.currentUser) return;
 
     try {
         const userId = auth.currentUser.uid;
-        
-        if (typeof firebase === 'undefined' || !firebase.database) {
-            throw new Error('Firebase database not available');
-        }
-        
         const favoriteRef = firebase.database().ref(`favorites/${userId}/${variant}`);
         await favoriteRef.remove();
         
@@ -1316,6 +1284,21 @@ async function removeFavoriteFromDisplay(variant, buttonElement) {
     } catch (error) {
         console.error('Error removing favorite:', error);
         alert('Error removing favorite. Please try again.');
+    }
+}
+
+// Function to check if a car is already favorited
+async function isCarFavorited(variant) {
+    if (!auth || !auth.currentUser) return false;
+
+    try {
+        const userId = auth.currentUser.uid;
+        const favoriteRef = firebase.database().ref(`favorites/${userId}/${variant}`);
+        const snapshot = await favoriteRef.once('value');
+        return snapshot.exists();
+    } catch (error) {
+        console.error('Error checking favorite status:', error);
+        return false;
     }
 }
 
@@ -1349,22 +1332,9 @@ async function initializeFavoriteIcons() {
     console.log('Heart icons initialized');
 }
 
-// Debug function to check Firebase availability
-function debugFirebaseSetup() {
-    console.log('=== Firebase Debug Info ===');
-    console.log('firebase object:', typeof firebase !== 'undefined' ? 'available' : 'undefined');
-    console.log('firebase.database:', typeof firebase !== 'undefined' && firebase.database ? 'available' : 'not available');
-    console.log('auth object:', typeof auth !== 'undefined' ? 'available' : 'undefined');
-    console.log('auth.currentUser:', auth && auth.currentUser ? auth.currentUser.email : 'no user');
-    console.log('========================');
-}
-
-// Enhanced initialization that works with your existing Firebase setup
+// Initialize favorites system when page loads
 function initializeFavoritesSystem() {
     console.log('Initializing favorites system...');
-    
-    // Debug Firebase setup
-    debugFirebaseSetup();
     
     // Only initialize if we're on a page with favorites functionality
     const favoritesList = document.getElementById("favorites-items");
@@ -1372,11 +1342,11 @@ function initializeFavoritesSystem() {
     const heartIcons = document.querySelectorAll('[onclick*="addToFave"]');
     
     if (favoritesList || cardContainer || heartIcons.length > 0) {
-        // Wait for Firebase and auth to be ready
-        const checkAndInit = () => {
-            if (typeof firebase !== 'undefined' && firebase.database && typeof auth !== 'undefined' && auth) {
+        // Wait for auth to be ready
+        const checkAuthAndInit = () => {
+            if (typeof auth !== 'undefined' && auth) {
                 if (auth.currentUser) {
-                    console.log('Firebase and auth ready, initializing favorites for user:', auth.currentUser.email);
+                    console.log('Auth ready, initializing favorites for user:', auth.currentUser.email);
                     
                     // Initialize heart icons if we're on a car listing page
                     if (heartIcons.length > 0) {
@@ -1388,17 +1358,17 @@ function initializeFavoritesSystem() {
                         loadFavorites();
                     }
                 } else {
-                    console.log('Firebase ready but no user signed in');
+                    console.log('Auth ready but no user signed in');
                     // Clear heart icons
                     heartIcons.forEach(icon => icon.classList.remove('fa-solid'));
                 }
             } else {
-                console.log('Waiting for Firebase/auth to be ready...');
-                setTimeout(checkAndInit, 500);
+                console.log('Waiting for auth to be ready...');
+                setTimeout(checkAuthAndInit, 500);
             }
         };
         
-        // Set up auth state listener if possible
+        // Set up auth state listener
         if (typeof auth !== 'undefined' && auth && auth.onAuthStateChanged) {
             auth.onAuthStateChanged((user) => {
                 if (user) {
@@ -1419,24 +1389,20 @@ function initializeFavoritesSystem() {
         }
         
         // Initial check
-        checkAndInit();
-    } else {
-        console.log('No favorites functionality elements found on this page');
+        checkAuthAndInit();
     }
 }
 
 // Auto-initialize when the page loads
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
-        // Wait a bit for other scripts to load
         setTimeout(initializeFavoritesSystem, 1000);
     });
 } else {
-    // DOM is already loaded
     setTimeout(initializeFavoritesSystem, 1000);
 }
 
-// Make functions globally available for onclick handlers
+// Make functions globally available
 window.removeFavoriteFromDisplay = removeFavoriteFromDisplay;
 
 //////////////////////////////
