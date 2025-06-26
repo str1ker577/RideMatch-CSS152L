@@ -126,7 +126,7 @@ except Exception as e:
 def health():
     status = {
         "status": "healthy",
-        "firebase_initialized": db is not None,
+        "firebase_initialized": realtime_db_ref is not None,
         "csv_loaded": not df.empty,
         "csv_records": len(df) if not df.empty else 0,
         "firebase_config_loaded": bool(firebase_config),
@@ -216,7 +216,7 @@ def verify_token():
 
 @app.route('/signup', methods=['POST'])
 def signup():
-    if not db:
+    if not realtime_db_ref:
         app.logger.error("Database not available for signup")
         return jsonify({"status": "error", "message": "Database not available"}), 500
     
