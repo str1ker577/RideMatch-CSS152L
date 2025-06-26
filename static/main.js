@@ -2,7 +2,6 @@
 //Global Functionality//
 ///////////////////////
 
-
 const isLocalhost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 const baseUrl = isLocalhost ? 'http://127.0.0.1:8000' : window.location.origin;
 //const baseUrl = "https://a7cbb3da-2928-4d18-ba75-ea41ce8ad0c5-00-g8eiilou0duk.sisko.replit.dev"; // Base URL for API requests
@@ -101,9 +100,9 @@ document.addEventListener('click', function(event) {
     });
 });
 
-/////////////////////////
-//Firebase Related Code//
-////////////////////////
+////////////////////////////
+// Firebase Related Code //
+//////////////////////////
 
 // Initialize Firebase when the page loads
 async function initializeFirebase() {
@@ -1078,31 +1077,47 @@ async function populateVariants() {
     });
 }
 
-
 ////////////////////////
 //FAVOURITES Function//
 //////////////////////
 async function addToFave(event, variant) {
+    // Check if user is authenticated
+    const user = auth.currentUser;
+    if (!user) {
+        alert('Please sign in to save favorites');
+        return;
+    }
 
     const isLiked = event.target.classList.contains('fa-solid');
     const likedStatus = !isLiked;
 
-    const response = await fetch(`${baseUrl}/toggle-fave`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ variant: variant, liked: likedStatus })
-    });
-    
-    const data = await response.json();
-    console.log(data);
-    if (data.liked) {
-        // Change to solid icon
-        event.target.classList.toggle('fa-solid');
-    } else {
-        // Change to outline icon
-        event.target.classList.toggle('fa-solid');
-    }
+    try {
+        const userId = user.uid;
+        const favoriteRef = ref(database, `favorites/${userId}/${variant}`);
 
+        if (likedStatus) {
+            // Add to favorites
+            await set(favoriteRef, {
+                variant: variant,
+                timestamp: Date.now(),
+                dateAdded: new Date().toISOString()
+            });
+            
+            // Change to solid icon
+            event.target.classList.add('fa-solid');
+            console.log('Added to favorites:', variant);
+        } else {
+            // Remove from favorites
+            await remove(favoriteRef);
+            
+            // Change to outline icon
+            event.target.classList.remove('fa-solid');
+            console.log('Removed from favorites:', variant);
+        }
+    } catch (error) {
+        console.error('Error toggling favorite:', error);
+        alert('Error updating favorites. Please try again.');
+    }
 }
 
 //////////////////////
@@ -1111,20 +1126,20 @@ async function addToFave(event, variant) {
 ///////////////////
 
 async function loadFavorites() {
-    console.log("function favorites is running");
+    console.log("Loading favorites...");
+
+    // Check if user is authenticated
+    const user = auth.currentUser;
+    if (!user) {
+        console.log('User not authenticated');
+        return;
+    }
 
     try {
-        const response = await fetch(`${baseUrl}/get-faves`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-        });
+        const userId = user.uid;
+        const favoritesRef = ref(database, `favorites/${userId}`);
+        const snapshot = await get(favoritesRef);
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-
-        const favorites = await response.json();
-        
         // Check if favorites list element exists before trying to use it
         const favoritesList = document.getElementById("favorites-items");
         if (!favoritesList) {
@@ -1141,71 +1156,79 @@ async function loadFavorites() {
             return;
         }
 
-        for (const car of favorites) {
-            const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${car.variant}`, {
-                method: "GET",
-                headers: { "Content-Type": "application/json" }
-            });
-            
-            if (!variantResponse.ok) {
-                console.error(`Failed to fetch specs for variant: ${car.variant}`);
-                continue;
-            }
-            
-            const variantData = await variantResponse.json();
+        if (snapshot.exists()) {
+            const favorites = snapshot.val();
+            const favoriteArray = Object.values(favorites);
 
-            const card = document.createElement("div");
-            card.classList.add("card");
-
-            card.innerHTML = `
-                <img src="${variantData.Image}" alt="${variantData.Model}">
-                <div class="name">${variantData.Brand} ${variantData.Model}</div>
-            `;
-
-            card.addEventListener("click", function () {
-                console.log("Card clicked - Populating popup");
-                console.log(variantData);
+            for (const car of favoriteArray) {
+                const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${car.variant}`, {
+                    method: "GET",
+                    headers: { "Content-Type": "application/json" }
+                });
                 
-                // Check if popup elements exist before trying to populate them
-                const carTitleElement = document.querySelector(".car-title");
-                const imgElement = document.querySelector(".img-fave-frame img");
-                const specContainer = document.querySelector(".spec-fave-frame .spec-card-container");
-                
-                if (carTitleElement && imgElement && specContainer) {
-                    // Populate the popup with the selected car's details
-                    carTitleElement.textContent = `${variantData.Brand} ${variantData.Model}`;
-                    imgElement.src = variantData.Image;
-                    specContainer.innerHTML = `
-                        <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${variantData.Brand}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${variantData.Model}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${variantData.BodyType}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${car.Variant}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${variantData.DriveTrain}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${variantData.Engine}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${variantData.Horsepower}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Transmission</strong><br><span class="spec-value">${variantData.Transmission}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Fuel Type</strong><br><span class="spec-value">${variantData.FuelType}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Ground Clearance</strong><br><span class="spec-value">${variantData.GroundClearance}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Cargo Space</strong><br><span class="spec-value">${variantData.CargoSpace}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Seating Capacity</strong><br><span class="spec-value">${variantData.SeatingCapacity}</span></div>
-                        <div class="spec-card"><strong class="spec-label">Price</strong><br><span class="spec-value">${variantData.Price}</span></div>
-                    `;
-
-                    // Check if populateColors function exists before calling it
-                    if (typeof populateColors === 'function') {
-                        populateColors(variantData.Model);
-                    }
-
-                    // Open the popup - check if togglePopup function exists
-                    if (typeof togglePopup === 'function') {
-                        togglePopup("card-popup");
-                    }
-                } else {
-                    console.warn("Popup elements not found on this page");
+                if (!variantResponse.ok) {
+                    console.error(`Failed to fetch specs for variant: ${car.variant}`);
+                    continue;
                 }
-            });
+                
+                const variantData = await variantResponse.json();
 
-            cardContainer.appendChild(card);
+                const card = document.createElement("div");
+                card.classList.add("card");
+
+                card.innerHTML = `
+                    <img src="${variantData.Image}" alt="${variantData.Model}">
+                    <div class="name">${variantData.Brand} ${variantData.Model}</div>
+                `;
+
+                card.addEventListener("click", function () {
+                    console.log("Card clicked - Populating popup");
+                    console.log(variantData);
+                    
+                    // Check if popup elements exist before trying to populate them
+                    const carTitleElement = document.querySelector(".car-title");
+                    const imgElement = document.querySelector(".img-fave-frame img");
+                    const specContainer = document.querySelector(".spec-fave-frame .spec-card-container");
+                    
+                    if (carTitleElement && imgElement && specContainer) {
+                        // Populate the popup with the selected car's details
+                        carTitleElement.textContent = `${variantData.Brand} ${variantData.Model}`;
+                        imgElement.src = variantData.Image;
+                        specContainer.innerHTML = `
+                            <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${variantData.Brand}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${variantData.Model}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${variantData.BodyType}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${car.variant}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${variantData.DriveTrain}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${variantData.Engine}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${variantData.Horsepower}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Transmission</strong><br><span class="spec-value">${variantData.Transmission}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Fuel Type</strong><br><span class="spec-value">${variantData.FuelType}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Ground Clearance</strong><br><span class="spec-value">${variantData.GroundClearance}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Cargo Space</strong><br><span class="spec-value">${variantData.CargoSpace}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Seating Capacity</strong><br><span class="spec-value">${variantData.SeatingCapacity}</span></div>
+                            <div class="spec-card"><strong class="spec-label">Price</strong><br><span class="spec-value">${variantData.Price}</span></div>
+                        `;
+
+                        // Check if populateColors function exists before calling it
+                        if (typeof populateColors === 'function') {
+                            populateColors(variantData.Model);
+                        }
+
+                        // Open the popup - check if togglePopup function exists
+                        if (typeof togglePopup === 'function') {
+                            togglePopup("card-popup");
+                        }
+                    } else {
+                        console.warn("Popup elements not found on this page");
+                    }
+                });
+
+                cardContainer.appendChild(card);
+            }
+        } else {
+            console.log('No favorites found');
+            cardContainer.innerHTML = '<p>No favorite cars yet. Start adding some!</p>';
         }
     } catch (error) {
         console.error("Error loading favorites:", error);
@@ -1216,6 +1239,70 @@ async function loadFavorites() {
         }
     }
 }
+
+// Function to check if a car is already favorited (useful for setting heart icon state)
+async function isCarFavorited(variant) {
+    const user = auth.currentUser;
+    if (!user) return false;
+
+    try {
+        const userId = user.uid;
+        const favoriteRef = ref(database, `favorites/${userId}/${variant}`);
+        const snapshot = await get(favoriteRef);
+        return snapshot.exists();
+    } catch (error) {
+        console.error('Error checking favorite status:', error);
+        return false;
+    }
+}
+
+// Function to initialize heart icons when page loads
+async function initializeFavoriteIcons() {
+    const user = auth.currentUser;
+    if (!user) return;
+
+    // Find all heart icons on the page
+    const heartIcons = document.querySelectorAll('[onclick*="addToFave"]');
+    
+    for (const icon of heartIcons) {
+        // Extract variant from onclick attribute or data attribute
+        const onclickAttr = icon.getAttribute('onclick');
+        const variantMatch = onclickAttr.match(/addToFave\([^,]+,\s*['"]([^'"]+)['"]\)/);
+        
+        if (variantMatch) {
+            const variant = variantMatch[1];
+            const isFavorited = await isCarFavorited(variant);
+            
+            if (isFavorited) {
+                icon.classList.add('fa-solid');
+            } else {
+                icon.classList.remove('fa-solid');
+            }
+        }
+    }
+}
+
+// Listen for authentication state changes
+onAuthStateChanged(auth, (user) => {
+    if (user) {
+        console.log('User is signed in:', user.uid);
+        // Initialize favorite icons when user signs in
+        initializeFavoriteIcons();
+    } else {
+        console.log('User is signed out');
+        // Clear all heart icons when user signs out
+        const heartIcons = document.querySelectorAll('.fa-solid');
+        heartIcons.forEach(icon => icon.classList.remove('fa-solid'));
+    }
+});
+
+// Call this when the favorites page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Only load favorites if we're on the favorites page
+    if (document.getElementById('favorites-items') || document.getElementById('card-container')) {
+        loadFavorites();
+    }
+})
 
 //////////////////////////////
 // Allows users to change  //
