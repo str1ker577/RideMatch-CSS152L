@@ -389,6 +389,8 @@ def toggle_fave():
         user_id = session['user']
         data = request.get_json()
         
+        app.logger.info(f"Toggle fave request from user {user_id}: {data}")
+        
         if not data:
             app.logger.error("No JSON data received for toggle-fave")
             return jsonify({"error": "No data provided"}), 400
@@ -402,11 +404,13 @@ def toggle_fave():
 
         # Sanitize the variant for Firebase path
         sanitized_variant = sanitize_firebase_key(variant)
-        app.logger.info(f"Original variant: {variant}, Sanitized: {sanitized_variant}")
+        app.logger.info(f"Processing variant: {variant} -> {sanitized_variant}")
 
         # Use Firebase Realtime Database
         favorites_ref = realtime_db_ref.child('favorites').child(user_id)
         existing_fave = favorites_ref.child(sanitized_variant).get()
+
+        app.logger.info(f"Existing favorite check for {sanitized_variant}: {existing_fave}")
 
         if liked:
             # Add to favorites
@@ -417,18 +421,37 @@ def toggle_fave():
                 'dateAdded': datetime.utcnow().isoformat() + 'Z',
                 'userEmail': session.get('email', 'Unknown')
             }
+            
+            # Set the favorite data
             favorites_ref.child(sanitized_variant).set(favorite_data)
-            app.logger.info(f"Added favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
-            return jsonify({"status": "added", "variant": variant, "liked": True}), 200
+            app.logger.info(f"✅ Added favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
+            
+            return jsonify({
+                "status": "added", 
+                "variant": variant, 
+                "liked": True,
+                "message": "Added to favorites"
+            }), 200
         else:
             # Remove from favorites
             if existing_fave:
                 favorites_ref.child(sanitized_variant).delete()
-                app.logger.info(f"Removed favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
-                return jsonify({"status": "removed", "variant": variant, "liked": False}), 200
+                app.logger.info(f"✅ Removed favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
+                
+                return jsonify({
+                    "status": "removed", 
+                    "variant": variant, 
+                    "liked": False,
+                    "message": "Removed from favorites"
+                }), 200
             else:
-                app.logger.info("Favorite not found, nothing to remove")
-                return jsonify({"status": "not_found", "variant": variant, "liked": False}), 200
+                app.logger.info(f"Favorite not found for removal: {variant}")
+                return jsonify({
+                    "status": "not_found", 
+                    "variant": variant, 
+                    "liked": False,
+                    "message": "Favorite not found"
+                }), 200
             
     except Exception as e:
         app.logger.error(f"Error toggling favorite: {e}")
@@ -455,7 +478,7 @@ def get_faves():
         favorites_ref = realtime_db_ref.child('favorites').child(user_id)
         favorites_data = favorites_ref.get() or {}
         
-        app.logger.info(f"Raw favorites data: {favorites_data}")
+        app.logger.info(f"Raw favorites data for {user_id}: {favorites_data}")
 
         # Convert to list format
         favorite_variants = []
@@ -463,10 +486,23 @@ def get_faves():
             if isinstance(variant_data, dict):
                 # Use the original variant name from the stored data
                 original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
-                variant_data['variant'] = original_variant
-                favorite_variants.append(variant_data)
+                
+                # Ensure we have the complete variant data
+                complete_variant_data = {
+                    'variant': original_variant,
+                    'sanitized_key': sanitized_key,
+                    'timestamp': variant_data.get('timestamp', int(time.time() * 1000)),
+                    'dateAdded': variant_data.get('dateAdded', datetime.utcnow().isoformat() + 'Z'),
+                    'userEmail': variant_data.get('userEmail', session.get('email', 'Unknown'))
+                }
+                
+                favorite_variants.append(complete_variant_data)
 
-        app.logger.info(f"Retrieved {len(favorite_variants)} favorites for user {user_id}")
+        app.logger.info(f"✅ Retrieved {len(favorite_variants)} favorites for user {user_id}")
+        
+        # Sort by timestamp (newest first)
+        favorite_variants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
         return jsonify(favorite_variants), 200
         
     except Exception as e:
@@ -695,17 +731,31 @@ def find_car_image(model):
             app.logger.warning(f"Image folder not found: {IMAGE_FOLDER}")
             return "/static/resources/tesr.png"
         
-        model = ''.join(e for e in model if e.isalnum() or e == '_')
+        # Clean the model name for matching
+        model_clean = ''.join(e for e in model if e.isalnum() or e == '_')
+        
+        # Try different matching strategies
         for filename in os.listdir(IMAGE_FOLDER):
-            if filename.lower().startswith(model.lower()):
-                return f"/static/resources/{filename}"
+            if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
+                filename_clean = filename.lower()
+                model_lower = model_clean.lower()
+                
+                # Try exact match
+                if filename_clean.startswith(model_lower):
+                    app.logger.info(f"Found image for {model}: {filename}")
+                    return f"/static/resources/{filename}"
+                
+                # Try partial match
+                if model_lower in filename_clean:
+                    app.logger.info(f"Found partial match image for {model}: {filename}")
+                    return f"/static/resources/{filename}"
         
         app.logger.info(f"No image found for model {model}, using default")
         return "/static/resources/tesr.png"
+        
     except Exception as e:
         app.logger.error(f"Error finding image for model {model}: {e}")
         return "/static/resources/tesr.png"
-    
 ###########################
 # Pull Data from CSV file #
 ###########################
@@ -719,38 +769,52 @@ def get_specs():
     variant = request.args.get("variant", "").strip()
     if not variant:
         app.logger.warning("No variant specified for specs lookup")
-        return jsonify({}), 400
+        return jsonify({"error": "Variant parameter required"}), 400
 
     try:
+        app.logger.info(f"Looking up specs for variant: {variant}")
+        
+        # Try exact match first
         specs_df = df[df["Variant"].str.lower() == variant.lower()]
+        
         if specs_df.empty:
-            app.logger.warning(f"Variant not found: {variant}")
-            return jsonify({"error": "Variant not found"}), 404
+            app.logger.warning(f"Exact variant not found: {variant}")
+            # Try partial match as fallback
+            specs_df = df[df["Variant"].str.contains(variant, case=False, na=False)]
+            
+            if specs_df.empty:
+                app.logger.warning(f"No variant found for: {variant}")
+                available_variants = df["Variant"].dropna().unique()[:10]  # Show first 10 for debugging
+                app.logger.info(f"Available variants (sample): {list(available_variants)}")
+                return jsonify({"error": "Variant not found", "available_variants": list(available_variants)}), 404
         
         specs = specs_df.iloc[0]
         image_path = find_car_image(str(specs["Model"]))
         
         car_specs = {
-            "Brand": str(specs["Brand"]),
-            "Model": str(specs["Model"]),
-            "Engine": str(specs["Engine"]),
-            "Horsepower": int(specs["Horsepower"]),
-            "DriveTrain": str(specs["Drive_Train"]),
-            "Transmission": str(specs["Transmission"]),
-            "BodyType": str(specs["Body_Type"]),
-            "FuelType": str(specs["Fuel_Type"]),
-            "GroundClearance": float(specs["Ground_Clearance"]),
-            "SeatingCapacity": int(specs["Seating_Capacity"]),
-            "CargoSpace": int(specs["Cargo_space"]),
-            "Price": float(specs["Price"]),
-            "Image": image_path
+            "Brand": str(specs.get("Brand", "Unknown")),
+            "Model": str(specs.get("Model", "Unknown")),
+            "Engine": str(specs.get("Engine", "N/A")),
+            "Horsepower": int(specs.get("Horsepower", 0)) if pd.notna(specs.get("Horsepower")) else 0,
+            "DriveTrain": str(specs.get("Drive_Train", "N/A")),
+            "Transmission": str(specs.get("Transmission", "N/A")),
+            "BodyType": str(specs.get("Body_Type", "N/A")),
+            "FuelType": str(specs.get("Fuel_Type", "N/A")),
+            "GroundClearance": float(specs.get("Ground_Clearance", 0)) if pd.notna(specs.get("Ground_Clearance")) else 0,
+            "SeatingCapacity": int(specs.get("Seating_Capacity", 0)) if pd.notna(specs.get("Seating_Capacity")) else 0,
+            "CargoSpace": int(specs.get("Cargo_space", 0)) if pd.notna(specs.get("Cargo_space")) else 0,
+            "Price": float(specs.get("Price", 0)) if pd.notna(specs.get("Price")) else 0,
+            "Image": image_path,
+            "Variant": str(specs.get("Variant", variant))  # Include the variant in response
         }
 
-        app.logger.info(f"Retrieved specs for variant: {variant}")
+        app.logger.info(f"✅ Retrieved specs for variant: {variant}")
         return jsonify(car_specs)
         
     except Exception as e:
         app.logger.error(f"Error getting specs for variant {variant}: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to get specs: {str(e)}"}), 500
     
 ###############################

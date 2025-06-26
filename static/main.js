@@ -46,6 +46,10 @@ function updateUIForAuthState() {
   }
 }
 
+
+window.removeFavoriteFromDisplay = removeFavoriteFromDisplay;
+window.addToFave = addToFave;
+
 //////////////////////
 //Side Menu Function//
 //////////////////////
@@ -126,12 +130,16 @@ async function initializeFirebase() {
         
         auth = firebase.auth();
         
-        // Test database connection
+        // FIXED: Test database connection properly
         try {
-            const testRef = firebase.database().ref('test');
+            // Test the database connection
+            const database = firebase.database();
+            const testRef = database.ref('test');
+            await testRef.once('value'); // This will throw an error if connection fails
             console.log('✅ Firebase database connection successful');
         } catch (dbError) {
             console.error('❌ Firebase database connection failed:', dbError);
+            // Don't throw here, let the app continue but log the error
         }
         
         // Monitor authentication state
@@ -149,31 +157,23 @@ async function initializeFirebase() {
                 if (loginBtn) loginBtn.style.display = 'none';
                 if (profileContainer) profileContainer.style.display = 'block';
 
-                // 🌟 Begin: Profile image vs icon logic
-                const profilePic = document.getElementById('profile-pic');      // <img>
-                const profileIcon = document.getElementById('profile-icon');    // <i>
+                // Profile image vs icon logic
+                const profilePic = document.getElementById('profile-pic');
+                const profileIcon = document.getElementById('profile-icon');
 
                 currentUser = user;
-
-                updateUIForAuthState()
+                updateUIForAuthState();
 
                 if (user.photoURL) {
-                    // User has uploaded a real photo
                     if (profileIcon) profileIcon.style.display = 'none';
                     if (profilePic) {
-                    profilePic.src = user.photoURL;
-                    profilePic.style.display = 'block';
-                    }
-                    else {
                         profilePic.src = user.photoURL;
                         profilePic.style.display = 'block';
                     }
                 } else {
-                    // No profile photo uploaded – show default icon
                     if (profileIcon) profileIcon.style.display = 'inline-block';
                     if (profilePic) profilePic.style.display = 'none';
                 }
-                // 🌟 End: Profile image vs icon logic
 
                 console.log('User is signed in:', user.email);
             } else {
@@ -188,6 +188,7 @@ async function initializeFirebase() {
                 if (profileContainer) profileContainer.style.display = 'none';
 
                 currentUser = null;
+                updateUIForAuthState();
 
                 console.log('User is signed out');
             }
@@ -629,15 +630,36 @@ function getFuelTypeIcon(fuelType) {
 
 
 document.addEventListener("DOMContentLoaded", function () {
+    console.log('DOM loaded, initializing...');
+    
     // Initialize Firebase first
     initializeFirebase();
 
     // Only load favorites if the favorites container exists
     const favoritesContainer = document.getElementById("favorites-items");
     if (favoritesContainer) {
-        loadFavorites(); // Call loadFavorites to populate favorites on page load
+        console.log('Favorites page detected, will load favorites after auth');
+        // Don't load favorites immediately, wait for auth state
+        // The auth state change handler will trigger loadFavorites when user is confirmed
+        
+        // Set up a listener for when the user auth state is determined
+        const checkAuthAndLoadFavorites = () => {
+            if (auth && auth.currentUser) {
+                console.log('Auth confirmed, loading favorites');
+                loadFavorites();
+            } else if (auth) {
+                console.log('No current user, skipping favorites load');
+            } else {
+                // Auth not ready yet, check again in a bit
+                setTimeout(checkAuthAndLoadFavorites, 500);
+            }
+        };
+        
+        // Start checking after a small delay to let Firebase initialize
+        setTimeout(checkAuthAndLoadFavorites, 1000);
     }
 
+    // Initialize other components as before
     const filterButton = document.getElementById("filter-btn"); 
     const resultsFrame = document.querySelector(".results-frame");
 
@@ -1099,6 +1121,9 @@ async function populateVariants() {
 //FAVOURITES Function//
 //////////////////////
 async function addToFave(event, variant) {
+    // Prevent event bubbling
+    event.stopPropagation();
+    
     // Check if user is authenticated
     if (!auth || !auth.currentUser) {
         alert('Please sign in to save favorites');
@@ -1108,29 +1133,44 @@ async function addToFave(event, variant) {
     const isLiked = event.target.classList.contains('fa-solid');
     const likedStatus = !isLiked;
 
+    console.log('Adding to favorites:', variant, 'liked:', likedStatus);
+
     try {
-        // Use Flask backend (same as testimonials/forum)
+        // Use Flask backend
         const response = await fetch(`${baseUrl}/toggle-fave`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ variant: variant, liked: likedStatus })
         });
         
+        console.log('Response status:', response.status);
+        
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const errorText = await response.text();
+            console.error('Server error:', errorText);
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
         }
         
         const data = await response.json();
         console.log('Backend response:', data);
         
-        if (data.liked) {
+        if (data.liked || data.status === 'added') {
             // Change to solid icon
+            event.target.classList.remove('fa-regular');
             event.target.classList.add('fa-solid');
             console.log('Added to favorites:', variant);
         } else {
             // Change to outline icon
             event.target.classList.remove('fa-solid');
+            event.target.classList.add('fa-regular');
             console.log('Removed from favorites:', variant);
+        }
+
+        // FIXED: If we're on the favorites page, reload the favorites immediately
+        const favoritesContainer = document.getElementById("favorites-items");
+        if (favoritesContainer) {
+            console.log('Reloading favorites because we are on favorites page');
+            loadFavorites();
         }
 
     } catch (error) {
@@ -1138,6 +1178,7 @@ async function addToFave(event, variant) {
         alert('Error updating favorites. Please try again.');
     }
 }
+
 //////////////////////
 // Loads the users // 
 // Favorite cars  //
@@ -1148,22 +1189,27 @@ async function loadFavorites() {
 
     // Check if user is authenticated
     if (!auth || !auth.currentUser) {
-        console.log('User not authenticated');
+        console.log('User not authenticated for loading favorites');
         return;
     }
 
     try {
-        // Use Flask backend (same as testimonials/forum)
+        // Use Flask backend
         const response = await fetch(`${baseUrl}/get-faves`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
         });
 
+        console.log('Get favorites response status:', response.status);
+
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            const errorText = await response.text();
+            console.error('Get favorites error:', errorText);
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
         }
 
         const favorites = await response.json();
+        console.log('Received favorites:', favorites);
         
         // Check if favorites list element exists before trying to use it
         const favoritesList = document.getElementById("favorites-items");
@@ -1182,79 +1228,89 @@ async function loadFavorites() {
         }
 
         if (favorites.length > 0) {
+            console.log(`Processing ${favorites.length} favorites`);
+            
             for (const car of favorites) {
-                const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${car.variant}`, {
-                    method: "GET",
-                    headers: { "Content-Type": "application/json" }
-                });
+                console.log('Processing favorite car:', car);
                 
-                if (!variantResponse.ok) {
-                    console.error(`Failed to fetch specs for variant: ${car.variant}`);
+                try {
+                    const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${encodeURIComponent(car.variant)}`, {
+                        method: "GET",
+                        headers: { "Content-Type": "application/json" }
+                    });
+                    
+                    if (!variantResponse.ok) {
+                        console.error(`Failed to fetch specs for variant: ${car.variant}, status: ${variantResponse.status}`);
+                        continue;
+                    }
+                    
+                    const variantData = await variantResponse.json();
+                    console.log('Got variant data:', variantData);
+
+                    const card = document.createElement("div");
+                    card.classList.add("card");
+
+                    card.innerHTML = `
+                        <img src="${variantData.Image || '/static/resources/tesr.png'}" alt="${variantData.Model || 'Car'}">
+                        <div class="name">${variantData.Brand || 'Unknown'} ${variantData.Model || 'Model'}</div>
+                        <div class="favorite-actions">
+                            <button class="remove-favorite-btn" onclick="removeFavoriteFromDisplay('${car.variant}', this)">
+                                <i class="fas fa-heart-broken"></i> Remove
+                            </button>
+                        </div>
+                    `;
+
+                    card.addEventListener("click", function (e) {
+                        // Don't trigger popup if remove button was clicked
+                        if (e.target.closest('.remove-favorite-btn')) return;
+                        
+                        console.log("Card clicked - Populating popup");
+                        
+                        // Check if popup elements exist before trying to populate them
+                        const carTitleElement = document.querySelector(".car-title");
+                        const imgElement = document.querySelector(".img-fave-frame img");
+                        const specContainer = document.querySelector(".spec-fave-frame .spec-card-container");
+                        
+                        if (carTitleElement && imgElement && specContainer) {
+                            // Populate the popup with the selected car's details
+                            carTitleElement.textContent = `${variantData.Brand} ${variantData.Model}`;
+                            imgElement.src = variantData.Image || '/static/resources/tesr.png';
+                            specContainer.innerHTML = `
+                                <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${variantData.Brand}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${variantData.Model}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${variantData.BodyType}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${car.variant}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${variantData.DriveTrain}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${variantData.Engine}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${variantData.Horsepower}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Transmission</strong><br><span class="spec-value">${variantData.Transmission}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Fuel Type</strong><br><span class="spec-value">${variantData.FuelType}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Ground Clearance</strong><br><span class="spec-value">${variantData.GroundClearance}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Cargo Space</strong><br><span class="spec-value">${variantData.CargoSpace}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Seating Capacity</strong><br><span class="spec-value">${variantData.SeatingCapacity}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Price</strong><br><span class="spec-value">${variantData.Price}</span></div>
+                            `;
+
+                            // Check if populateColors function exists before calling it
+                            if (typeof populateColors === 'function') {
+                                populateColors(variantData.Model);
+                            }
+
+                            // Open the popup - check if togglePopup function exists
+                            if (typeof togglePopup === 'function') {
+                                togglePopup("card-popup");
+                            }
+                        } else {
+                            console.warn("Popup elements not found on this page");
+                        }
+                    });
+
+                    cardContainer.appendChild(card);
+                    
+                } catch (specError) {
+                    console.error('Error fetching specs for variant:', car.variant, specError);
                     continue;
                 }
-                
-                const variantData = await variantResponse.json();
-
-                const card = document.createElement("div");
-                card.classList.add("card");
-
-                card.innerHTML = `
-                    <img src="${variantData.Image}" alt="${variantData.Model}">
-                    <div class="name">${variantData.Brand} ${variantData.Model}</div>
-                    <div class="favorite-actions">
-                        <button class="remove-favorite-btn" onclick="removeFavoriteFromDisplay('${car.variant}', this)">
-                            <i class="fas fa-heart-broken"></i> Remove
-                        </button>
-                    </div>
-                `;
-
-                card.addEventListener("click", function (e) {
-                    // Don't trigger popup if remove button was clicked
-                    if (e.target.closest('.remove-favorite-btn')) return;
-                    
-                    console.log("Card clicked - Populating popup");
-                    console.log(variantData);
-                    
-                    // Check if popup elements exist before trying to populate them
-                    const carTitleElement = document.querySelector(".car-title");
-                    const imgElement = document.querySelector(".img-fave-frame img");
-                    const specContainer = document.querySelector(".spec-fave-frame .spec-card-container");
-                    
-                    if (carTitleElement && imgElement && specContainer) {
-                        // Populate the popup with the selected car's details
-                        carTitleElement.textContent = `${variantData.Brand} ${variantData.Model}`;
-                        imgElement.src = variantData.Image;
-                        specContainer.innerHTML = `
-                            <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${variantData.Brand}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${variantData.Model}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${variantData.BodyType}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${car.variant}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${variantData.DriveTrain}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${variantData.Engine}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${variantData.Horsepower}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Transmission</strong><br><span class="spec-value">${variantData.Transmission}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Fuel Type</strong><br><span class="spec-value">${variantData.FuelType}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Ground Clearance</strong><br><span class="spec-value">${variantData.GroundClearance}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Cargo Space</strong><br><span class="spec-value">${variantData.CargoSpace}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Seating Capacity</strong><br><span class="spec-value">${variantData.SeatingCapacity}</span></div>
-                            <div class="spec-card"><strong class="spec-label">Price</strong><br><span class="spec-value">${variantData.Price}</span></div>
-                        `;
-
-                        // Check if populateColors function exists before calling it
-                        if (typeof populateColors === 'function') {
-                            populateColors(variantData.Model);
-                        }
-
-                        // Open the popup - check if togglePopup function exists
-                        if (typeof togglePopup === 'function') {
-                            togglePopup("card-popup");
-                        }
-                    } else {
-                        console.warn("Popup elements not found on this page");
-                    }
-                });
-
-                cardContainer.appendChild(card);
             }
         } else {
             console.log('No favorites found');
@@ -1262,17 +1318,19 @@ async function loadFavorites() {
         }
     } catch (error) {
         console.error("Error loading favorites:", error);
-        // Optionally show user-friendly error message
-        const favoritesList = document.getElementById("favorites-items");
-        if (favoritesList) {
-            favoritesList.innerHTML = '<p style="color: red;">Error loading favorites. Please try again later.</p>';
+        // Show user-friendly error message
+        const cardContainer = document.getElementById("card-container");
+        if (cardContainer) {
+            cardContainer.innerHTML = '<p style="color: red; text-align: center;">Error loading favorites. Please try again later.</p>';
         }
     }
 }
 
-// Function to remove favorite from display
+// FIXED: Better removeFavoriteFromDisplay function
 async function removeFavoriteFromDisplay(variant, buttonElement) {
     if (!auth || !auth.currentUser) return;
+
+    console.log('Removing favorite from display:', variant);
 
     try {
         const response = await fetch(`${baseUrl}/toggle-fave`, {
@@ -1282,6 +1340,8 @@ async function removeFavoriteFromDisplay(variant, buttonElement) {
         });
         
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Remove favorite error:', errorText);
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
@@ -1304,9 +1364,6 @@ async function removeFavoriteFromDisplay(variant, buttonElement) {
         alert('Error removing favorite. Please try again.');
     }
 }
-
-// Make functions globally available
-window.removeFavoriteFromDisplay = removeFavoriteFromDisplay;
 
 //////////////////////////////
 // Allows users to change  //
