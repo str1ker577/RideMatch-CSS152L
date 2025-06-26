@@ -351,88 +351,87 @@ def profile():
 #################################
 # Toggle Favorite/Like Function #
 #################################
+def sanitize_firebase_key(key):
+    """Sanitize a string to be used as a Firebase key"""
+    # Replace illegal characters with safe alternatives
+    sanitized = key.replace('.', '_DOT_')
+    sanitized = sanitized.replace(' ', '_SPACE_')
+    sanitized = sanitized.replace('/', '_SLASH_')
+    sanitized = sanitized.replace('[', '_LBRACKET_')
+    sanitized = sanitized.replace(']', '_RBRACKET_')
+    sanitized = sanitized.replace('#', '_HASH_')
+    sanitized = sanitized.replace('$', '_DOLLAR_')
+    return sanitized
+
+def unsanitize_firebase_key(key):
+    """Convert sanitized Firebase key back to original"""
+    original = key.replace('_DOT_', '.')
+    original = original.replace('_SPACE_', ' ')
+    original = original.replace('_SLASH_', '/')
+    original = original.replace('_LBRACKET_', '[')
+    original = original.replace('_RBRACKET_', ']')
+    original = original.replace('_HASH_', '#')
+    original = original.replace('_DOLLAR_', '$')
+    return original
+
 @app.route('/toggle-fave', methods=['POST'])
 def toggle_fave():
-    """Debug version of toggle favorite"""
-    app.logger.info("=== DEBUG: toggle-fave endpoint called ===")
+    """Toggle favorite status using Firebase Realtime Database"""
+    if 'user' not in session:
+        app.logger.warning("Unauthorized access to toggle-fave")
+        return jsonify({"error": "User not logged in"}), 401
+    
+    if not realtime_db_ref:
+        app.logger.error("Database not available for toggle-fave")
+        return jsonify({"error": "Database not available"}), 500
     
     try:
-        # Check session
-        app.logger.info(f"Session keys: {list(session.keys())}")
-        app.logger.info(f"User in session: {'user' in session}")
-        
-        if 'user' not in session:
-            app.logger.warning("No user in session")
-            return jsonify({"error": "User not logged in"}), 401
-        
         user_id = session['user']
-        app.logger.info(f"User ID: {user_id}")
-        
-        # Check database
-        app.logger.info(f"realtime_db_ref available: {realtime_db_ref is not None}")
-        
-        if not realtime_db_ref:
-            app.logger.error("Database not available")
-            return jsonify({"error": "Database not available"}), 500
-        
-        # Check request data
-        app.logger.info(f"Request content type: {request.content_type}")
-        app.logger.info(f"Request data: {request.get_data()}")
-        
         data = request.get_json()
-        app.logger.info(f"Parsed JSON data: {data}")
         
         if not data:
-            app.logger.error("No JSON data received")
+            app.logger.error("No JSON data received for toggle-fave")
             return jsonify({"error": "No data provided"}), 400
             
         variant = data.get('variant')
         liked = data.get('liked')
-        
-        app.logger.info(f"Variant: {variant}, Liked: {liked}")
 
         if not variant:
-            app.logger.error("No variant specified")
+            app.logger.error("No variant specified for toggle-fave")
             return jsonify({"error": "Variant required"}), 400
 
-        # Try database operation
-        app.logger.info("Attempting database operation...")
-        
+        # Sanitize the variant for Firebase path
+        sanitized_variant = sanitize_firebase_key(variant)
+        app.logger.info(f"Original variant: {variant}, Sanitized: {sanitized_variant}")
+
+        # Use Firebase Realtime Database
         favorites_ref = realtime_db_ref.child('favorites').child(user_id)
-        app.logger.info(f"Created favorites_ref: {favorites_ref}")
-        
-        existing_fave = favorites_ref.child(variant).get()
-        app.logger.info(f"Existing favorite: {existing_fave}")
+        existing_fave = favorites_ref.child(sanitized_variant).get()
 
         if liked:
-            app.logger.info("Adding to favorites...")
+            # Add to favorites
             favorite_data = {
-                'variant': variant,
+                'variant': variant,  # Store original variant name
+                'sanitized_key': sanitized_variant,  # Store sanitized key for reference
                 'timestamp': int(time.time() * 1000),
                 'dateAdded': datetime.utcnow().isoformat() + 'Z',
                 'userEmail': session.get('email', 'Unknown')
             }
-            app.logger.info(f"Favorite data: {favorite_data}")
-            
-            result = favorites_ref.child(variant).set(favorite_data)
-            app.logger.info(f"Set result: {result}")
-            
-            app.logger.info(f"Successfully added favorite: {variant}")
+            favorites_ref.child(sanitized_variant).set(favorite_data)
+            app.logger.info(f"Added favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
             return jsonify({"status": "added", "variant": variant, "liked": True}), 200
         else:
-            app.logger.info("Removing from favorites...")
+            # Remove from favorites
             if existing_fave:
-                result = favorites_ref.child(variant).delete()
-                app.logger.info(f"Delete result: {result}")
-                app.logger.info(f"Successfully removed favorite: {variant}")
+                favorites_ref.child(sanitized_variant).delete()
+                app.logger.info(f"Removed favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
                 return jsonify({"status": "removed", "variant": variant, "liked": False}), 200
             else:
                 app.logger.info("Favorite not found, nothing to remove")
                 return jsonify({"status": "not_found", "variant": variant, "liked": False}), 200
             
     except Exception as e:
-        app.logger.error(f"Exception in toggle-fave: {e}")
-        app.logger.error(f"Exception type: {type(e)}")
+        app.logger.error(f"Error toggling favorite: {e}")
         import traceback
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
@@ -452,7 +451,7 @@ def get_faves():
         user_id = session['user']
         app.logger.info(f"Getting favorites for user: {user_id}")
         
-        # Get favorites from Firebase Realtime Database (same as testimonials/forum)
+        # Get favorites from Firebase Realtime Database
         favorites_ref = realtime_db_ref.child('favorites').child(user_id)
         favorites_data = favorites_ref.get() or {}
         
@@ -460,9 +459,11 @@ def get_faves():
 
         # Convert to list format
         favorite_variants = []
-        for variant_key, variant_data in favorites_data.items():
+        for sanitized_key, variant_data in favorites_data.items():
             if isinstance(variant_data, dict):
-                variant_data['variant'] = variant_key
+                # Use the original variant name from the stored data
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
+                variant_data['variant'] = original_variant
                 favorite_variants.append(variant_data)
 
         app.logger.info(f"Retrieved {len(favorite_variants)} favorites for user {user_id}")
