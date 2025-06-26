@@ -436,6 +436,43 @@ def toggle_fave():
         import traceback
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
+
+@app.route('/get-faves', methods=['POST'])
+def get_faves():
+    """Get user's favorites using Firebase Realtime Database"""
+    if 'user' not in session:
+        app.logger.warning("Unauthorized access to favorites")
+        return jsonify({"error": "Not logged in"}), 401
+    
+    if not realtime_db_ref:
+        app.logger.error("Database not available for get-faves")
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        user_id = session['user']
+        app.logger.info(f"Getting favorites for user: {user_id}")
+        
+        # Get favorites from Firebase Realtime Database (same as testimonials/forum)
+        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+        favorites_data = favorites_ref.get() or {}
+        
+        app.logger.info(f"Raw favorites data: {favorites_data}")
+
+        # Convert to list format
+        favorite_variants = []
+        for variant_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                variant_data['variant'] = variant_key
+                favorite_variants.append(variant_data)
+
+        app.logger.info(f"Retrieved {len(favorite_variants)} favorites for user {user_id}")
+        return jsonify(favorite_variants), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error retrieving favorites: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to retrieve favorites: {str(e)}"}), 500
     
 #########################
 # Filter Function Logic #
@@ -714,37 +751,6 @@ def get_specs():
     except Exception as e:
         app.logger.error(f"Error getting specs for variant {variant}: {e}")
         return jsonify({"error": f"Failed to get specs: {str(e)}"}), 500
-
-##########################
-# Favorite/Like Function #
-##########################
-@app.route('/test-firebase', methods=['GET'])
-def test_firebase():
-    """Test Firebase connection"""
-    try:
-        app.logger.info("Testing Firebase connection...")
-        
-        if not realtime_db_ref:
-            return jsonify({"error": "realtime_db_ref is None"}), 500
-        
-        # Try to write and read a test value
-        test_ref = realtime_db_ref.child('test')
-        test_data = {'message': 'Hello Firebase!', 'timestamp': int(time.time())}
-        
-        app.logger.info(f"Writing test data: {test_data}")
-        test_ref.set(test_data)
-        
-        app.logger.info("Reading test data back...")
-        result = test_ref.get()
-        
-        app.logger.info(f"Test successful, got back: {result}")
-        return jsonify({"status": "success", "data": result}), 200
-        
-    except Exception as e:
-        app.logger.error(f"Firebase test failed: {e}")
-        import traceback
-        app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": str(e)}), 500
     
 ###############################
 # Testimonials Function Logic #
