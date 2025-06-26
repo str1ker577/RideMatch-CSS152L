@@ -1081,7 +1081,7 @@ async function populateVariants() {
 //FAVOURITES Function//
 //////////////////////
 async function addToFave(event, variant) {
-    // Check if user is authenticated (using your existing auth pattern)
+    // Check if user is authenticated
     if (!auth || !auth.currentUser) {
         alert('Please sign in to save favorites');
         return;
@@ -1092,8 +1092,13 @@ async function addToFave(event, variant) {
 
     try {
         const userId = auth.currentUser.uid;
-        const database = firebase.database();
-        const favoriteRef = database.ref(`favorites/${userId}/${variant}`);
+        
+        // Make sure Firebase database is available
+        if (typeof firebase === 'undefined' || !firebase.database) {
+            throw new Error('Firebase database not available');
+        }
+        
+        const favoriteRef = firebase.database().ref(`favorites/${userId}/${variant}`);
 
         if (likedStatus) {
             // Add to favorites
@@ -1137,10 +1142,13 @@ async function loadFavorites() {
 
     try {
         const userId = auth.currentUser.uid;
-        const database = firebase.database();
-        const favoritesRef = database.ref(`favorites/${userId}`);
         
-        // Use Firebase v8 syntax
+        // Make sure Firebase database is available
+        if (typeof firebase === 'undefined' || !firebase.database) {
+            throw new Error('Firebase database not available');
+        }
+        
+        const favoritesRef = firebase.database().ref(`favorites/${userId}`);
         const snapshot = await favoritesRef.once('value');
 
         // Check if favorites list element exists before trying to use it
@@ -1257,8 +1265,12 @@ async function isCarFavorited(variant) {
 
     try {
         const userId = auth.currentUser.uid;
-        const database = firebase.database();
-        const favoriteRef = database.ref(`favorites/${userId}/${variant}`);
+        
+        if (typeof firebase === 'undefined' || !firebase.database) {
+            return false;
+        }
+        
+        const favoriteRef = firebase.database().ref(`favorites/${userId}/${variant}`);
         const snapshot = await favoriteRef.once('value');
         return snapshot.exists();
     } catch (error) {
@@ -1273,9 +1285,12 @@ async function removeFavoriteFromDisplay(variant, buttonElement) {
 
     try {
         const userId = auth.currentUser.uid;
-        const database = firebase.database();
-        const favoriteRef = database.ref(`favorites/${userId}/${variant}`);
         
+        if (typeof firebase === 'undefined' || !firebase.database) {
+            throw new Error('Firebase database not available');
+        }
+        
+        const favoriteRef = firebase.database().ref(`favorites/${userId}/${variant}`);
         await favoriteRef.remove();
         
         // Remove the card from display
@@ -1308,8 +1323,11 @@ async function removeFavoriteFromDisplay(variant, buttonElement) {
 async function initializeFavoriteIcons() {
     if (!auth || !auth.currentUser) return;
 
+    console.log('Initializing heart icons for user:', auth.currentUser.email);
+
     // Find all heart icons on the page
     const heartIcons = document.querySelectorAll('[onclick*="addToFave"]');
+    console.log('Found', heartIcons.length, 'heart icons');
     
     for (const icon of heartIcons) {
         // Extract variant from onclick attribute
@@ -1327,11 +1345,26 @@ async function initializeFavoriteIcons() {
             }
         }
     }
+    
+    console.log('Heart icons initialized');
 }
 
-// Enhanced version that works with your existing Firebase auth setup
+// Debug function to check Firebase availability
+function debugFirebaseSetup() {
+    console.log('=== Firebase Debug Info ===');
+    console.log('firebase object:', typeof firebase !== 'undefined' ? 'available' : 'undefined');
+    console.log('firebase.database:', typeof firebase !== 'undefined' && firebase.database ? 'available' : 'not available');
+    console.log('auth object:', typeof auth !== 'undefined' ? 'available' : 'undefined');
+    console.log('auth.currentUser:', auth && auth.currentUser ? auth.currentUser.email : 'no user');
+    console.log('========================');
+}
+
+// Enhanced initialization that works with your existing Firebase setup
 function initializeFavoritesSystem() {
     console.log('Initializing favorites system...');
+    
+    // Debug Firebase setup
+    debugFirebaseSetup();
     
     // Only initialize if we're on a page with favorites functionality
     const favoritesList = document.getElementById("favorites-items");
@@ -1339,65 +1372,68 @@ function initializeFavoritesSystem() {
     const heartIcons = document.querySelectorAll('[onclick*="addToFave"]');
     
     if (favoritesList || cardContainer || heartIcons.length > 0) {
-        // Wait for auth to be ready
-        const checkAuthAndInit = () => {
-            if (auth && auth.currentUser) {
-                console.log('Auth ready, initializing favorites for user:', auth.currentUser.email);
-                
-                // Initialize heart icons if we're on a car listing page
-                if (heartIcons.length > 0) {
-                    initializeFavoriteIcons();
+        // Wait for Firebase and auth to be ready
+        const checkAndInit = () => {
+            if (typeof firebase !== 'undefined' && firebase.database && typeof auth !== 'undefined' && auth) {
+                if (auth.currentUser) {
+                    console.log('Firebase and auth ready, initializing favorites for user:', auth.currentUser.email);
+                    
+                    // Initialize heart icons if we're on a car listing page
+                    if (heartIcons.length > 0) {
+                        initializeFavoriteIcons();
+                    }
+                    
+                    // Load favorites if we're on the favorites page
+                    if (favoritesList || cardContainer) {
+                        loadFavorites();
+                    }
+                } else {
+                    console.log('Firebase ready but no user signed in');
+                    // Clear heart icons
+                    heartIcons.forEach(icon => icon.classList.remove('fa-solid'));
                 }
-                
-                // Load favorites if we're on the favorites page
-                if (favoritesList || cardContainer) {
-                    loadFavorites();
-                }
-            } else if (auth) {
-                // Auth is initialized but no user signed in
-                console.log('Auth ready but no user signed in');
-                
-                // Clear heart icons
-                heartIcons.forEach(icon => icon.classList.remove('fa-solid'));
+            } else {
+                console.log('Waiting for Firebase/auth to be ready...');
+                setTimeout(checkAndInit, 500);
             }
         };
         
-        // If auth is already initialized
-        if (typeof auth !== 'undefined' && auth) {
-            if (auth.currentUser) {
-                checkAuthAndInit();
-            } else {
-                // Listen for auth state changes
-                auth.onAuthStateChanged((user) => {
-                    if (user) {
-                        console.log('Favorites: User signed in:', user.email);
+        // Set up auth state listener if possible
+        if (typeof auth !== 'undefined' && auth && auth.onAuthStateChanged) {
+            auth.onAuthStateChanged((user) => {
+                if (user) {
+                    console.log('Favorites: User signed in:', user.email);
+                    if (heartIcons.length > 0) {
                         initializeFavoriteIcons();
-                        
-                        // Load favorites if we're on the favorites page
-                        if (favoritesList || cardContainer) {
-                            loadFavorites();
-                        }
-                    } else {
-                        console.log('Favorites: User signed out');
-                        // Clear all heart icons
-                        const allHeartIcons = document.querySelectorAll('.fa-solid');
-                        allHeartIcons.forEach(icon => icon.classList.remove('fa-solid'));
                     }
-                });
-            }
-        } else {
-            // Wait for Firebase to be initialized
-            setTimeout(initializeFavoritesSystem, 500);
+                    if (favoritesList || cardContainer) {
+                        loadFavorites();
+                    }
+                } else {
+                    console.log('Favorites: User signed out');
+                    // Clear all heart icons
+                    const allHeartIcons = document.querySelectorAll('[onclick*="addToFave"]');
+                    allHeartIcons.forEach(icon => icon.classList.remove('fa-solid'));
+                }
+            });
         }
+        
+        // Initial check
+        checkAndInit();
+    } else {
+        console.log('No favorites functionality elements found on this page');
     }
 }
 
 // Auto-initialize when the page loads
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeFavoritesSystem);
+    document.addEventListener('DOMContentLoaded', () => {
+        // Wait a bit for other scripts to load
+        setTimeout(initializeFavoritesSystem, 1000);
+    });
 } else {
     // DOM is already loaded
-    initializeFavoritesSystem();
+    setTimeout(initializeFavoritesSystem, 1000);
 }
 
 // Make functions globally available for onclick handlers

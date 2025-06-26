@@ -351,31 +351,6 @@ def profile():
 #################################
 # Toggle Favorite/Like Function #
 #################################
-
-@app.route('/get-faves', methods=['POST'])
-def get_faves():
-    if not db:
-        app.logger.error("Database not available for get-faves")
-        return jsonify({"error": "Database not available"}), 500
-    
-    if 'user' in session:
-        user_id = session['user']
-        try:
-            favorites_ref = db.collection('users').document(user_id).collection('favorites')
-            favorites = favorites_ref.stream()
-
-            favorite_variants = []
-            for favorite in favorites:
-                favorite_variants.append(favorite.to_dict())
-
-            app.logger.info(f"Retrieved {len(favorite_variants)} favorites for user {user_id}")
-            return jsonify(favorite_variants)
-        except Exception as e:
-            app.logger.error(f"Error retrieving favorites: {e}")
-            return jsonify({"error": f"Failed to retrieve favorites: {str(e)}"}), 500
-    else:
-        app.logger.warning("Unauthorized access to favorites")
-        return jsonify({"error": "Not logged in"}), 401
     
 #########################
 # Filter Function Logic #
