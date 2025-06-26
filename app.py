@@ -351,6 +351,91 @@ def profile():
 #################################
 # Toggle Favorite/Like Function #
 #################################
+@app.route('/toggle-fave', methods=['POST'])
+def toggle_fave():
+    """Toggle favorite status using Firebase Realtime Database"""
+    if 'user' not in session:
+        app.logger.warning("Unauthorized access to toggle-fave")
+        return jsonify({"error": "User not logged in"}), 401
+    
+    if not realtime_db_ref:
+        app.logger.error("Database not available for toggle-fave")
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        user_id = session['user']
+        data = request.get_json()
+        
+        if not data:
+            app.logger.error("No JSON data received for toggle-fave")
+            return jsonify({"error": "No data provided"}), 400
+            
+        variant = data.get('variant')
+        liked = data.get('liked')
+
+        if not variant:
+            app.logger.error("No variant specified for toggle-fave")
+            return jsonify({"error": "Variant required"}), 400
+
+        # Use Firebase Realtime Database (same as testimonials/forum)
+        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+        existing_fave = favorites_ref.child(variant).get()
+
+        if liked:
+            # Add to favorites
+            favorite_data = {
+                'variant': variant,
+                'timestamp': int(time.time() * 1000),
+                'dateAdded': datetime.utcnow().isoformat() + 'Z',
+                'userEmail': session.get('email', 'Unknown')
+            }
+            favorites_ref.child(variant).set(favorite_data)
+            app.logger.info(f"Added favorite: {variant} for user {user_id}")
+            return jsonify({"status": "added", "variant": variant, "liked": True}), 200
+        else:
+            # Remove from favorites
+            if existing_fave:
+                favorites_ref.child(variant).delete()
+                app.logger.info(f"Removed favorite: {variant} for user {user_id}")
+                return jsonify({"status": "removed", "variant": variant, "liked": False}), 200
+            else:
+                return jsonify({"status": "not_found", "variant": variant, "liked": False}), 200
+            
+    except Exception as e:
+        app.logger.error(f"Error toggling favorite: {e}")
+        return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
+
+@app.route('/get-faves', methods=['POST'])
+def get_faves():
+    """Get user's favorites using Firebase Realtime Database"""
+    if 'user' not in session:
+        app.logger.warning("Unauthorized access to favorites")
+        return jsonify({"error": "Not logged in"}), 401
+    
+    if not realtime_db_ref:
+        app.logger.error("Database not available for get-faves")
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        user_id = session['user']
+        
+        # Get favorites from Firebase Realtime Database (same as testimonials/forum)
+        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+        favorites_data = favorites_ref.get() or {}
+
+        # Convert to list format
+        favorite_variants = []
+        for variant_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                variant_data['variant'] = variant_key
+                favorite_variants.append(variant_data)
+
+        app.logger.info(f"Retrieved {len(favorite_variants)} favorites for user {user_id}")
+        return jsonify(favorite_variants), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error retrieving favorites: {e}")
+        return jsonify({"error": f"Failed to retrieve favorites: {str(e)}"}), 500
     
 #########################
 # Filter Function Logic #

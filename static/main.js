@@ -1109,37 +1109,35 @@ async function addToFave(event, variant) {
     const likedStatus = !isLiked;
 
     try {
-        const userId = auth.currentUser.uid;
+        // Use Flask backend (same as testimonials/forum)
+        const response = await fetch(`${baseUrl}/toggle-fave`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ variant: variant, liked: likedStatus })
+        });
         
-        // Use Firebase database (now properly configured with correct URL)
-        const favoriteRef = firebase.database().ref(`favorites/${userId}/${variant}`);
-
-        if (likedStatus) {
-            // Add to favorites
-            await favoriteRef.set({
-                variant: variant,
-                timestamp: firebase.database.ServerValue.TIMESTAMP,
-                dateAdded: new Date().toISOString(),
-                userEmail: auth.currentUser.email
-            });
-            
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Backend response:', data);
+        
+        if (data.liked) {
             // Change to solid icon
             event.target.classList.add('fa-solid');
             console.log('Added to favorites:', variant);
         } else {
-            // Remove from favorites
-            await favoriteRef.remove();
-            
             // Change to outline icon
             event.target.classList.remove('fa-solid');
             console.log('Removed from favorites:', variant);
         }
+
     } catch (error) {
         console.error('Error toggling favorite:', error);
         alert('Error updating favorites. Please try again.');
     }
 }
-
 //////////////////////
 // Loads the users // 
 // Favorite cars  //
@@ -1155,10 +1153,18 @@ async function loadFavorites() {
     }
 
     try {
-        const userId = auth.currentUser.uid;
-        const favoritesRef = firebase.database().ref(`favorites/${userId}`);
-        const snapshot = await favoritesRef.once('value');
+        // Use Flask backend (same as testimonials/forum)
+        const response = await fetch(`${baseUrl}/get-faves`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+        });
 
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const favorites = await response.json();
+        
         // Check if favorites list element exists before trying to use it
         const favoritesList = document.getElementById("favorites-items");
         if (!favoritesList) {
@@ -1175,11 +1181,8 @@ async function loadFavorites() {
             return;
         }
 
-        if (snapshot.exists()) {
-            const favorites = snapshot.val();
-            const favoriteArray = Object.values(favorites);
-
-            for (const car of favoriteArray) {
+        if (favorites.length > 0) {
+            for (const car of favorites) {
                 const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${car.variant}`, {
                     method: "GET",
                     headers: { "Content-Type": "application/json" }
@@ -1267,26 +1270,26 @@ async function loadFavorites() {
     }
 }
 
-// Function to remove favorite from display (for favorites page)
+// Function to remove favorite from display
 async function removeFavoriteFromDisplay(variant, buttonElement) {
     if (!auth || !auth.currentUser) return;
 
     try {
-        const userId = auth.currentUser.uid;
-        const favoriteRef = firebase.database().ref(`favorites/${userId}/${variant}`);
-        await favoriteRef.remove();
+        const response = await fetch(`${baseUrl}/toggle-fave`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ variant: variant, liked: false })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
         
         // Remove the card from display
         const card = buttonElement.closest('.card');
         if (card) {
             card.remove();
         }
-        
-        // Update any heart icons on other pages
-        const heartIcons = document.querySelectorAll(`[onclick*="${variant}"]`);
-        heartIcons.forEach(icon => {
-            icon.classList.remove('fa-solid');
-        });
         
         console.log('Removed from favorites:', variant);
         
@@ -1300,121 +1303,6 @@ async function removeFavoriteFromDisplay(variant, buttonElement) {
         console.error('Error removing favorite:', error);
         alert('Error removing favorite. Please try again.');
     }
-}
-
-// Function to check if a car is already favorited
-async function isCarFavorited(variant) {
-    if (!auth || !auth.currentUser) return false;
-
-    try {
-        const userId = auth.currentUser.uid;
-        const favoriteRef = firebase.database().ref(`favorites/${userId}/${variant}`);
-        const snapshot = await favoriteRef.once('value');
-        return snapshot.exists();
-    } catch (error) {
-        console.error('Error checking favorite status:', error);
-        return false;
-    }
-}
-
-// Function to initialize heart icons when page loads
-async function initializeFavoriteIcons() {
-    if (!auth || !auth.currentUser) return;
-
-    console.log('Initializing heart icons for user:', auth.currentUser.email);
-
-    // Find all heart icons on the page
-    const heartIcons = document.querySelectorAll('[onclick*="addToFave"]');
-    console.log('Found', heartIcons.length, 'heart icons');
-    
-    for (const icon of heartIcons) {
-        // Extract variant from onclick attribute
-        const onclickAttr = icon.getAttribute('onclick');
-        const variantMatch = onclickAttr.match(/addToFave\([^,]+,\s*['"]([^'"]+)['"]\)/);
-        
-        if (variantMatch) {
-            const variant = variantMatch[1];
-            const isFavorited = await isCarFavorited(variant);
-            
-            if (isFavorited) {
-                icon.classList.add('fa-solid');
-            } else {
-                icon.classList.remove('fa-solid');
-            }
-        }
-    }
-    
-    console.log('Heart icons initialized');
-}
-
-// Initialize favorites system when page loads
-function initializeFavoritesSystem() {
-    console.log('Initializing favorites system...');
-    
-    // Only initialize if we're on a page with favorites functionality
-    const favoritesList = document.getElementById("favorites-items");
-    const cardContainer = document.getElementById("card-container");
-    const heartIcons = document.querySelectorAll('[onclick*="addToFave"]');
-    
-    if (favoritesList || cardContainer || heartIcons.length > 0) {
-        // Wait for auth to be ready
-        const checkAuthAndInit = () => {
-            if (typeof auth !== 'undefined' && auth) {
-                if (auth.currentUser) {
-                    console.log('Auth ready, initializing favorites for user:', auth.currentUser.email);
-                    
-                    // Initialize heart icons if we're on a car listing page
-                    if (heartIcons.length > 0) {
-                        initializeFavoriteIcons();
-                    }
-                    
-                    // Load favorites if we're on the favorites page
-                    if (favoritesList || cardContainer) {
-                        loadFavorites();
-                    }
-                } else {
-                    console.log('Auth ready but no user signed in');
-                    // Clear heart icons
-                    heartIcons.forEach(icon => icon.classList.remove('fa-solid'));
-                }
-            } else {
-                console.log('Waiting for auth to be ready...');
-                setTimeout(checkAuthAndInit, 500);
-            }
-        };
-        
-        // Set up auth state listener
-        if (typeof auth !== 'undefined' && auth && auth.onAuthStateChanged) {
-            auth.onAuthStateChanged((user) => {
-                if (user) {
-                    console.log('Favorites: User signed in:', user.email);
-                    if (heartIcons.length > 0) {
-                        initializeFavoriteIcons();
-                    }
-                    if (favoritesList || cardContainer) {
-                        loadFavorites();
-                    }
-                } else {
-                    console.log('Favorites: User signed out');
-                    // Clear all heart icons
-                    const allHeartIcons = document.querySelectorAll('[onclick*="addToFave"]');
-                    allHeartIcons.forEach(icon => icon.classList.remove('fa-solid'));
-                }
-            });
-        }
-        
-        // Initial check
-        checkAuthAndInit();
-    }
-}
-
-// Auto-initialize when the page loads
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', () => {
-        setTimeout(initializeFavoritesSystem, 1000);
-    });
-} else {
-    setTimeout(initializeFavoritesSystem, 1000);
 }
 
 // Make functions globally available
