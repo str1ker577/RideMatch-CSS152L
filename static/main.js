@@ -567,6 +567,11 @@ function displayFilteredCars(data) {
         // Get the fuel type icon
         const fuelTypeIcon = getFuelTypeIcon(car.Fuel_Type);
         
+        // UPDATED: Check if car is already liked and set appropriate heart style
+        const isLiked = userFavorites.has(car.Variant);
+        const heartClass = isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
+        const heartColor = isLiked ? '#e74c3c' : '#b49b66'; // Red if liked, gold if not
+        
         row.innerHTML = `
         <td>${car.Brand || "Unknown"}</td>
         <td>${car.Model || "Unknown"}</td>
@@ -590,7 +595,10 @@ function displayFilteredCars(data) {
         <td>${car.Price ? "₱" + car.Price.toLocaleString() : "N/A"}</td>
         <td>
             <div class="heart-container">
-                <i class="fa-regular fa-heart" id="like-icon" onclick="addToFave(event, '${car.Variant}')"></i>
+                <i class="${heartClass}" 
+                   id="like-icon" 
+                   style="color: ${heartColor}; cursor: pointer;" 
+                   onclick="addToFave(event, '${car.Variant}')"></i>
             </div>
         </td>
     `;
@@ -1130,54 +1138,320 @@ async function addToFave(event, variant) {
         return;
     }
 
-    const isLiked = event.target.classList.contains('fa-solid');
-    const likedStatus = !isLiked;
+    const isCurrentlyLiked = userFavorites.has(variant);
+    const newLikedStatus = !isCurrentlyLiked;
 
-    console.log('Adding to favorites:', variant, 'liked:', likedStatus);
+    console.log('Like action:', variant, 'currently liked:', isCurrentlyLiked, 'new status:', newLikedStatus);
+
+    // REQUIREMENT 1 & 4: Check for duplicates when trying to like
+    if (newLikedStatus && userFavorites.has(variant)) {
+        showLikeErrorMessage("You already liked this car!");
+        return;
+    }
 
     try {
-        // Use Flask backend
+        // Show loading state on heart
+        const originalColor = event.target.style.color;
+        event.target.style.color = '#95a5a6'; // Gray loading color
+        
         const response = await fetch(`${baseUrl}/toggle-fave`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ variant: variant, liked: likedStatus })
+            body: JSON.stringify({ variant: variant, liked: newLikedStatus })
         });
-        
-        console.log('Response status:', response.status);
         
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Server error:', errorText);
             throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
         }
         
         const data = await response.json();
-        console.log('Backend response:', data);
         
+        // REQUIREMENT 2: Update heart appearance with new colors
         if (data.liked || data.status === 'added') {
-            // Change to solid icon
+            // Added to favorites - solid red heart
             event.target.classList.remove('fa-regular');
             event.target.classList.add('fa-solid');
-            console.log('Added to favorites:', variant);
+            event.target.style.color = '#e74c3c'; // Red
+            
+            userFavorites.add(variant);
+            showLikeSuccessMessage("Added to favorites!");
+            
         } else {
-            // Change to outline icon
+            // Removed from favorites - outline gold heart
             event.target.classList.remove('fa-solid');
             event.target.classList.add('fa-regular');
-            console.log('Removed from favorites:', variant);
+            event.target.style.color = '#b49b66'; // Gold
+            
+            userFavorites.delete(variant);
+            showLikeSuccessMessage("Removed from favorites!");
         }
 
-        // FIXED: If we're on the favorites page, reload the favorites immediately
+        // If we're on the favorites page, reload the favorites immediately
         const favoritesContainer = document.getElementById("favorites-items");
         if (favoritesContainer) {
-            console.log('Reloading favorites because we are on favorites page');
-            loadFavorites();
+            setTimeout(() => {
+                loadFavorites();
+            }, 500);
         }
 
     } catch (error) {
         console.error('Error toggling favorite:', error);
-        alert('Error updating favorites. Please try again.');
+        event.target.style.color = originalColor;
+        showLikeErrorMessage('Error updating favorites. Please try again.');
     }
 }
+
+// NEW: Calculator page like function (separate from main filter function)
+async function addToFaveFromCalculator(event, variant) {
+    // Prevent event bubbling
+    event.stopPropagation();
+    
+    // Check if user is authenticated
+    if (!auth || !auth.currentUser) {
+        alert('Please sign in to save favorites');
+        return;
+    }
+
+    const isCurrentlyLiked = userFavorites.has(variant);
+    const newLikedStatus = !isCurrentlyLiked;
+
+    console.log('Calculator like action:', variant, 'currently liked:', isCurrentlyLiked, 'new status:', newLikedStatus);
+
+    // Check for duplicates when trying to like
+    if (newLikedStatus && userFavorites.has(variant)) {
+        showLikeErrorMessage("You already liked this car!");
+        return;
+    }
+
+    try {
+        // Show loading state on heart
+        const originalColor = event.target.style.color;
+        event.target.style.color = '#95a5a6'; // Gray loading color
+        
+        const response = await fetch(`${baseUrl}/toggle-fave`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ variant: variant, liked: newLikedStatus })
+        });
+        
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Update heart appearance with colors
+        if (data.liked || data.status === 'added') {
+            // Added to favorites - solid red heart
+            event.target.classList.remove('fa-regular');
+            event.target.classList.add('fa-solid');
+            event.target.style.color = '#e74c3c'; // Red
+            
+            userFavorites.add(variant);
+            showLikeSuccessMessage("Added to favorites!");
+            
+        } else {
+            // Removed from favorites - outline gold heart  
+            event.target.classList.remove('fa-solid');
+            event.target.classList.add('fa-regular');
+            event.target.style.color = '#b49b66'; // Gold
+            
+            userFavorites.delete(variant);
+            showLikeSuccessMessage("Removed from favorites!");
+        }
+
+    } catch (error) {
+        console.error('Error toggling favorite from calculator:', error);
+        event.target.style.color = originalColor;
+        showLikeErrorMessage('Error updating favorites. Please try again.');
+    }
+}
+
+///////////////////////////////////////
+// ENHANCED FAVOURITES FUNCTIONALITY //
+///////////////////////////////////////
+
+// Global variable to store user's current favorites for quick checking
+let userFavorites = new Set();
+
+// Load user favorites into memory for quick duplicate checking
+async function loadUserFavoritesForDuplicateCheck() {
+    if (!auth || !auth.currentUser) {
+        userFavorites.clear();
+        return;
+    }
+
+    try {
+        const response = await fetch(`${baseUrl}/get-faves`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+        });
+
+        if (response.ok) {
+            const favorites = await response.json();
+            userFavorites.clear();
+            favorites.forEach(fav => {
+                userFavorites.add(fav.variant);
+            });
+            console.log('Loaded favorites for duplicate check:', userFavorites);
+            
+            // Update heart colors on current page
+            updateHeartColorsOnPage();
+        }
+    } catch (error) {
+        console.error('Error loading favorites for duplicate check:', error);
+    }
+}
+
+// Update heart colors based on current favorites
+function updateHeartColorsOnPage() {
+    // Update main filter page hearts
+    document.querySelectorAll('[id="like-icon"]').forEach(heart => {
+        const onclick = heart.getAttribute('onclick');
+        if (onclick) {
+            // Extract variant from onclick attribute
+            const match = onclick.match(/addToFave\(event,\s*['"`]([^'"`]+)['"`]\)/);
+            if (match) {
+                const variant = match[1];
+                if (userFavorites.has(variant)) {
+                    // Already liked - red heart
+                    heart.className = 'fa-solid fa-heart';
+                    heart.style.color = '#e74c3c'; // Red
+                } else {
+                    // Not liked - gold outline heart
+                    heart.className = 'fa-regular fa-heart';
+                    heart.style.color = '#b49b66'; // Gold
+                }
+            }
+        }
+    });
+
+    // Update calculator page hearts
+    document.querySelectorAll('[id="calculator-like-icon"]').forEach(heart => {
+        const onclick = heart.getAttribute('onclick');
+        if (onclick) {
+            const match = onclick.match(/addToFaveFromCalculator\(event,\s*['"`]([^'"`]+)['"`]\)/);
+            if (match) {
+                const variant = match[1];
+                if (userFavorites.has(variant)) {
+                    heart.className = 'fa-solid fa-heart';
+                    heart.style.color = '#e74c3c'; // Red
+                } else {
+                    heart.className = 'fa-regular fa-heart';
+                    heart.style.color = '#b49b66'; // Gold
+                }
+            }
+        }
+    });
+}
+
+// Success message display
+function showLikeSuccessMessage(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'like-message success';
+    messageDiv.innerHTML = `
+        <i class="fas fa-check-circle"></i>
+        <span>${message}</span>
+    `;
+    messageDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #27ae60;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        animation: slideInRight 0.3s ease;
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 300);
+        }
+    }, 2000);
+}
+
+// Error message display
+function showLikeErrorMessage(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'like-message error';
+    messageDiv.innerHTML = `
+        <i class="fas fa-exclamation-circle"></i>
+        <span>${message}</span>
+    `;
+    messageDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #e74c3c;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        animation: slideInRight 0.3s ease;
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 300);
+        }
+    }, 3000);
+}
+
+// Add CSS animations for the notification messages
+const styleSheet = document.createElement('style');
+styleSheet.textContent = `
+    @keyframes slideInRight {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+    
+    @keyframes slideOutRight {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+`;
+document.head.appendChild(styleSheet);
+
 
 //////////////////////
 // Loads the users // 
@@ -1815,7 +2089,7 @@ function displayCalculatorCarResults(cars, maxBudget) {
     if (cars.length === 0) {
         carSpecs.innerHTML = `
             <tr>
-                <td colspan="6" style="text-align: center; padding: 2rem; color: #666;">
+                <td colspan="7" style="text-align: center; padding: 2rem; color: #666;">
                     No cars found within your budget of ₱${Math.floor(maxBudget).toLocaleString()}.<br>
                     <small>Try adjusting your income, savings, or loan parameters.</small>
                 </td>
@@ -1825,10 +2099,15 @@ function displayCalculatorCarResults(cars, maxBudget) {
         // Sort cars by price (ascending)
         cars.sort((a, b) => parseFloat(a.Price) - parseFloat(b.Price));
         
-        // Generate table rows
+        // Generate table rows with heart icons
         cars.forEach(car => {
             const price = parseFloat(car.Price) || 0;
             const affordability = getAffordabilityLevel(price, maxBudget);
+            
+            // Check if car is already liked and set appropriate heart style
+            const isLiked = userFavorites.has(car.Variant);
+            const heartClass = isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
+            const heartColor = isLiked ? '#e74c3c' : '#b49b66'; // Red if liked, gold if not
             
             const row = document.createElement("tr");
             row.innerHTML = `
@@ -1839,6 +2118,14 @@ function displayCalculatorCarResults(cars, maxBudget) {
                 <td class="price-cell">₱${price.toLocaleString()}</td>
                 <td class="affordability-cell ${affordability.class}" title="${affordability.description}">
                     ${affordability.level}
+                </td>
+                <td class="heart-cell">
+                    <div class="heart-container">
+                        <i class="${heartClass}" 
+                           id="calculator-like-icon" 
+                           style="color: ${heartColor}; cursor: pointer;" 
+                           onclick="addToFaveFromCalculator(event, '${car.Variant}')"></i>
+                    </div>
                 </td>
             `;
             carSpecs.appendChild(row);
@@ -2025,25 +2312,70 @@ function updateCalculationPreview() {
 
 // MODIFIED: Initialize calculator when DOM loads
 document.addEventListener("DOMContentLoaded", function () {
-    console.log("🚀 Calculator page initialized");
+    console.log('DOM loaded, initializing enhanced like functionality...');
     
-    // Setup calculator listeners
-    setupCalculatorListeners();
+    // Initialize Firebase first
+    initializeFirebase();
+
+    // Set up auth state listener to load favorites when user logs in
+    const setupFavoritesLoader = () => {
+        if (typeof auth !== 'undefined' && auth) {
+            auth.onAuthStateChanged((user) => {
+                if (user) {
+                    // User logged in - load their favorites for duplicate checking
+                    console.log('User logged in, loading favorites for duplicate checking');
+                    setTimeout(() => {
+                        loadUserFavoritesForDuplicateCheck();
+                    }, 1000); // Small delay to ensure everything is ready
+                } else {
+                    // User logged out - clear favorites
+                    console.log('User logged out, clearing favorites');
+                    userFavorites.clear();
+                }
+            });
+        } else {
+            // Auth not ready yet, try again
+            setTimeout(setupFavoritesLoader, 500);
+        }
+    };
     
-    // Reset calculator on page load
-    const calculatorForm = document.getElementById("price-calculator-form");
-    if (calculatorForm) {
-        resetCalculator();
-        console.log("✅ Calculator form reset on page load");
+    setupFavoritesLoader();
+
+    // Rest of your existing DOMContentLoaded code...
+    const favoritesContainer = document.getElementById("favorites-items");
+    if (favoritesContainer) {
+        const checkAuthAndLoadFavorites = () => {
+            if (auth && auth.currentUser) {
+                loadFavorites();
+            } else if (auth) {
+                console.log('No current user, skipping favorites load');
+            } else {
+                setTimeout(checkAuthAndLoadFavorites, 500);
+            }
+        };
+        setTimeout(checkAuthAndLoadFavorites, 1000);
     }
-    
-    // Run precision test in console (development only)
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        console.log("🧪 Running precision test...");
-        const testResults = testCalculatorPrecision();
-        console.log("✅ Test completed. Results:", testResults);
+
+    // Your existing slider initialization code...
+    const priceSlider = document.getElementById("price");
+    const horsepowerSlider = document.getElementById("horsepower");
+    const seatingSlider = document.getElementById("seating");
+
+    if (priceSlider && horsepowerSlider && seatingSlider) {
+        priceSlider.value = priceSlider.max;
+        horsepowerSlider.value = horsepowerSlider.min;
+        seatingSlider.value = "0";
+
+        updateSliderValue("price", "₱", true);
+        updateSliderValue("horsepower", "HP", false);
+        updateSliderValue("seating", "seats", false);
     }
 });
+
+// Make functions globally available
+window.addToFave = addToFave;
+window.addToFaveFromCalculator = addToFaveFromCalculator;
+window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
 
 /////////////////////////
 //Testimonials Logic  //
