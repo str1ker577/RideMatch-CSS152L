@@ -2402,6 +2402,7 @@ textarea:focus, input[type="text"]:focus {
 /* IMPROVED: Fixed header similar to main filter */
 .calculator-cars-table {
     width: 100%;
+    min-width: 900px; /* ADDED: minimum width to prevent column squashing */
     border-collapse: collapse;
     background: white;
     margin: 0;
@@ -2426,35 +2427,42 @@ textarea:focus, input[type="text"]:focus {
     white-space: nowrap;
 }
 
-/* ADDED: Specific column widths and alignments */
+/* UPDATED: Specific column widths and alignments including heart column */
 .calculator-cars-table th:nth-child(1) { /* Brand */
-    width: 15%;
+    width: 13%;
     text-align: left;
 }
 
 .calculator-cars-table th:nth-child(2) { /* Model */
-    width: 18%;
+    width: 16%;
     text-align: left;
 }
 
 .calculator-cars-table th:nth-child(3) { /* Variant */
-    width: 20%;
+    width: 18%;
     text-align: left;
 }
 
 .calculator-cars-table th:nth-child(4) { /* Fuel Type */
-    width: 15%;
-    text-align: center; /* CENTERED */
+    width: 13%;
+    text-align: center;
 }
 
 .calculator-cars-table th:nth-child(5) { /* Price */
-    width: 17%;
-    text-align: center; /* CENTERED */
+    width: 15%;
+    text-align: center;
 }
 
 .calculator-cars-table th:nth-child(6) { /* Affordability */
     width: 15%;
-    text-align: center; /* CENTERED */
+    text-align: center;
+}
+
+.calculator-cars-table th:nth-child(7) { /* Heart Column */
+    width: 10%;
+    text-align: center;
+    color: #fff;
+    font-size: 1.2rem;
 }
 
 .calculator-cars-table td {
@@ -2465,7 +2473,7 @@ textarea:focus, input[type="text"]:focus {
     word-wrap: break-word; /* ADDED: handle long text */
 }
 
-/* ADDED: Specific column alignments for data cells */
+/* UPDATED: Specific column alignments for data cells including heart */
 .calculator-cars-table td:nth-child(1), /* Brand */
 .calculator-cars-table td:nth-child(2), /* Model */
 .calculator-cars-table td:nth-child(3) { /* Variant */
@@ -2474,7 +2482,8 @@ textarea:focus, input[type="text"]:focus {
 
 .calculator-cars-table td:nth-child(4), /* Fuel Type */
 .calculator-cars-table td:nth-child(5), /* Price */
-.calculator-cars-table td:nth-child(6) { /* Affordability */
+.calculator-cars-table td:nth-child(6), /* Affordability */
+.calculator-cars-table td:nth-child(7) { /* Heart */
     text-align: center;
 }
 
@@ -2511,6 +2520,31 @@ textarea:focus, input[type="text"]:focus {
     border-radius: 4px;
     font-size: 0.85rem; /* ADDED: smaller font */
     min-width: 80px; /* ADDED: consistent width */
+}
+
+/* NEW: Heart column styling */
+.calculator-cars-table .heart-cell {
+    text-align: center;
+    padding: 0.8rem 0.5rem;
+    vertical-align: middle;
+}
+
+.calculator-cars-table .heart-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.calculator-cars-table .heart-container i {
+    font-size: 1.2rem;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.calculator-cars-table .heart-container i:hover {
+    transform: scale(1.2);
 }
 
 .affordability-excellent {
@@ -2569,12 +2603,22 @@ textarea:focus, input[type="text"]:focus {
     
     .calculator-cars-table {
         font-size: 0.9rem;
+        min-width: 800px; /* REDUCED for mobile but still wide enough */
     }
     
     .calculator-cars-table th,
     .calculator-cars-table td {
         padding: 0.5rem;
     }
+    
+    /* MOBILE: Adjust column widths */
+    .calculator-cars-table th:nth-child(1) { width: 12%; }
+    .calculator-cars-table th:nth-child(2) { width: 15%; }
+    .calculator-cars-table th:nth-child(3) { width: 17%; }
+    .calculator-cars-table th:nth-child(4) { width: 12%; }
+    .calculator-cars-table th:nth-child(5) { width: 14%; }
+    .calculator-cars-table th:nth-child(6) { width: 15%; }
+    .calculator-cars-table th:nth-child(7) { width: 15%; } /* Bigger heart column on mobile */
 }
 
 /*************************/
