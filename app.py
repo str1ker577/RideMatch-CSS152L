@@ -756,6 +756,7 @@ def find_car_image(model):
     except Exception as e:
         app.logger.error(f"Error finding image for model {model}: {e}")
         return "/static/resources/tesr.png"
+    
 ###########################
 # Pull Data from CSV file #
 ###########################
