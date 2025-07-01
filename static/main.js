@@ -1005,11 +1005,32 @@ async function compareCars() {
         addCarToComparison(selectedVariant, specs);
         comparedCars.push({variant: selectedVariant, specs: specs});
         updateBarCharts();
+        
+        // Show success message and reset form
+        showSuccessMessage();
+        resetCompareForm();
 
     } catch (error) {
         console.error('Error fetching car specs:', error);
         alert('Error fetching car specifications. Please try again.');
     }
+}
+
+function showSuccessMessage() {
+    const successMessage = document.getElementById('compare-success-message');
+    successMessage.style.display = 'flex';
+    
+    // Hide message after 3 seconds
+    setTimeout(() => {
+        successMessage.style.display = 'none';
+    }, 3000);
+}
+
+function resetCompareForm() {
+    // Reset all dropdowns to default
+    document.getElementById('brand').selectedIndex = 0;
+    document.getElementById('model').innerHTML = '<option value="">Select Model</option>';
+    document.getElementById('variant').innerHTML = '<option value="">Select Variant</option>';
 }
 
 function addCarToComparison(variant, specs) {
@@ -1359,7 +1380,13 @@ function updateCargoSpaceChart() {
     }
 
     const labels = comparedCars.map(car => car.variant);
-    const data = comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0);
+    // Check for both 'Cargospace' and 'CargoSpace' (case variations)
+    const data = comparedCars.map(car => {
+        return parseFloat(car.specs.Cargospace) || 
+               parseFloat(car.specs.CargoSpace) || 
+               parseFloat(car.specs.cargospace) || 
+               parseFloat(car.specs.cargoSpace) || 0;
+    });
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
 
