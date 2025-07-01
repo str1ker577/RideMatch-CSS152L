@@ -918,22 +918,36 @@ async function loadDefaultCars() {
 // COMPARE Function //
 /////////////////////
 
+// Global variables for compare page
+let comparedCars = [];
+let chartInstances = {};
+
 // Function to populate models based on selected brand
 async function populateModels() {
     const brand = document.getElementById('brand').value;
     if (!brand) return;
 
-    const response = await fetch(`${baseUrl}/get_models?brand=${brand}`);
-    const models = await response.json();
-    
-    const modelDropdown = document.getElementById('model');
-    modelDropdown.innerHTML = '<option value="">Select Model</option>';
-    models.forEach(model => {
-        const option = document.createElement('option');
-        option.value = model;
-        option.textContent = model;
-        modelDropdown.appendChild(option);
-    });
+    try {
+        const response = await fetch(`${baseUrl}/get_models?brand=${brand}`);
+        const models = await response.json();
+        
+        const modelDropdown = document.getElementById('model');
+        modelDropdown.innerHTML = '<option value="">Select Model</option>';
+        models.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            modelDropdown.appendChild(option);
+        });
+        
+        // Clear variants when brand changes
+        const variantDropdown = document.getElementById('variant');
+        variantDropdown.innerHTML = '<option value="">Select Variant</option>';
+        
+    } catch (error) {
+        console.error('Error fetching models:', error);
+        alert('Error fetching models. Please try again.');
+    }
 }
 
 // Function to populate variants based on selected model
@@ -941,20 +955,522 @@ async function populateVariants() {
     const model = document.getElementById('model').value;
     if (!model) return;
 
-    const response = await fetch(`${baseUrl}/get_variants?model=${model}`);
-    const variants = await response.json();
+    try {
+        const response = await fetch(`${baseUrl}/get_variants?model=${model}`);
+        const variants = await response.json();
+        
+        const variantDropdown = document.getElementById('variant');
+        variantDropdown.innerHTML = '<option value="">Select Variant</option>';
+        variants.forEach(variant => {
+            const option = document.createElement('option');
+            option.value = variant;
+            option.textContent = variant;
+            variantDropdown.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Error fetching variants:', error);
+        alert('Error fetching variants. Please try again.');
+    }
+}
+
+// Compare Cars Function
+async function compareCars() {
+    const selectedVariant = document.getElementById('variant').value;
+    if (!selectedVariant) {
+        alert("Please select a variant to compare.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`${baseUrl}/get_specs?variant=${selectedVariant}`);
+        const specs = await response.json();
+
+        if (Object.keys(specs).length === 0) {
+            alert('No specifications found for this variant.');
+            return;
+        }
+
+        if (document.getElementById(`car-${selectedVariant}`)) {
+            alert(`${selectedVariant} is already in the comparison.`);
+            return;
+        }
+
+        // Limit to 5 cars for better visualization
+        if (comparedCars.length >= 5) {
+            alert('Maximum 5 cars can be compared at once. Please remove a car first.');
+            return;
+        }
+
+        addCarToComparison(selectedVariant, specs);
+        comparedCars.push({variant: selectedVariant, specs: specs});
+        updateBarCharts();
+
+    } catch (error) {
+        console.error('Error fetching car specs:', error);
+        alert('Error fetching car specifications. Please try again.');
+    }
+}
+
+function addCarToComparison(variant, specs) {
+    const container = document.getElementById('comparison-container');
+    const carColumn = document.createElement('div');
+    carColumn.id = `car-${variant}`;
+    carColumn.classList.add('car-column');
+
+    // Car title
+    const carTitle = document.createElement('div');
+    carTitle.classList.add('car-title');
+    carTitle.textContent = variant;
+    carColumn.appendChild(carTitle);
+
+    // Car image
+    if (specs['Image']) {
+        const imgContainer = document.createElement('div');
+        imgContainer.classList.add('car-image-container');
+        const img = document.createElement('img');
+        img.src = specs['Image'];
+        img.alt = `Image of ${variant}`;
+        img.classList.add('car-image');
+        imgContainer.appendChild(img);
+        carColumn.appendChild(imgContainer);
+    }
+
+    // Specifications sections
+    const specSections = {
+        "General Specifications": ["Brand", "Model"],
+        "Performance Specifications": ["Horsepower", "Engine", "Transmission", "DriveTrain", "FuelType"],
+        "Utility Specifications": ["SeatingCapacity", "GroundClearance", "Cargospace"]
+    };
+
+    for (const [category, keys] of Object.entries(specSections)) {
+        const sectionDiv = document.createElement('div');
+        sectionDiv.classList.add('spec-section');
+        
+        const categoryTitle = document.createElement('div');
+        categoryTitle.classList.add('spec-category');
+        categoryTitle.textContent = category;
+        sectionDiv.appendChild(categoryTitle);
+
+        keys.forEach(key => {
+            if (specs[key] !== undefined) {
+                const specDiv = document.createElement('div');
+                specDiv.classList.add('spec-value');
+                
+                let formattedValue = specs[key];
+                if (key === "Horsepower") formattedValue += " hp";
+                if (key === "GroundClearance") formattedValue += " cm";
+                if (key === "Cargospace") formattedValue += " L";
+                
+                specDiv.innerHTML = `<span class="spec-label">${key.replace(/([A-Z])/g, ' $1').trim()}:</span> ${formattedValue}`;
+                
+                // Add performance bar for numeric values
+                if (key === "Horsepower" || key === "SeatingCapacity" || key === "GroundClearance") {
+                    const progressBar = createProgressBar(formattedValue, key);
+                    specDiv.appendChild(progressBar);
+                }
+                
+                sectionDiv.appendChild(specDiv);
+            }
+        });
+
+        carColumn.appendChild(sectionDiv);
+    }
+
+    // Price section
+    if (specs["Price"]) {
+        const priceDiv = document.createElement('div');
+        priceDiv.classList.add('price-comparison');
+        const formattedPrice = new Intl.NumberFormat('en-PH', { 
+            style: 'currency', 
+            currency: 'PHP' 
+        }).format(specs["Price"]);
+        priceDiv.innerHTML = `<div class="price-value">${formattedPrice}</div>`;
+        carColumn.appendChild(priceDiv);
+    }
+
+    // Remove button
+    const removeBtn = document.createElement('button');
+    removeBtn.classList.add('remove-btn');
+    removeBtn.textContent = "Remove Car";
+    removeBtn.onclick = () => {
+        carColumn.remove();
+        comparedCars = comparedCars.filter(car => car.variant !== variant);
+        updateBarCharts();
+    };
+
+    carColumn.appendChild(removeBtn);
+    container.appendChild(carColumn);
+}
+
+function createProgressBar(value, type) {
+    const progressContainer = document.createElement('div');
+    progressContainer.classList.add('performance-bar');
     
-    const variantDropdown = document.getElementById('variant');
-    variantDropdown.innerHTML = '<option value="">Select Variant</option>';
-    variants.forEach(variant => {
-        const option = document.createElement('option');
-        option.value = variant;
-        option.textContent = variant;
-        variantDropdown.appendChild(option);
+    const progressFill = document.createElement('div');
+    progressFill.classList.add('performance-fill');
+    
+    // Calculate percentage based on type with dynamic scaling
+    let percentage = 0;
+    const numValue = parseInt(value);
+    
+    switch(type) {
+        case "Horsepower":
+            const maxHP = comparedCars.length > 0 ? Math.max(...comparedCars.map(car => parseInt(car.specs.Horsepower) || 0), numValue) : Math.max(numValue, 200);
+            percentage = (numValue / maxHP) * 100;
+            break;
+        case "SeatingCapacity":
+            percentage = (numValue / 8) * 100;
+            break;
+        case "GroundClearance":
+            const maxClearance = comparedCars.length > 0 ? Math.max(...comparedCars.map(car => parseInt(car.specs.GroundClearance) || 0), numValue) : Math.max(numValue, 25);
+            percentage = (numValue / maxClearance) * 100;
+            break;
+    }
+    
+    progressFill.style.width = `${Math.min(percentage, 100)}%`;
+    progressContainer.appendChild(progressFill);
+    
+    return progressContainer;
+}
+
+// Chart color palette using established colors
+const chartColors = [
+    '#b49b66', '#d4af37', '#9e8a56', '#8b7355', '#7a6247'
+];
+
+const chartBackgroundColors = [
+    'rgba(180, 155, 102, 0.8)',
+    'rgba(212, 175, 55, 0.8)',
+    'rgba(158, 138, 86, 0.8)',
+    'rgba(139, 115, 85, 0.8)',
+    'rgba(122, 98, 71, 0.8)'
+];
+
+function updateBarCharts() {
+    if (comparedCars.length === 0) {
+        document.getElementById('compare-charts-section').style.display = 'none';
+        Object.values(chartInstances).forEach(chart => {
+            if (chart) chart.destroy();
+        });
+        chartInstances = {};
+        return;
+    }
+
+    document.getElementById('compare-charts-section').style.display = 'block';
+    
+    updateHorsepowerChart();
+    updatePriceChart();
+    updateGroundClearanceChart();
+    updateCargoSpaceChart();
+    updateSeatingCapacityChart();
+}
+
+function updateHorsepowerChart() {
+    const ctx = document.getElementById('horsepowerChart').getContext('2d');
+    
+    if (chartInstances.horsepower) {
+        chartInstances.horsepower.destroy();
+    }
+
+    const labels = comparedCars.map(car => car.variant);
+    const data = comparedCars.map(car => parseInt(car.specs.Horsepower) || 0);
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
+
+    chartInstances.horsepower = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Horsepower (HP)',
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
+                borderWidth: 2,
+                borderRadius: 8,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y} HP`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Horsepower (HP)',
+                        color: '#b49b66',
+                        font: { weight: 'bold' }
+                    },
+                    grid: { color: 'rgba(180, 155, 102, 0.1)' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { maxRotation: 45, minRotation: 0 }
+                }
+            }
+        }
     });
 }
 
-// Ensure event listeners are added to dropdowns (only if they exist)
+function updatePriceChart() {
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    
+    if (chartInstances.price) {
+        chartInstances.price.destroy();
+    }
+
+    const labels = comparedCars.map(car => car.variant);
+    const data = comparedCars.map(car => car.specs.Price || 0);
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
+
+    chartInstances.price = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Price (PHP)',
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
+                borderWidth: 2,
+                borderRadius: 8,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return new Intl.NumberFormat('en-PH', { 
+                                style: 'currency', 
+                                currency: 'PHP' 
+                            }).format(context.parsed.y);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Price (PHP)',
+                        color: '#b49b66',
+                        font: { weight: 'bold' }
+                    },
+                    grid: { color: 'rgba(180, 155, 102, 0.1)' },
+                    ticks: {
+                        callback: function(value) {
+                            return '₱' + (value / 1000000).toFixed(1) + 'M';
+                        }
+                    }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { maxRotation: 45, minRotation: 0 }
+                }
+            }
+        }
+    });
+}
+
+function updateGroundClearanceChart() {
+    const ctx = document.getElementById('groundClearanceChart').getContext('2d');
+    
+    if (chartInstances.groundClearance) {
+        chartInstances.groundClearance.destroy();
+    }
+
+    const labels = comparedCars.map(car => car.variant);
+    const data = comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0);
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
+
+    chartInstances.groundClearance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Ground Clearance (cm)',
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
+                borderWidth: 2,
+                borderRadius: 8,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y} cm`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Ground Clearance (cm)',
+                        color: '#b49b66',
+                        font: { weight: 'bold' }
+                    },
+                    grid: { color: 'rgba(180, 155, 102, 0.1)' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { maxRotation: 45, minRotation: 0 }
+                }
+            }
+        }
+    });
+}
+
+function updateCargoSpaceChart() {
+    const ctx = document.getElementById('cargoSpaceChart').getContext('2d');
+    
+    if (chartInstances.cargoSpace) {
+        chartInstances.cargoSpace.destroy();
+    }
+
+    const labels = comparedCars.map(car => car.variant);
+    const data = comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0);
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
+
+    chartInstances.cargoSpace = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Cargo Space (L)',
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
+                borderWidth: 2,
+                borderRadius: 8,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y} L`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Cargo Space (Liters)',
+                        color: '#b49b66',
+                        font: { weight: 'bold' }
+                    },
+                    grid: { color: 'rgba(180, 155, 102, 0.1)' }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { maxRotation: 45, minRotation: 0 }
+                }
+            }
+        }
+    });
+}
+
+function updateSeatingCapacityChart() {
+    const ctx = document.getElementById('seatingCapacityChart').getContext('2d');
+    
+    if (chartInstances.seatingCapacity) {
+        chartInstances.seatingCapacity.destroy();
+    }
+
+    const labels = comparedCars.map(car => car.variant);
+    const data = comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0);
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
+
+    chartInstances.seatingCapacity = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Seating Capacity',
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
+                borderWidth: 2,
+                borderRadius: 8,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y} seats`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Seating Capacity',
+                        color: '#b49b66',
+                        font: { weight: 'bold' }
+                    },
+                    grid: { color: 'rgba(180, 155, 102, 0.1)' },
+                    ticks: { stepSize: 1 }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { maxRotation: 45, minRotation: 0 }
+                }
+            }
+        }
+    });
+}
+
+// Event listeners for dropdowns (if not already added in main.js)
 const brandDropdown = document.getElementById('brand');
 const modelDropdown = document.getElementById('model');
 
@@ -966,104 +1482,23 @@ if (modelDropdown) {
     modelDropdown.addEventListener('change', populateVariants);
 }
 
-// Compare Cars Function
-async function compareCars() {
-    const selectedVariant = document.getElementById('variant').value;
-    if (!selectedVariant) {
-        console.warn("No variant selected.");
-        return;
-    }
-
-    console.log("Fetching specs for variant:", selectedVariant);
-    const response = await fetch(`${baseUrl}/get_specs?variant=${selectedVariant}`);
-    const specs = await response.json();
-
-    if (Object.keys(specs).length === 0) {
-        alert('No specifications found for this variant.');
-        return;
-    }
-
-    const container = document.getElementById('comparison-container');
-
-    if (document.getElementById(`car-${selectedVariant}`)) {
-        alert(`${selectedVariant} is already in the comparison.`);
-        return;
-    }
-
-    const carColumn = document.createElement('div');
-    carColumn.id = `car-${selectedVariant}`;
-    carColumn.classList.add('car-column');
-
-    const carTitle = document.createElement('div');
-    carTitle.classList.add('car-title');
-    carTitle.textContent = selectedVariant;
-    carColumn.appendChild(carTitle);
-
-    if (specs['Image']) {
-        const imgContainer = document.createElement('div');
-        imgContainer.classList.add('car-image-container');
-
-        const img = document.createElement('img');
-        img.src = specs['Image'];
-        img.alt = `Image of ${selectedVariant}`;
-        img.classList.add('car-image');
-
-        imgContainer.appendChild(img);
-        carColumn.appendChild(imgContainer);
-    }
-
-    const specOrder = {
-        "General Specifications": ["Brand", "Model", "BodyType, Variant"],
-        "Performance Specifications": ["Horsepower", "Engine", "Transmission", "DriveTrain", "FuelType"],
-        "Utility Specifications": ["SeatingCapacity", "GroundClearance", "Cargospace"],
-        "Price": []
-    };
-
-    // Iterate through the spec categories and their keys
-    for (const [category, keys] of Object.entries(specOrder)) {
-        if (keys.length > 0) {
-            const categoryTitle = document.createElement('div');
-            categoryTitle.classList.add('spec-value', 'spec-label');
-            categoryTitle.textContent = category;
-            carColumn.appendChild(categoryTitle);
+// Handle window resize for responsive charts
+window.addEventListener('resize', function() {
+    Object.values(chartInstances).forEach(chart => {
+        if (chart) {
+            chart.resize();
         }
+    });
+});
 
-        keys.forEach(key => {
-            if (specs[key] !== undefined) {
-                const specDiv = document.createElement('div');
-                specDiv.classList.add('spec-value');
-                let formattedValue = specs[key];
-                
-                // Formatting for specific specs
-                if (key === "Horsepower") formattedValue += " hp";
-                if (key === "Ground Clearance") formattedValue += " cm";
-                if (key === "Cargo Space") formattedValue += " L";
-                
-                // Add the formatted spec to the car column
-                specDiv.innerHTML = `<span class="spec-label">${key}:</span> ${formattedValue}`;
-                carColumn.appendChild(specDiv);
-            }
-        });
-    }
-
-    // Price formatting and addition
-    if (specs["Price"]) {
-        const priceDiv = document.createElement('div');
-        priceDiv.classList.add('spec-value');
-        const formattedPrice = new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(specs["Price"]);
-        priceDiv.innerHTML = `<span class="spec-label">Price:</span> ${formattedPrice}`;
-        carColumn.appendChild(priceDiv);
-    }
-
-    // Add the remove button for the car
-    const removeBtn = document.createElement('button');
-    removeBtn.classList.add('remove-btn');
-    removeBtn.textContent = "Remove Car";
-    removeBtn.onclick = () => carColumn.remove();
-
-    carColumn.appendChild(removeBtn);
-    container.appendChild(carColumn);
-}
+// Clean up chart instances when page unloads
+window.addEventListener('beforeunload', function() {
+    Object.values(chartInstances).forEach(chart => {
+        if (chart) {
+            chart.destroy();
+        }
+    });
+});
 
 //////////////////////////////////
 // Shows corresponding models  //

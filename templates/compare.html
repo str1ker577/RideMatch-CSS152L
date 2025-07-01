@@ -17,22 +17,6 @@
   <!-- Link to CSS -->
   <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='style.css')}}">
 
-  <!-- Optional inline style for the sidebar slide animation -->
-  <style>
-    .SideBar {
-      position: fixed;
-      top: 0;
-      left: -100%;
-      width: 500px;
-      height: 100%;
-      background-color: #fff;
-      transition: left 0.5s ease-in-out;
-      z-index: 1000;
-    }
-    .SideBar.open {
-      left: 0;
-    }
-  </style>
 </head>
 <body>
     <!-- Popup Containers -->
@@ -162,14 +146,14 @@
     <div class="liked"><a href="#"></a></div>
   </header>
 
-  <div class="outer-frame" style="margin-top:10rem;">
-    <h2 class="filter-title">Compare Cars</h2>
-    <div class="inner-frame">
-      <div class="filter-left">
+<!-- Car Selection Form -->
+  <div class="compare-outer-frame" style="margin-top:10rem;">
+    <h2 class="compare-filter-title">Compare Cars</h2>
+    <div class="compare-inner-frame">
+      <div class="compare-filter-left">
         <form id="compare-form">
           <label for="brand">Select Brand:</label>
           <select id="brand" name="brand" onchange="populateModels()">
-
             <option value="" selected disabled>Select Brand</option>
             <option value="Toyota">Toyota</option>
             <option value="Honda">Honda</option>
@@ -183,13 +167,11 @@
           <label for="model">Select Model:</label>
           <select id="model" name="model" onchange="populateVariants()">
             <option value="">Select Model</option>
-            <!-- Populate with car models based on selected brand -->
           </select>
 
           <label for="variant">Select Variant:</label>
           <select id="variant" name="variant">
             <option value="">Select Variant</option>
-            <!-- Populate with car variants based on selected model -->
           </select>
 
           <button class="compare_btn" type="button" onclick="compareCars()">Compare Cars</button>
@@ -198,7 +180,60 @@
     </div>
   </div>
 
-  <div class="wrapper">
+  <!-- Bar Charts Visualization Section -->
+  <div class="compare-wrapper">
+    <div class="compare-charts-section" id="compare-charts-section" style="display: none;">
+      <h2 class="compare-charts-title">
+        <i class='bx bx-bar-chart-alt-2' style='margin-right: 0.5rem;'></i>
+        Performance Analysis
+      </h2>
+      
+      <div class="compare-charts-grid">
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-tachometer' style='color: #b49b66;'></i>
+            <h3>Horsepower Comparison</h3>
+          </div>
+          <canvas id="horsepowerChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-money' style='color: #b49b66;'></i>
+            <h3>Price Comparison</h3>
+          </div>
+          <canvas id="priceChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-trending-up' style='color: #b49b66;'></i>
+            <h3>Ground Clearance</h3>
+          </div>
+          <canvas id="groundClearanceChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-package' style='color: #b49b66;'></i>
+            <h3>Cargo Space</h3>
+          </div>
+          <canvas id="cargoSpaceChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-group' style='color: #b49b66;'></i>
+            <h3>Seating Capacity</h3>
+          </div>
+          <canvas id="seatingCapacityChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Car Comparison Cards -->
+  <div class="compare-wrapper">
     <div class="comp_table_frame">
       <div class="comp_table_content">
         <div id="comparison-container">
@@ -207,6 +242,8 @@
       </div>
     </div>
   </div>
+
+  
   <!-- Footer -->
   <footer>
     <div class="footer-container">
