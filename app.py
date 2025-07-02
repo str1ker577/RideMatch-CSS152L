@@ -534,13 +534,14 @@ def get_cars():
         drive_train = request.args.get("drive_train", "").strip()
         transmission = request.args.get("transmission", "").strip()
         fuel_type = request.args.get("fuel_type", "").strip()
+        year = request.args.get("year", "").strip()  # NEW: Year filter parameter
         min_hp = request.args.get("min_hp", type=int, default=50)
         min_cargo = request.args.get("min_cargo", type=int, default=100)
         max_price = request.args.get("max_price", type=int, default=3000000)
         min_ground_clearance = request.args.get("min_ground_clearance", type=float, default=13.3)
         seating = request.args.get("seating", type=int, default=None)
 
-        app.logger.info(f"Filter parameters: brand={brand}, model={model}, body_type={body_type}")
+        app.logger.info(f"Filter parameters: brand={brand}, model={model}, body_type={body_type}, year={year}")  # NEW: Include year in logging
         app.logger.info(f"Numeric filters: min_hp={min_hp}, min_cargo={min_cargo}, max_price={max_price}, min_ground_clearance={min_ground_clearance}, seating={seating}")
 
         filtered_df = df.copy()
@@ -552,12 +553,14 @@ def get_cars():
         app.logger.info(f"Cargo_space dtype: {filtered_df['Cargo_space'].dtype}")
         app.logger.info(f"Ground_Clearance dtype: {filtered_df['Ground_Clearance'].dtype}")
         app.logger.info(f"Price dtype: {filtered_df['Price'].dtype}")
+        app.logger.info(f"Year dtype: {filtered_df['Year'].dtype}")  # NEW: Log year data type
         
         # Sample values
         app.logger.info(f"Sample Horsepower values: {filtered_df['Horsepower'].head().tolist()}")
         app.logger.info(f"Sample Cargo_space values: {filtered_df['Cargo_space'].head().tolist()}")
         app.logger.info(f"Sample Ground_Clearance values: {filtered_df['Ground_Clearance'].head().tolist()}")
         app.logger.info(f"Sample Price values: {filtered_df['Price'].head().tolist()}")
+        app.logger.info(f"Sample Year values: {filtered_df['Year'].head().tolist()}")  # NEW: Log year sample values
 
         # Apply filters step by step
         if brand and brand.lower() not in ["any", "all brands"]:
@@ -595,6 +598,18 @@ def get_cars():
             app.logger.info(f"Available fuel types: {filtered_df['Fuel_Type'].unique().tolist()}")
             filtered_df = filtered_df[filtered_df["Fuel_Type"].str.lower().str.contains(fuel_type.lower(), na=False)]
             app.logger.info(f"After fuel type filter: {len(filtered_df)} cars")
+
+        # NEW: Apply year filter
+        if year:
+            app.logger.info(f"Applying year filter: {year}")
+            app.logger.info(f"Available years: {filtered_df['Year'].unique().tolist()}")
+            
+            try:
+                year_int = int(year)
+                filtered_df = filtered_df[filtered_df["Year"] == year_int]
+                app.logger.info(f"After year filter: {len(filtered_df)} cars")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
 
         # Apply numeric filters
         app.logger.info("Applying numeric filters...")
@@ -646,6 +661,35 @@ def get_cars():
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to filter cars: {str(e)}"}), 500
 
+# NEW: Route to get all available years
+@app.route('/get_years', methods=['GET'])
+def get_years():
+    if df.empty:
+        app.logger.warning("No car data available for years")
+        return jsonify([])
+    
+    try:
+        # Get unique years and convert to list
+        years = df["Year"].dropna().unique().tolist()
+        
+        # Convert to integers and remove any invalid years
+        valid_years = []
+        for year in years:
+            try:
+                year_int = int(year)
+                if 1900 <= year_int <= 2030:  # Reasonable year range
+                    valid_years.append(year_int)
+            except (ValueError, TypeError):
+                continue
+        
+        app.logger.info(f"Retrieved {len(valid_years)} valid years")
+        return jsonify(valid_years)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting years: {e}")
+        return jsonify([])
+
+# Keep your existing routes as they are:
 @app.route('/get_all_models', methods=['GET'])
 def get_all_models():
     if df.empty:
@@ -696,66 +740,7 @@ def get_variants():
     except Exception as e:
         app.logger.error(f"Error getting variants for model {model}: {e}")
         return jsonify([])
-
-def find_colors(model):
-    try:
-        IMAGE_FOLDER = os.path.join(app.static_folder, "resources")
-        if not os.path.exists(IMAGE_FOLDER):
-            app.logger.warning(f"Image folder not found: {IMAGE_FOLDER}")
-            return []
-        
-        model = ''.join(e for e in model if e.isalnum())
-        colors = []
-        for filename in os.listdir(IMAGE_FOLDER):
-            if filename.lower().startswith(model.lower()) and '_' in filename:
-                color = filename.split('_')[1].split('.')[0]
-                image_path = find_car_image(filename.split('.')[0])
-                colors.append({"color": color, "image_path": image_path})
-        
-        app.logger.info(f"Found {len(colors)} colors for model {model}")
-        return colors
-    except Exception as e:
-        app.logger.error(f"Error finding colors for model {model}: {e}")
-        return []
-
-@app.route('/get_colors', methods=['GET'])
-def get_colors():
-    model = request.args.get("model", "").strip()
-    colors = find_colors(model)
-    return jsonify(colors)
-
-def find_car_image(model):
-    try:
-        IMAGE_FOLDER = os.path.join(app.static_folder, "resources")
-        if not os.path.exists(IMAGE_FOLDER):
-            app.logger.warning(f"Image folder not found: {IMAGE_FOLDER}")
-            return "/static/resources/tesr.png"
-        
-        # Clean the model name for matching
-        model_clean = ''.join(e for e in model if e.isalnum() or e == '_')
-        
-        # Try different matching strategies
-        for filename in os.listdir(IMAGE_FOLDER):
-            if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.gif')):
-                filename_clean = filename.lower()
-                model_lower = model_clean.lower()
-                
-                # Try exact match
-                if filename_clean.startswith(model_lower):
-                    app.logger.info(f"Found image for {model}: {filename}")
-                    return f"/static/resources/{filename}"
-                
-                # Try partial match
-                if model_lower in filename_clean:
-                    app.logger.info(f"Found partial match image for {model}: {filename}")
-                    return f"/static/resources/{filename}"
-        
-        app.logger.info(f"No image found for model {model}, using default")
-        return "/static/resources/tesr.png"
-        
-    except Exception as e:
-        app.logger.error(f"Error finding image for model {model}: {e}")
-        return "/static/resources/tesr.png"
+    
     
 ###########################
 # Pull Data from CSV file #

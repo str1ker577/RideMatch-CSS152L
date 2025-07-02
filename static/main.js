@@ -460,7 +460,8 @@ async function applyFilters() {
     const bodyType = document.getElementById("body-type").value.trim().toLowerCase();
     const driveTrain = document.getElementById("drive-train").value.trim().toLowerCase();
     const transmission = document.getElementById("transmission").value.trim().toLowerCase();
-    const fuelType = document.getElementById("fuel-type").value.trim().toLowerCase(); 
+    const fuelType = document.getElementById("fuel-type").value.trim().toLowerCase();
+    const year = document.getElementById("year").value.trim(); // NEW: Year filter
     const minHp = parseFloat(document.getElementById("horsepower").value) || 50;
     const minCargo = parseFloat(document.getElementById("cargo-space").value) || 100;
     const maxPrice = parseFloat(document.getElementById("price").value) || 3000000;
@@ -474,6 +475,7 @@ async function applyFilters() {
     console.log("Drive Train:", driveTrain);
     console.log("Transmission:", transmission);
     console.log("Fuel Type:", fuelType);
+    console.log("Year:", year); // NEW: Log year filter
     console.log("Min HP:", minHp);
     console.log("Min Cargo Space:", minCargo);
     console.log("Max Price:", maxPrice);
@@ -481,7 +483,7 @@ async function applyFilters() {
     console.log("Min Seating Capacity:", seating);
 
     // Check if any filters are applied (not default values)
-    const hasFilters = brand || model || bodyType || driveTrain || transmission || fuelType || 
+    const hasFilters = brand || model || bodyType || driveTrain || transmission || fuelType || year || // NEW: Include year in filter check
                       minHp > 50 || minCargo > 100 || maxPrice < 3000000 || 
                       minGroundClearance > 2 || seating > 0;
 
@@ -501,6 +503,7 @@ async function applyFilters() {
     if (driveTrain) url.searchParams.append("drive_train", driveTrain.charAt(0).toUpperCase() + driveTrain.slice(1));
     if (transmission) url.searchParams.append("transmission", transmission.charAt(0).toUpperCase() + transmission.slice(1));
     if (fuelType) url.searchParams.append("fuel_type", fuelType.charAt(0).toUpperCase() + fuelType.slice(1));
+    if (year) url.searchParams.append("year", year); // NEW: Add year parameter
 
     url.searchParams.append("min_hp", minHp);
     url.searchParams.append("min_cargo", minCargo);
@@ -527,6 +530,127 @@ async function applyFilters() {
         alert("An error occurred while fetching data. Please try again later.");
     }
 }
+
+// NEW: Function to populate years dropdown
+async function populateYears() {
+    try {
+        const response = await fetch(`${baseUrl}/get_years`);
+        const years = await response.json();
+        
+        const yearSelect = document.getElementById("year");
+        
+        // Clear existing options except the first two
+        yearSelect.innerHTML = `
+            <option value="" selected disabled>Choose Year...</option>
+            <option value="">Any Year</option>
+        `;
+        
+        // Sort years in descending order (newest first)
+        years.sort((a, b) => b - a);
+        
+        // Add year options
+        years.forEach(year => {
+            const option = document.createElement("option");
+            option.value = year;
+            option.textContent = year;
+            yearSelect.appendChild(option);
+        });
+        
+        console.log("Years populated successfully");
+    } catch (error) {
+        console.error("Error loading years:", error);
+    }
+}
+
+// UPDATED: Helper function to reset all filters
+function resetAllFilters() {
+    // Reset dropdowns
+    document.getElementById("brand").value = "";
+    document.getElementById("model").value = "";
+    document.getElementById("body-type").value = "";
+    document.getElementById("drive-train").value = "";
+    document.getElementById("transmission").value = "";
+    document.getElementById("fuel-type").value = "";
+    document.getElementById("year").value = ""; // NEW: Reset year dropdown
+    
+    // Reset sliders to their initial values
+    const priceSlider = document.getElementById("price");
+    const horsepowerSlider = document.getElementById("horsepower");
+    const seatingSlider = document.getElementById("seating");
+    const cargoSlider = document.getElementById("cargo-space");
+    const groundClearanceSlider = document.getElementById("ground-clearance");
+    
+    if (priceSlider) priceSlider.value = priceSlider.max;
+    if (horsepowerSlider) horsepowerSlider.value = horsepowerSlider.min;
+    if (seatingSlider) seatingSlider.value = "0";
+    if (cargoSlider) cargoSlider.value = cargoSlider.min;
+    if (groundClearanceSlider) groundClearanceSlider.value = groundClearanceSlider.min;
+    
+    // Update slider display values
+    updateSliderValue("price", "", true);
+    updateSliderValue("horsepower", "HP", false);
+    updateSliderValue("seating", "seats", false);
+    updateSliderValue("cargo-space", "L", false);
+    updateSliderValue("ground-clearance", "cm", false);
+}
+
+// UPDATED: DOMContentLoaded event listener
+document.addEventListener("DOMContentLoaded", function () {
+    console.log('DOM loaded, initializing...');
+    
+    // Initialize Firebase first
+    initializeFirebase();
+
+    // NEW: Populate years dropdown
+    populateYears();
+
+    // Only load favorites if the favorites container exists
+    const favoritesContainer = document.getElementById("favorites-items");
+    if (favoritesContainer) {
+        console.log('Favorites page detected, will load favorites after auth');
+        // Don't load favorites immediately, wait for auth state
+        // The auth state change handler will trigger loadFavorites when user is confirmed
+        
+        // Set up a listener for when the user auth state is determined
+        const checkAuthAndLoadFavorites = () => {
+            if (auth && auth.currentUser) {
+                console.log('Auth confirmed, loading favorites');
+                loadFavorites();
+            } else if (auth) {
+                console.log('No current user, skipping favorites load');
+            } else {
+                // Auth not ready yet, check again in a bit
+                setTimeout(checkAuthAndLoadFavorites, 500);
+            }
+        };
+        
+        // Start checking after a small delay to let Firebase initialize
+        setTimeout(checkAuthAndLoadFavorites, 1000);
+    }
+
+    // Initialize other components as before
+    const filterButton = document.getElementById("filter-btn"); 
+    const resultsFrame = document.querySelector(".results-frame");
+
+    // Only initialize sliders if they exist on this page
+    const priceSlider = document.getElementById("price");
+    const horsepowerSlider = document.getElementById("horsepower");
+    const seatingSlider = document.getElementById("seating");
+
+    // Check if all required slider elements exist before trying to use them
+    if (priceSlider && horsepowerSlider && seatingSlider) {
+        // Ensure sliders start at minimum values
+        priceSlider.value = priceSlider.max;
+        horsepowerSlider.value = horsepowerSlider.min;
+        seatingSlider.value = "0";
+
+        // Update displayed values to match the min values
+        updateSliderValue("price", "₱", true);
+        updateSliderValue("horsepower", "HP", false);
+        updateSliderValue("seating", "seats", false);
+    }
+});
+
 
 //////////////////////////////// 
 // Shows the filtered Results //
