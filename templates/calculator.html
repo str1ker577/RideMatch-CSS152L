@@ -38,30 +38,22 @@
       </div>
     </div>
   
-<div id="signup-popup" class="popup">
-  <div class="popup-content">
-      <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
-      <h1>Sign Up</h1>
-      <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
-          <!-- THIS IS THE KEY ADDITION -->
-          <div class="input-group">
-              <label for="username-signup">Username (Optional)</label>
-              <input type="text" name="username_signup" id="username-signup" 
-                    placeholder="Choose a username" 
-                    minlength="3" maxlength="20" 
-                    pattern="[a-zA-Z0-9_]+" 
-                    title="Username must be 3-20 characters, letters, numbers, and underscores only">
-          </div>
-          <!-- END KEY ADDITION -->
-          <input type="email" name="email_signup" placeholder="Email" required>
-          <input type="password" name="password_signup" placeholder="Password" required>
-          <button type="submit">Sign Up</button>
-      </form>
-      <p class="success-message"></p>
-      <p class="error-message12"></p>
-      <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
-  </div>
-</div>
+    <div id="signup-popup" class="popup">
+      <div class="popup-content">
+          <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+          <h1>Sign Up</h1>
+          <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+              <input type="email" name="email_signup" placeholder="Email" required>
+              <input type="password" name="password_signup" placeholder="Password" required>
+              <button type="submit">Sign Up</button>
+          </form>
+          <p class="success-message"></p>
+          <p class="error-message12"></p> <!-- Error message element -->
+
+          <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+      </div>
+    </div>
+
   <!-- Navbar -->
   <header>
     <!-- Centered Logo -->

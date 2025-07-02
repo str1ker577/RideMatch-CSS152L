@@ -4,18 +4,17 @@
 
 const isLocalhost = window.location.hostname === '127.0.0.1' || window.location.hostname === 'localhost';
 const baseUrl = isLocalhost ? 'http://127.0.0.1:8000' : window.location.origin;
+//const baseUrl = "https://a7cbb3da-2928-4d18-ba75-ea41ce8ad0c5-00-g8eiilou0duk.sisko.replit.dev"; // Base URL for API requests
 
 // Firebase initialization 
 let auth; // Global auth object
 let userName = null; // Keep your existing userName variable
-let userDisplayName = null; // NEW: Store the display name (username)
 let currentUser = null;
 
-// Function to get current user name - UPDATED
+// Function to get current user name
 function getCurrentUserName() {
   if (auth && auth.currentUser) {
-    // Priority: username > display name > email
-    return userDisplayName || auth.currentUser.displayName || auth.currentUser.email || 'Anonymous';
+    return auth.currentUser.displayName || auth.currentUser.email || 'Anonymous';
   }
   return 'Anonymous';
 }
@@ -47,6 +46,7 @@ function updateUIForAuthState() {
   }
 }
 
+
 window.removeFavoriteFromDisplay = removeFavoriteFromDisplay;
 window.addToFave = addToFave;
 
@@ -58,20 +58,19 @@ const menuButton = document.getElementById('menu-button');
 const closeButton = document.getElementById('close-button');
 const sidebar = document.getElementById('sidebar');
 
-if (menuButton && closeButton && sidebar) {
-  menuButton.addEventListener('click', () => {
-      sidebar.classList.add('open');
-      menuButton.style.display = 'none'; 
-      closeButton.style.display = 'block';
-  });
+menuButton.addEventListener('click', () => {
+    sidebar.classList.add('open');
+    menuButton.style.display = 'none'; 
+    closeButton.style.display = 'block';
+});
 
-  // Close the sidebar and switch back the icons when close button is clicked
-  closeButton.addEventListener('click', () => {
-      sidebar.classList.remove('open');
-      menuButton.style.display = 'block'; 
-      closeButton.style.display = 'none';
-  });
-}
+// Close the sidebar and switch back the icons when close button is clicked
+closeButton.addEventListener('click', () => {
+    sidebar.classList.remove('open');
+    menuButton.style.display = 'block'; 
+    closeButton.style.display = 'none';
+});
+
 
 // Popup functionality
 function togglePopup(popupId) {
@@ -109,184 +108,6 @@ document.addEventListener('click', function(event) {
 // Firebase Related Code //
 //////////////////////////
 
-// NEW: Function to fetch user profile data
-async function fetchUserProfile(userId) {
-    try {
-        const database = firebase.database();
-        const userRef = database.ref(`users/${userId}`);
-        const snapshot = await userRef.once('value');
-        return snapshot.val();
-    } catch (error) {
-        console.error('Error fetching user profile:', error);
-        return null;
-    }
-}
-
-// NEW: Function to save user profile data
-async function saveUserProfile(userId, profileData) {
-    try {
-        const database = firebase.database();
-        const userRef = database.ref(`users/${userId}`);
-        await userRef.set(profileData);
-        console.log('User profile saved successfully');
-        return true;
-    } catch (error) {
-        console.error('Error saving user profile:', error);
-        return false;
-    }
-}
-
-// NEW: Function to check if username is available
-async function isUsernameAvailable(username) {
-    try {
-        const database = firebase.database();
-        const usernamesRef = database.ref('usernames');
-        const snapshot = await usernamesRef.orderByValue().equalTo(username).once('value');
-        return !snapshot.exists();
-    } catch (error) {
-        console.error('Error checking username availability:', error);
-        return false;
-    }
-}
-
-// NEW: Function to show username selection modal
-function showUsernameModal() {
-    // Create modal HTML if it doesn't exist
-    if (!document.getElementById('username-modal')) {
-        const modalHTML = `
-            <div id="username-modal" class="popup">
-                <div class="popup-content username-popup-content">
-                    <h2>Choose Your Username</h2>
-                    <p>This will be displayed instead of your email address</p>
-                    <form id="username-form">
-                        <input type="text" id="username-input" placeholder="Enter username" required 
-                               minlength="3" maxlength="20" pattern="[a-zA-Z0-9_]+" 
-                               title="Username must be 3-20 characters, letters, numbers, and underscores only">
-                        <div id="username-status"></div>
-                        <button type="submit">Set Username</button>
-                    </form>
-                </div>
-            </div>
-        `;
-        document.body.insertAdjacentHTML('beforeend', modalHTML);
-        
-        // Add event listener for username form
-        document.getElementById('username-form').addEventListener('submit', handleUsernameSubmit);
-        
-        // Add real-time username validation
-        document.getElementById('username-input').addEventListener('input', debounce(checkUsernameAvailability, 500));
-    }
-    
-    document.getElementById('username-modal').classList.add('active');
-}
-
-// NEW: Debounce function for username checking
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
-
-// NEW: Check username availability in real-time
-async function checkUsernameAvailability() {
-    const usernameInput = document.getElementById('username-input');
-    const statusDiv = document.getElementById('username-status');
-    const username = usernameInput.value.trim();
-    
-    if (username.length < 3) {
-        statusDiv.innerHTML = '<span style="color: orange;">Username must be at least 3 characters</span>';
-        return;
-    }
-    
-    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
-        statusDiv.innerHTML = '<span style="color: red;">Only letters, numbers, and underscores allowed</span>';
-        return;
-    }
-    
-    statusDiv.innerHTML = '<span style="color: gray;">Checking availability...</span>';
-    
-    const available = await isUsernameAvailable(username);
-    if (available) {
-        statusDiv.innerHTML = '<span style="color: green;">✓ Username available</span>';
-    } else {
-        statusDiv.innerHTML = '<span style="color: red;">✗ Username already taken</span>';
-    }
-}
-
-// NEW: Handle username form submission
-async function handleUsernameSubmit(event) {
-    event.preventDefault();
-    
-    const usernameInput = document.getElementById('username-input');
-    const username = usernameInput.value.trim();
-    
-    if (!currentUser) {
-        console.error('No user logged in');
-        return;
-    }
-    
-    // Final validation
-    if (username.length < 3 || !/^[a-zA-Z0-9_]+$/.test(username)) {
-        alert('Please enter a valid username');
-        return;
-    }
-    
-    // Check availability one more time
-    const available = await isUsernameAvailable(username);
-    if (!available) {
-        alert('Username is already taken. Please choose another.');
-        return;
-    }
-    
-    try {
-        const database = firebase.database();
-        const userId = currentUser.uid;
-        
-        // Save username mapping
-        await database.ref(`usernames/${userId}`).set(username);
-        
-        // Save user profile
-        const profileData = {
-            username: username,
-            email: currentUser.email,
-            createdAt: firebase.database.ServerValue.TIMESTAMP,
-            profilePicture: currentUser.photoURL || null
-        };
-        
-        await saveUserProfile(userId, profileData);
-        
-        // Update global variables
-        userDisplayName = username;
-        
-        // Update UI
-        updateWelcomeMessage();
-        
-        // Close modal
-        document.getElementById('username-modal').classList.remove('active');
-        
-        console.log('Username set successfully:', username);
-        
-    } catch (error) {
-        console.error('Error setting username:', error);
-        alert('Failed to set username. Please try again.');
-    }
-}
-
-// NEW: Update welcome message with username
-function updateWelcomeMessage() {
-    const welcomeText = document.getElementById('welcome-text');
-    if (welcomeText) {
-        const displayName = userDisplayName || userName;
-        welcomeText.textContent = `Welcome, ${displayName}`;
-    }
-}
-
 // Initialize Firebase when the page loads
 async function initializeFirebase() {
     try {
@@ -309,38 +130,26 @@ async function initializeFirebase() {
         
         auth = firebase.auth();
         
-        // Test database connection (removed to avoid permission issues)
-        console.log('✅ Firebase initialized, skipping connection test');
-        // Note: Connection will be tested when actually reading data
+        // FIXED: Test database connection properly
+        try {
+            // Test the database connection
+            const database = firebase.database();
+            const testRef = database.ref('test');
+            await testRef.once('value'); // This will throw an error if connection fails
+            console.log('✅ Firebase database connection successful');
+        } catch (dbError) {
+            console.error('❌ Firebase database connection failed:', dbError);
+            // Don't throw here, let the app continue but log the error
+        }
         
-        // Monitor authentication state - UPDATED
-        auth.onAuthStateChanged(async (user) => {
+        // Monitor authentication state
+        auth.onAuthStateChanged((user) => {
             if (user) {
                 userName = user.email;
-                currentUser = user;
-                
-                // NEW: Fetch user profile to get username
-                const userProfile = await fetchUserProfile(user.uid);
-                if (userProfile && userProfile.username) {
-                    userDisplayName = userProfile.username;
-                    console.log('Found existing username:', userDisplayName);
-                } else {
-                    // Check if username was just set during signup
-                    const justSetUsername = sessionStorage.getItem('usernameJustSet');
-                    if (!userDisplayName && !justSetUsername) {
-                        // Only show modal if no username was set during signup
-                        userDisplayName = null;
-                        setTimeout(() => {
-                            // Double-check that username wasn't set in the meantime
-                            if (!userDisplayName && !sessionStorage.getItem('usernameJustSet')) {
-                                showUsernameModal();
-                            }
-                        }, 1500);
-                    }
-                }
 
-                // Update welcome message with username or email
-                updateWelcomeMessage();
+                // Update welcome message
+                const welcomeText = document.getElementById('welcome-text');
+                if (welcomeText) welcomeText.textContent = `Welcome, ${userName}`;
 
                 // Hide login button, show profile pic/icon container
                 const loginBtn = document.getElementById('login-button');
@@ -352,12 +161,13 @@ async function initializeFirebase() {
                 const profilePic = document.getElementById('profile-pic');
                 const profileIcon = document.getElementById('profile-icon');
 
+                currentUser = user;
                 updateUIForAuthState();
 
-                if (user.photoURL || (userProfile && userProfile.profilePicture)) {
+                if (user.photoURL) {
                     if (profileIcon) profileIcon.style.display = 'none';
                     if (profilePic) {
-                        profilePic.src = userProfile?.profilePicture || user.photoURL;
+                        profilePic.src = user.photoURL;
                         profilePic.style.display = 'block';
                     }
                 } else {
@@ -368,8 +178,6 @@ async function initializeFirebase() {
                 console.log('User is signed in:', user.email);
             } else {
                 userName = null;
-                userDisplayName = null; // NEW: Clear username
-                currentUser = null;
 
                 const welcomeText = document.getElementById('welcome-text');
                 if (welcomeText) welcomeText.textContent = 'Welcome!';
@@ -379,6 +187,7 @@ async function initializeFirebase() {
                 if (loginBtn) loginBtn.style.display = 'block';
                 if (profileContainer) profileContainer.style.display = 'none';
 
+                currentUser = null;
                 updateUIForAuthState();
 
                 console.log('User is signed out');
@@ -435,61 +244,18 @@ function handleSignup(event) {
     event.preventDefault();
     const email = document.querySelector('input[name="email_signup"]').value;
     const password = document.querySelector('input[name="password_signup"]').value;
-    const username = document.querySelector('input[name="username_signup"]')?.value.trim();
     
     if (!auth) {
         console.error('Firebase not initialized');
         return;
     }
     
-    // Validate username if provided
-    if (username && (username.length < 3 || !/^[a-zA-Z0-9_]+$/.test(username))) {
-        document.querySelector('.error-message12').textContent = 'Username must be 3-20 characters with only letters, numbers, and underscores';
-        return;
-    }
-    
     // Use Firebase client-side authentication
     auth.createUserWithEmailAndPassword(email, password)
-        .then(async (userCredential) => {
+        .then((userCredential) => {
             // User signed up successfully
             const user = userCredential.user;
             console.log('User signed up:', user.email);
-            
-            // If username was provided, set it immediately
-            if (username) {
-                try {
-                    // Check if username is available
-                    const available = await isUsernameAvailable(username);
-                    if (!available) {
-                        document.querySelector('.error-message12').textContent = 'Username already taken. You can set it later in your profile.';
-                    } else {
-                        // Set username
-                        const database = firebase.database();
-                        const userId = user.uid;
-                        
-                        await database.ref(`usernames/${userId}`).set(username);
-                        
-                        const profileData = {
-                            username: username,
-                            email: user.email,
-                            createdAt: firebase.database.ServerValue.TIMESTAMP,
-                            profilePicture: null
-                        };
-                        
-                        await saveUserProfile(userId, profileData);
-                        userDisplayName = username;
-                        
-                        // Set a flag to prevent the modal from showing
-                        sessionStorage.setItem('usernameJustSet', 'true');
-                        setTimeout(() => sessionStorage.removeItem('usernameJustSet'), 3000);
-                        
-                        console.log('Username set during signup:', username);
-                    }
-                } catch (error) {
-                    console.error('Error setting username during signup:', error);
-                    document.querySelector('.error-message12').textContent = 'Account created but username setup failed. You can set it later.';
-                }
-            }
             
             // Display success message
             document.querySelector('.success-message').textContent = "Signup successful! Please log in.";
@@ -630,55 +396,6 @@ function getFirebaseErrorMessage(errorCode) {
             return 'Authentication failed. Please try again.';
     }
 }
-
-// NEW: Utility functions for other pages to use
-window.getCurrentUserDisplayName = function() {
-    return userDisplayName || userName || 'Anonymous';
-};
-
-window.getCurrentUserId = function() {
-    return currentUser ? currentUser.uid : null;
-};
-
-window.getUserProfile = function() {
-    if (!currentUser) return null;
-    return {
-        uid: currentUser.uid,
-        email: currentUser.email,
-        username: userDisplayName,
-        photoURL: currentUser.photoURL
-    };
-};
-
-// NEW: Function to get display name for any user by ID
-window.getDisplayNameByUserId = async function(userId) {
-    try {
-        // Check if it's the current user
-        if (currentUser && currentUser.uid === userId) {
-            return userDisplayName || currentUser.email;
-        }
-        
-        // Fetch from database
-        const database = firebase.database();
-        const userRef = database.ref(`users/${userId}`);
-        const snapshot = await userRef.once('value');
-        const userData = snapshot.val();
-        
-        if (userData && userData.username) {
-            return userData.username;
-        }
-        
-        // Fallback to username mapping
-        const usernameRef = database.ref(`usernames/${userId}`);
-        const usernameSnapshot = await usernameRef.once('value');
-        const username = usernameSnapshot.val();
-        
-        return username || userData?.email || 'Anonymous';
-    } catch (error) {
-        console.error('Error getting display name:', error);
-        return 'Anonymous';
-    }
-};
 
 ////////////////////////////
 // Formats the CSV file  //
@@ -1454,7 +1171,6 @@ const chartBackgroundColors = [
 function updateBarCharts() {
     if (comparedCars.length === 0) {
         document.getElementById('compare-charts-section').style.display = 'none';
-        document.getElementById('comparison-cards-wrapper').style.display = 'none';
         Object.values(chartInstances).forEach(chart => {
             if (chart) chart.destroy();
         });
@@ -1463,7 +1179,6 @@ function updateBarCharts() {
     }
 
     document.getElementById('compare-charts-section').style.display = 'block';
-    document.getElementById('comparison-cards-wrapper').style.display = 'block';
     
     updateHorsepowerChart();
     updatePriceChart();
@@ -1479,11 +1194,7 @@ function updateHorsepowerChart() {
         chartInstances.horsepower.destroy();
     }
 
-    const labels = comparedCars.map(car => {
-        // Add model name in parentheses under variant
-        const model = car.specs.Model || '';
-        return model ? `${car.variant}\n(${model})` : car.variant;
-    });
+    const labels = comparedCars.map(car => car.variant);
     const data = comparedCars.map(car => parseInt(car.specs.Horsepower) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1542,10 +1253,7 @@ function updatePriceChart() {
         chartInstances.price.destroy();
     }
 
-    const labels = comparedCars.map(car => {
-        const model = car.specs.Model || '';
-        return model ? `${car.variant}\n(${model})` : car.variant;
-    });
+    const labels = comparedCars.map(car => car.variant);
     const data = comparedCars.map(car => car.specs.Price || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1612,10 +1320,7 @@ function updateGroundClearanceChart() {
         chartInstances.groundClearance.destroy();
     }
 
-    const labels = comparedCars.map(car => {
-        const model = car.specs.Model || '';
-        return model ? `${car.variant}\n(${model})` : car.variant;
-    });
+    const labels = comparedCars.map(car => car.variant);
     const data = comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1674,10 +1379,7 @@ function updateCargoSpaceChart() {
         chartInstances.cargoSpace.destroy();
     }
 
-    const labels = comparedCars.map(car => {
-        const model = car.specs.Model || '';
-        return model ? `${car.variant}\n(${model})` : car.variant;
-    });
+    const labels = comparedCars.map(car => car.variant);
     // Check for both 'Cargospace' and 'CargoSpace' (case variations)
     const data = comparedCars.map(car => {
         return parseFloat(car.specs.Cargospace) || 
@@ -1742,10 +1444,7 @@ function updateSeatingCapacityChart() {
         chartInstances.seatingCapacity.destroy();
     }
 
-    const labels = comparedCars.map(car => {
-        const model = car.specs.Model || '';
-        return model ? `${car.variant}\n(${model})` : car.variant;
-    });
+    const labels = comparedCars.map(car => car.variant);
     const data = comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1892,10 +1591,6 @@ async function populateVariants() {
 //FAVOURITES Function//
 //////////////////////
 async function addToFave(event, variant) {
-
-    if (typeof originalColor === 'undefined') {
-          const originalColor = element.style.color || '#000000';
-      }
     // Prevent event bubbling
     event.stopPropagation();
     
@@ -3197,56 +2892,12 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     }
   }
 
-  // NEW: Function to get current user name (using global functions)
+  // Function to get current user name
   function getCurrentUserName() {
-    if (typeof window.getCurrentUserDisplayName === 'function') {
-      return window.getCurrentUserDisplayName();
-    }
-    
-    // Fallback to original method
     if (typeof auth !== 'undefined' && auth && auth.currentUser) {
       return auth.currentUser.displayName || auth.currentUser.email || 'Anonymous';
     }
     return 'Anonymous';
-  }
-
-  // NEW: Function to get display name for any user
-  async function getDisplayName(userId, fallbackName = null) {
-    try {
-      if (typeof window.getDisplayNameByUserId === 'function') {
-        return await window.getDisplayNameByUserId(userId);
-      }
-      
-      // Fallback to Firebase lookup
-      const database = firebase.database();
-      const userRef = database.ref(`users/${userId}`);
-      const snapshot = await userRef.once('value');
-      const userData = snapshot.val();
-      
-      if (userData && userData.username) {
-        return userData.username;
-      }
-      
-      return fallbackName || userData?.email || 'Anonymous';
-    } catch (error) {
-      console.error('Error getting display name:', error);
-      return fallbackName || 'Anonymous';
-    }
-  }
-
-  // NEW: Function to get profile picture
-  async function getProfilePicture(userId) {
-    try {
-      const database = firebase.database();
-      const userRef = database.ref(`users/${userId}`);
-      const snapshot = await userRef.once('value');
-      const userData = snapshot.val();
-      
-      return userData?.profilePicture || null;
-    } catch (error) {
-      console.error('Error getting profile picture:', error);
-      return null;
-    }
   }
 
   // Initialize testimonials DOM elements
@@ -3358,14 +3009,13 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
       return;
     }
 
-    // Check authentication
+    // Check authentication (uncomment when ready)
+    /*
     if (typeof auth !== 'undefined' && auth && !auth.currentUser) {
       alert("Please sign in to submit a testimonial.");
-      if (typeof togglePopup === 'function') {
-        togglePopup('login-popup');
-      }
       return;
     }
+    */
 
     // Toggle form visibility
     const isHidden = elements.form.style.display === 'none' || elements.form.style.display === '';
@@ -3385,7 +3035,7 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     console.log('Form display changed to:', elements.form.style.display);
   }
 
-  // UPDATED: Submit testimonial with username support
+  // Submit testimonial
   async function submitTestimonial(event) {
     console.log('submitTestimonial called');
     
@@ -3415,15 +3065,6 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
       return;
     }
 
-    // Check authentication
-    if (typeof auth === 'undefined' || !auth || !auth.currentUser) {
-      alert("Please sign in to submit a testimonial.");
-      if (typeof togglePopup === 'function') {
-        togglePopup('login-popup');
-      }
-      return;
-    }
-
     // Show loading state
     const submitButton = elements.submitBtn;
     if (submitButton) {
@@ -3432,22 +3073,16 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
       submitButton.disabled = true;
 
       try {
-        // Get user name and profile picture
+        // Get user name
         const userName = getCurrentUserName();
-        const userId = auth.currentUser.uid;
-        const userProfile = typeof window.getUserProfile === 'function' ? window.getUserProfile() : null;
-        
         console.log('User name:', userName);
-        console.log('User ID:', userId);
         
         // Prepare testimonial data for Flask API
         const testimonialData = {
           name: userName,
           testimonial: testimonialText,
           title: titleText || null,
-          rating: 5,
-          userId: userId,  // NEW: Include user ID
-          userPhoto: userProfile?.photoURL || null  // NEW: Include profile picture
+          rating: 5
         };
 
         console.log('Sending testimonial data:', testimonialData);
@@ -3497,7 +3132,7 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     }
   }
 
-  // UPDATED: Load testimonials from Flask API with username support
+  // Load testimonials from Flask API
   async function loadTestimonials() {
     // Get elements safely
     const elements = getTestimonialElements();
@@ -3528,10 +3163,10 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
         return;
       }
 
-      // Add each testimonial to display with username support
-      for (const testimonial of testimonials) {
-        await addTestimonialToDisplay(testimonial);
-      }
+      // Add each testimonial to display
+      testimonials.forEach(testimonial => {
+        addTestimonialToDisplay(testimonial);
+      });
 
     } catch (error) {
       console.error('Error loading testimonials:', error);
@@ -3541,8 +3176,8 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     }
   }
 
-  // UPDATED: Add testimonial to display with username and profile picture support
-  async function addTestimonialToDisplay(testimonial) {
+  // Add testimonial to display
+  function addTestimonialToDisplay(testimonial) {
     const elements = getTestimonialElements();
     
     if (!elements || !elements.initialized || !elements.container) {
@@ -3559,26 +3194,6 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     // Convert timestamp to date
     const date = testimonial.timestamp ? new Date(testimonial.timestamp) : new Date();
     
-    // NEW: Get updated display name and profile picture if userId exists
-    let displayName = testimonial.name;
-    let profilePicture = testimonial.userPhoto;
-    
-    if (testimonial.userId) {
-      try {
-        // Try to get the latest username and profile picture
-        const latestDisplayName = await getDisplayName(testimonial.userId, testimonial.name);
-        const latestProfilePicture = await getProfilePicture(testimonial.userId);
-        
-        displayName = latestDisplayName;
-        if (latestProfilePicture) {
-          profilePicture = latestProfilePicture;
-        }
-      } catch (error) {
-        console.error('Error getting latest user data:', error);
-        // Keep original data if lookup fails
-      }
-    }
-    
     const testimonialElement = document.createElement('div');
     testimonialElement.className = 'testimonial-card expanded';
     testimonialElement.setAttribute('data-expanded', 'true');
@@ -3587,8 +3202,8 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     testimonialElement.innerHTML = `
       <div class="card-header">
         <div class="profile-section">
-          ${profilePicture ? 
-            `<img src="${escapeHtml(profilePicture)}" alt="Profile" class="profile-pic">` :
+          ${testimonial.userPhoto ? 
+            `<img src="${escapeHtml(testimonial.userPhoto)}" alt="Profile" class="profile-pic">` :
             `<div class="profile-icon"><i class="fas fa-user"></i></div>`
           }
         </div>
@@ -3606,21 +3221,14 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
         <div class="testimonial-footer">
           <div class="author-info">
             <span class="date">${date.toLocaleDateString()}</span>
-            <span class="author-name">${escapeHtml(displayName)}</span>
+            <span class="author-name">${escapeHtml(testimonial.name)}</span>
             ${testimonial.title ? `<span class="author-title">${escapeHtml(testimonial.title)}</span>` : '<span class="author-title"></span>'}
           </div>
-          ${testimonial.userId && auth && auth.currentUser && testimonial.userId === auth.currentUser.uid ? `
-            <div class="testimonial-actions">
-              <button class="delete-testimonial-btn" onclick="TestimonialsModule.deleteTestimonial('${testimonial.id}')" title="Delete testimonial">
-                <i class="fas fa-trash"></i>
-              </button>
-            </div>
-          ` : ''}
         </div>
       </div>
 
       <div class="card-content compact-content">
-        <p class="compact-text">Check out <span class="author-name">${escapeHtml(displayName)}</span>'s testimonial!</p>
+        <p class="compact-text">Check out <span class="author-name">${escapeHtml(testimonial.name)}</span>'s testimonial!</p>
       </div>
     `;
     
@@ -3651,28 +3259,19 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     }
   }
 
-  // UPDATED: Delete testimonial (for user's own testimonials)
+  // Delete testimonial (for admin use)
   async function deleteTestimonial(testimonialId) {
-    if (!auth || !auth.currentUser) {
-      alert('Please sign in to delete testimonials.');
-      return;
-    }
-
     if (!confirm('Are you sure you want to delete this testimonial?')) {
       return;
     }
 
     try {
       const response = await fetch(`/api/testimonials/${testimonialId}`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        }
+        method: 'DELETE'
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
 
       console.log('Testimonial deleted successfully');
@@ -3683,11 +3282,7 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
       
     } catch (error) {
       console.error('Error deleting testimonial:', error);
-      if (error.message.includes('unauthorized')) {
-        showErrorMessage('You can only delete your own testimonials.');
-      } else {
-        showErrorMessage('Failed to delete testimonial.');
-      }
+      showErrorMessage('Failed to delete testimonial.');
     }
   }
 
@@ -3784,8 +3379,8 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     }
   }
 
-  // Initialize testimonials when page loads
-  function initializeTestimonials() {
+    // Initialize testimonials when page loads
+    function initializeTestimonials() {
     console.log('Initializing testimonials functionality');
     
     // First check if testimonial elements exist on this page
@@ -3813,7 +3408,7 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
         hideLoadingIndicator();
         }
     }, 100);
-  }
+    }
 
   // Auto-initialize when DOM is loaded
   if (document.readyState === 'loading') {
@@ -3948,58 +3543,6 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     }
   }
 
-  // NEW: Get display name for user
-  async function getDisplayName(userId, fallbackEmail = null) {
-    try {
-      // Use the global function if available
-      if (typeof window.getDisplayNameByUserId === 'function') {
-        return await window.getDisplayNameByUserId(userId);
-      }
-      
-      // Fallback to Firebase lookup
-      const database = firebase.database();
-      
-      // Try username mapping first
-      const usernameRef = database.ref(`usernames/${userId}`);
-      const usernameSnapshot = await usernameRef.once('value');
-      const username = usernameSnapshot.val();
-      
-      if (username) {
-        return username;
-      }
-      
-      // Try user profile
-      const userRef = database.ref(`users/${userId}`);
-      const userSnapshot = await userRef.once('value');
-      const userData = userSnapshot.val();
-      
-      if (userData && userData.username) {
-        return userData.username;
-      }
-      
-      // Final fallback
-      return fallbackEmail || userData?.email || 'Anonymous';
-    } catch (error) {
-      console.error('Error getting display name:', error);
-      return fallbackEmail || 'Anonymous';
-    }
-  }
-
-  // NEW: Get profile picture for user
-  async function getProfilePicture(userId) {
-    try {
-      const database = firebase.database();
-      const userRef = database.ref(`users/${userId}`);
-      const snapshot = await userRef.once('value');
-      const userData = snapshot.val();
-      
-      return userData?.profilePicture || null;
-    } catch (error) {
-      console.error('Error getting profile picture:', error);
-      return null;
-    }
-  }
-
   // CLEANED: Load posts (removed tag filtering)
   async function loadPosts() {
     if (!forumElements.postsContainer) return;
@@ -4028,11 +3571,9 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
       }
 
       sortPosts(posts);
-      
-      // Process each post to update display names
-      for (const post of posts) {
-        await addPostToDisplay(post);
-      }
+      posts.forEach(post => {
+        addPostToDisplay(post);
+      });
 
     } catch (error) {
       console.error('Error loading forum posts:', error);
@@ -4043,42 +3584,41 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
   }
 
   // Sort posts based on active tab
-  function sortPosts(posts) {
-    switch (activeTab) {
-      case 'recent':
-        posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        break;
-      case 'popular':
-        posts.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
-        break;
-      case 'answered':
-        posts.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
-        break;
-      case 'trending':
-        // NEW: Sort by activity score (views + comments + votes)
-        posts.sort((a, b) => {
-          const scoreA = (a.views || 0) + (a.commentCount || 0) + (a.upvotes || 0);
-          const scoreB = (b.views || 0) + (b.commentCount || 0) + (b.upvotes || 0);
-          return scoreB - scoreA;
-        });
-        break;
-      default:
-        // Default to recent if unknown tab
-        posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    }
+function sortPosts(posts) {
+  switch (activeTab) {
+    case 'recent':
+      posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      break;
+    case 'popular':
+      posts.sort((a, b) => (b.upvotes - b.downvotes) - (a.upvotes - a.downvotes));
+      break;
+    case 'answered':
+      posts.sort((a, b) => (b.commentCount || 0) - (a.commentCount || 0));
+      break;
+    case 'trending':
+      // NEW: Sort by activity score (views + comments + votes)
+      posts.sort((a, b) => {
+        const scoreA = (a.views || 0) + (a.commentCount || 0) + (a.upvotes || 0);
+        const scoreB = (b.views || 0) + (b.commentCount || 0) + (b.upvotes || 0);
+        return scoreB - scoreA;
+      });
+      break;
+    default:
+      // Default to recent if unknown tab
+      posts.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
+}
 
-  // UPDATED: Add post to display with username support
-  async function addPostToDisplay(post) {
+  // Add post to display with expand arrow and anonymous option
+  function addPostToDisplay(post) {
     if (!forumElements.postsContainer) return;
 
     const timeAgo = getTimeAgo(post.createdAt);
     const isExpanded = expandedPosts.has(post.id);
     const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
     
-    // NEW: Get display name and profile picture
-    const authorName = post.isAnonymous ? 'Anonymous' : await getDisplayName(post.userId, post.authorName);
-    const profilePicture = post.isAnonymous ? null : await getProfilePicture(post.userId);
+    // Handle anonymous posts
+    const authorName = post.isAnonymous ? 'Anonymous' : (post.authorName || 'Anonymous');
     
     const postElement = document.createElement('div');
     postElement.className = `forum-post ${isExpanded ? 'expanded' : ''}`;
@@ -4099,13 +3639,7 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
         <div class="post-content">
           <h3 class="post-title">${escapeHtml(post.title)}</h3>
           <div class="post-meta">
-            <div class="author-info">
-              ${profilePicture && !post.isAnonymous ? 
-                `<img src="${profilePicture}" alt="Profile" class="author-pic">` : 
-                `<div class="author-icon"><i class="bx bx-user"></i></div>`
-              }
-              <span class="post-author">by ${escapeHtml(authorName)}</span>
-            </div>
+            <span class="post-author">by ${escapeHtml(authorName)}</span>
             <span class="post-time">${timeAgo}</span>
           </div>
         </div>
@@ -4126,15 +3660,15 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
         </div>
       </div>
       
-      ${isExpanded ? await renderExpandedPost(post, tags) : ''}
+      ${isExpanded ? renderExpandedPost(post, tags) : ''}
     `;
     
     forumElements.postsContainer.appendChild(postElement);
   }
 
-  // UPDATED: Render expanded post with username support
-  async function renderExpandedPost(post, tags) {
-    const authorName = post.isAnonymous ? 'Anonymous' : await getDisplayName(post.userId, post.authorName);
+  // Render expanded post with "Tags:" label
+  function renderExpandedPost(post, tags) {
+    const authorName = post.isAnonymous ? 'Anonymous' : (post.authorName || 'Anonymous');
     
     return `
       <div class="post-body">
@@ -4233,7 +3767,7 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
         const tags = post.tags ? post.tags.split(',').map(tag => tag.trim()) : [];
         
         const expandedContent = document.createElement('div');
-        expandedContent.innerHTML = await renderExpandedPost(post, tags);
+        expandedContent.innerHTML = renderExpandedPost(post, tags);
         postElement.appendChild(expandedContent.firstElementChild);
         
         setTimeout(() => loadComments(postId), 100);
@@ -4241,7 +3775,7 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     }
   }
 
-  // UPDATED: Load comments with username support
+  // Load comments with voting and replies
   async function loadComments(postId) {
     const commentsContainer = document.getElementById(`comments-${postId}`);
     if (!commentsContainer) return;
@@ -4268,14 +3802,8 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
       // Organize comments by parent/child relationships
       const organizedComments = organizeComments(comments);
       
-      // Render comments with username support
-      const renderedComments = [];
-      for (const comment of organizedComments) {
-        renderedComments.push(await renderComment(comment, postId));
-      }
-      
-      commentsContainer.innerHTML = renderedComments.length > 0 
-        ? renderedComments.join('')
+      commentsContainer.innerHTML = organizedComments.length > 0 
+        ? organizedComments.map(comment => renderComment(comment, postId)).join('')
         : '<p style="text-align: center; color: #666; font-style: italic;">No comments yet</p>';
         
     } catch (error) {
@@ -4307,20 +3835,13 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     return rootComments;
   }
 
-  // UPDATED: Render comment with username support
-  async function renderComment(comment, postId, isReply = false) {
+  // Render comment with voting and reply functionality
+  function renderComment(comment, postId, isReply = false) {
     const timeAgo = getTimeAgo(comment.createdAt);
-    const authorName = comment.isAnonymous ? 'Anonymous' : await getDisplayName(comment.userId, comment.authorName);
-    const profilePicture = comment.isAnonymous ? null : await getProfilePicture(comment.userId);
+    const authorName = comment.isAnonymous ? 'Anonymous' : (comment.authorName || 'Anonymous');
     const indentClass = isReply ? 'comment-reply' : '';
     
-    // Process replies
-    const replyHtmlPromises = comment.replies && comment.replies.length > 0 
-      ? comment.replies.map(reply => renderComment(reply, postId, true))
-      : [];
-    const replyHtmls = await Promise.all(replyHtmlPromises);
-    
-    return `
+    let html = `
       <div class="comment ${indentClass}" data-comment-id="${comment.id}">
         <div class="comment-content">
           <!-- Comment voting -->
@@ -4336,13 +3857,7 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
           
           <div class="comment-main">
             <div class="comment-header">
-              <div class="comment-author-info">
-                ${profilePicture && !comment.isAnonymous ? 
-                  `<img src="${profilePicture}" alt="Profile" class="comment-author-pic">` : 
-                  `<div class="comment-author-icon"><i class="bx bx-user"></i></div>`
-                }
-                <span class="comment-author">${escapeHtml(authorName)}</span>
-              </div>
+              <span class="comment-author">${escapeHtml(authorName)}</span>
               <span class="comment-time">${timeAgo}</span>
             </div>
             <div class="comment-text">${escapeHtml(comment.text).replace(/\n/g, '<br>')}</div>
@@ -4379,13 +3894,15 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
         </div>
         
         <!-- Render replies -->
-        ${replyHtmls.length > 0 ? `
+        ${comment.replies && comment.replies.length > 0 ? `
           <div class="comment-replies">
-            ${replyHtmls.join('')}
+            ${comment.replies.map(reply => renderComment(reply, postId, true)).join('')}
           </div>
         ` : ''}
       </div>
     `;
+    
+    return html;
   }
 
   // Vote on comments
@@ -4613,7 +4130,7 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     }
   }
 
-  // UPDATED: Submit question with username support
+  // Submit question with anonymous option
   async function submitQuestion(event) {
     if (event) event.preventDefault();
     
@@ -4635,9 +4152,6 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
     }
 
     try {
-      // Get current user's display name for the post
-      const authorName = isAnonymous ? 'Anonymous' : window.getCurrentUserDisplayName();
-      
       const response = await fetch('/api/forum/posts', {
         method: 'POST',
         headers: {
@@ -4647,8 +4161,7 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
           title: title,
           body: body,
           tags: tags,
-          isAnonymous: isAnonymous,
-          authorName: authorName  // Include the username
+          isAnonymous: isAnonymous
         })
       });
 
@@ -4800,19 +4313,7 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
 
   function getTimeAgo(dateString) {
     const now = new Date();
-    let date;
-    
-    // Handle different timestamp formats
-    if (typeof dateString === 'number') {
-      // If it's a timestamp in milliseconds
-      date = new Date(dateString);
-    } else if (typeof dateString === 'string') {
-      // If it's an ISO string
-      date = new Date(dateString);
-    } else {
-      return 'Unknown time';
-    }
-    
+    const date = new Date(dateString);
     const diffInMinutes = Math.floor((now - date) / (1000 * 60));
 
     if (diffInMinutes < 1) return 'just now';
