@@ -309,17 +309,9 @@ async function initializeFirebase() {
         
         auth = firebase.auth();
         
-        // FIXED: Test database connection properly
-        try {
-            // Test the database connection with a public path
-            const database = firebase.database();
-            const testRef = database.ref('testimonials'); // Use public readable path
-            await testRef.limitToLast(1).once('value'); // Just check if we can read
-            console.log('✅ Firebase database connection successful');
-        } catch (dbError) {
-            console.error('❌ Firebase database connection failed:', dbError);
-            // Don't throw here, let the app continue but log the error
-        }
+        // Test database connection (removed to avoid permission issues)
+        console.log('✅ Firebase initialized, skipping connection test');
+        // Note: Connection will be tested when actually reading data
         
         // Monitor authentication state - UPDATED
         auth.onAuthStateChanged(async (user) => {
@@ -331,10 +323,20 @@ async function initializeFirebase() {
                 const userProfile = await fetchUserProfile(user.uid);
                 if (userProfile && userProfile.username) {
                     userDisplayName = userProfile.username;
+                    console.log('Found existing username:', userDisplayName);
                 } else {
-                    // User doesn't have a username yet, show selection modal
-                    userDisplayName = null;
-                    setTimeout(() => showUsernameModal(), 1000); // Small delay to ensure UI is ready
+                    // Check if username was just set during signup
+                    const justSetUsername = sessionStorage.getItem('usernameJustSet');
+                    if (!userDisplayName && !justSetUsername) {
+                        // Only show modal if no username was set during signup
+                        userDisplayName = null;
+                        setTimeout(() => {
+                            // Double-check that username wasn't set in the meantime
+                            if (!userDisplayName && !sessionStorage.getItem('usernameJustSet')) {
+                                showUsernameModal();
+                            }
+                        }, 1500);
+                    }
                 }
 
                 // Update welcome message with username or email
@@ -476,6 +478,11 @@ function handleSignup(event) {
                         
                         await saveUserProfile(userId, profileData);
                         userDisplayName = username;
+                        
+                        // Set a flag to prevent the modal from showing
+                        sessionStorage.setItem('usernameJustSet', 'true');
+                        setTimeout(() => sessionStorage.removeItem('usernameJustSet'), 3000);
+                        
                         console.log('Username set during signup:', username);
                     }
                 } catch (error) {
