@@ -311,10 +311,10 @@ async function initializeFirebase() {
         
         // FIXED: Test database connection properly
         try {
-            // Test the database connection
+            // Test the database connection with a public path
             const database = firebase.database();
-            const testRef = database.ref('test');
-            await testRef.once('value'); // This will throw an error if connection fails
+            const testRef = database.ref('testimonials'); // Use public readable path
+            await testRef.limitToLast(1).once('value'); // Just check if we can read
             console.log('✅ Firebase database connection successful');
         } catch (dbError) {
             console.error('❌ Firebase database connection failed:', dbError);
@@ -433,18 +433,56 @@ function handleSignup(event) {
     event.preventDefault();
     const email = document.querySelector('input[name="email_signup"]').value;
     const password = document.querySelector('input[name="password_signup"]').value;
+    const username = document.querySelector('input[name="username_signup"]')?.value.trim();
     
     if (!auth) {
         console.error('Firebase not initialized');
         return;
     }
     
+    // Validate username if provided
+    if (username && (username.length < 3 || !/^[a-zA-Z0-9_]+$/.test(username))) {
+        document.querySelector('.error-message12').textContent = 'Username must be 3-20 characters with only letters, numbers, and underscores';
+        return;
+    }
+    
     // Use Firebase client-side authentication
     auth.createUserWithEmailAndPassword(email, password)
-        .then((userCredential) => {
+        .then(async (userCredential) => {
             // User signed up successfully
             const user = userCredential.user;
             console.log('User signed up:', user.email);
+            
+            // If username was provided, set it immediately
+            if (username) {
+                try {
+                    // Check if username is available
+                    const available = await isUsernameAvailable(username);
+                    if (!available) {
+                        document.querySelector('.error-message12').textContent = 'Username already taken. You can set it later in your profile.';
+                    } else {
+                        // Set username
+                        const database = firebase.database();
+                        const userId = user.uid;
+                        
+                        await database.ref(`usernames/${userId}`).set(username);
+                        
+                        const profileData = {
+                            username: username,
+                            email: user.email,
+                            createdAt: firebase.database.ServerValue.TIMESTAMP,
+                            profilePicture: null
+                        };
+                        
+                        await saveUserProfile(userId, profileData);
+                        userDisplayName = username;
+                        console.log('Username set during signup:', username);
+                    }
+                } catch (error) {
+                    console.error('Error setting username during signup:', error);
+                    document.querySelector('.error-message12').textContent = 'Account created but username setup failed. You can set it later.';
+                }
+            }
             
             // Display success message
             document.querySelector('.success-message').textContent = "Signup successful! Please log in.";
