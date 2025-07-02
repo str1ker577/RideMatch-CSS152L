@@ -1197,9 +1197,9 @@ function addCarToComparison(variant, specs) {
         carColumn.appendChild(imgContainer);
     }
 
-    // Specifications sections
+    // UPDATED: Specifications sections with Year included
     const specSections = {
-        "General Specifications": ["Brand", "Model"],
+        "General Specifications": ["Brand", "Model", "Year"], // Added Year here
         "Performance Specifications": ["Horsepower", "Engine", "Transmission", "DriveTrain", "FuelType"],
         "Utility Specifications": ["SeatingCapacity", "GroundClearance", "Cargospace"]
     };
@@ -1214,7 +1214,7 @@ function addCarToComparison(variant, specs) {
         sectionDiv.appendChild(categoryTitle);
 
         keys.forEach(key => {
-            if (specs[key] !== undefined) {
+            if (specs[key] !== undefined && specs[key] !== "") {
                 const specDiv = document.createElement('div');
                 specDiv.classList.add('spec-value');
                 
@@ -1222,10 +1222,11 @@ function addCarToComparison(variant, specs) {
                 if (key === "Horsepower") formattedValue += " hp";
                 if (key === "GroundClearance") formattedValue += " cm";
                 if (key === "Cargospace") formattedValue += " L";
+                // Year doesn't need additional formatting
                 
                 specDiv.innerHTML = `<span class="spec-label">${key.replace(/([A-Z])/g, ' $1').trim()}:</span> ${formattedValue}`;
                 
-                // Add performance bar for numeric values
+                // Add performance bar for numeric values (not for Year)
                 if (key === "Horsepower" || key === "SeatingCapacity" || key === "GroundClearance") {
                     const progressBar = createProgressBar(formattedValue, key);
                     specDiv.appendChild(progressBar);
@@ -1258,10 +1259,18 @@ function addCarToComparison(variant, specs) {
         carColumn.remove();
         comparedCars = comparedCars.filter(car => car.variant !== variant);
         updateBarCharts();
+        
+        // Hide comparison sections if no cars left
+        if (comparedCars.length === 0) {
+            document.getElementById('comparison-cards-wrapper').style.display = 'none';
+        }
     };
 
     carColumn.appendChild(removeBtn);
     container.appendChild(carColumn);
+    
+    // Show the comparison cards wrapper
+    document.getElementById('comparison-cards-wrapper').style.display = 'block';
 }
 
 function createProgressBar(value, type) {

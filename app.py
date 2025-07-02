@@ -753,49 +753,62 @@ def get_specs():
         return jsonify({"error": "Car data not available"}), 500
     
     variant = request.args.get("variant", "").strip()
+    
     if not variant:
         app.logger.warning("No variant specified for specs lookup")
-        return jsonify({"error": "Variant parameter required"}), 400
+        return jsonify({})
 
     try:
-        app.logger.info(f"Looking up specs for variant: {variant}")
+        # Find the car with matching variant
+        car_data = df[df["Variant"].str.lower() == variant.lower()]
         
-        # Try exact match first
-        specs_df = df[df["Variant"].str.lower() == variant.lower()]
+        if car_data.empty:
+            app.logger.warning(f"No car found for variant: {variant}")
+            return jsonify({})
         
-        if specs_df.empty:
-            app.logger.warning(f"Exact variant not found: {variant}")
-            # Try partial match as fallback
-            specs_df = df[df["Variant"].str.contains(variant, case=False, na=False)]
-            
-            if specs_df.empty:
-                app.logger.warning(f"No variant found for: {variant}")
-                available_variants = df["Variant"].dropna().unique()[:10]  # Show first 10 for debugging
-                app.logger.info(f"Available variants (sample): {list(available_variants)}")
-                return jsonify({"error": "Variant not found", "available_variants": list(available_variants)}), 404
+        # Get the first matching car (in case of duplicates)
+        car = car_data.iloc[0]
         
-        specs = specs_df.iloc[0]
-        image_path = find_car_image(str(specs["Model"]))
-        
-        car_specs = {
-            "Brand": str(specs.get("Brand", "Unknown")),
-            "Model": str(specs.get("Model", "Unknown")),
-            "Engine": str(specs.get("Engine", "N/A")),
-            "Horsepower": int(specs.get("Horsepower", 0)) if pd.notna(specs.get("Horsepower")) else 0,
-            "DriveTrain": str(specs.get("Drive_Train", "N/A")),
-            "Transmission": str(specs.get("Transmission", "N/A")),
-            "BodyType": str(specs.get("Body_Type", "N/A")),
-            "FuelType": str(specs.get("Fuel_Type", "N/A")),
-            "GroundClearance": float(specs.get("Ground_Clearance", 0)) if pd.notna(specs.get("Ground_Clearance")) else 0,
-            "SeatingCapacity": int(specs.get("Seating_Capacity", 0)) if pd.notna(specs.get("Seating_Capacity")) else 0,
-            "CargoSpace": int(specs.get("Cargo_space", 0)) if pd.notna(specs.get("Cargo_space")) else 0,
-            "Price": float(specs.get("Price", 0)) if pd.notna(specs.get("Price")) else 0,
-            "Image": image_path,
-            "Variant": str(specs.get("Variant", variant))  # Include the variant in response
+        # Build specs dictionary with all the information needed for comparison
+        specs = {
+            "Brand": car.get("Brand", ""),
+            "Model": car.get("Model", ""),
+            "Body_Type": car.get("Body_Type", ""),
+            "Variant": car.get("Variant", ""),
+            "Drive_Train": car.get("Drive_Train", ""),
+            "Engine": car.get("Engine", ""),
+            "Horsepower": car.get("Horsepower", 0),
+            "Transmission": car.get("Transmission", ""),
+            "Fuel_Type": car.get("Fuel_Type", ""),
+            "Year": car.get("Year", ""),  # NEW: Include Year in specs
+            "Ground_Clearance": car.get("Ground_Clearance", 0),
+            "Cargo_space": car.get("Cargo_space", 0),
+            "Seating_Capacity": car.get("Seating_Capacity", 0),
+            "Price": car.get("Price", 0),
+            "Image": find_car_image(car.get("Model", "")),  # Get car image
         }
-
-        app.logger.info(f"✅ Retrieved specs for variant: {variant}")
-        return jsonify(car_specs)
+        
+        # Map to the field names expected by your JavaScript
+        formatted_specs = {
+            "Brand": specs["Brand"],
+            "Model": specs["Model"],
+            "BodyType": specs["Body_Type"],
+            "Variant": specs["Variant"],
+            "DriveTrain": specs["Drive_Train"],
+            "Engine": specs["Engine"],
+            "Horsepower": specs["Horsepower"],
+            "Transmission": specs["Transmission"],
+            "FuelType": specs["Fuel_Type"],
+            "Year": specs["Year"],  # NEW: Add Year to formatted specs
+            "GroundClearance": specs["Ground_Clearance"],
+            "Cargospace": specs["Cargo_space"],  # Note: Your JS checks for both 'Cargospace' and 'CargoSpace'
+            "SeatingCapacity": specs["Seating_Capacity"],
+            "Price": specs["Price"],
+            "Image": specs["Image"]
+        }
+        
+        app.logger.info(f"Retrieved specs for variant: {variant}")
+        return jsonify(formatted_specs)
         
     except Exception as e:
         app.logger.error(f"Error getting specs for variant {variant}: {e}")
