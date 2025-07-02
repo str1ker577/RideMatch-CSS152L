@@ -66,73 +66,111 @@ Car_ID,Brand,Model,Body_Type,Variant,Drive_Train,Engine,Horsepower,Transmission,
 65,Mitsubishi,Montero Sport,SUV,GLS A/T,2WD,2.4L;  4 Cylinde 16 Valve,179,8-Speed; Automatic,Diesel,21.8,502,7,2025,1899000
 66,Mitsubishi,Montero Sport,SUV,Black 2WD Series 8A/T,2WD,2.4L;  4 Cylinde 16 Valve,179,8-Speed; Automatic,Diesel,21.8,502,7,2025,2162000
 67,Mitsubishi,Montero Sport,SUV,Black 4WD Series 8A/T,4WD,2.4L;  4 Cylinde 16 Valve,179,8-Speed; Automatic,Diesel,21.8,502,7,2025,2502000
-68,Mitsubishi,Triton,Truck,GL 2WD MT,2WD,2.4L; In-line 4 Cylinder,180,6-Speed; Manual,Diesel,22.2,2340,5,2024,1134000
-69,Mitsubishi,Triton,Truck,GL 4WD MT,4WD,2.4L; In-line 4 Cylinder,180,6-Speed; Manual,Diesel,22.2,2340,5,2024,1157000
-70,Mitsubishi,Triton,Truck,GLX 2WD MT,2WD,2.4L; In-line 4 Cylinder,180,6-Speed; Manual,Diesel,22.2,2340,5,2024,1311000
-71,Mitsubishi,Triton,Truck,GLX 2WD AT,2WD,2.4L; In-line 4 Cylinder,180,6-Speed; Automatic,Diesel,22.2,2340,5,2024,1383000
-72,Mitsubishi,Triton,Truck,GLX 4WD MT,4WD,2.4L; In-line 4 Cylinder,,6-Speed; Manual,Diesel,22.2,2340,5,2024,1561000
-73,Mitsubishi,Triton,Truck,GLS 2WD AT,2WD,2.4L; In-line 4 Cylinder,,6-Speed; Automatic,Diesel,22.2,2340,5,2024,1582000
-74,Mitsubishi,Triton,Truck,Athlete 4WD AT,4WD,2.4L; In-line 4 Cylinder,,6-Speed; Automatic,Diesel,22.2,2340,5,2024,1909000
-75,Mitsubishi,L300,Van,Exceed 2.2 Diesel,,2.2L; In-line 4 Cylinder,98,5-Speed ; Manual,Diesel,19.5,1145,3,2024,825000
-76,Honda,City,Sedan,1.5 E CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2024,973000
-77,Honda,City,Sedan,1.5 S CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2024,998000
-78,Honda,City,Sedan,1.5 V CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2024,1073000
-79,Honda,City,Sedan,1.5 RS CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2024,1128000
-80,Honda,City,Hatchback,1.5 RS CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,289,5,2024,1189000
-81,Honda,Brio,Hatchback,1.2L S MT,FWD,1.2L; In-line 4,89,5-Speed ; Manual,Gasoline,13.7,258,5,2024,735000
-82,Honda,Brio,Hatchback,1.2L V CVT,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2024,827000
-83,Honda,Brio,Hatchback,1.2L RS CVT,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2024,853000
-84,Honda,Brio,Hatchback,1.2L RS CVT Black Top,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2024,863000
-85,Honda,BR-V,SUV,1.5L S MT,FWD,1.5L; In-line 4 Cylinder,119,6-Speed; Manual,Gasoline,20.7,570,7,2024,1090000
-86,Honda,BR-V,SUV,1.5L S CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,570,7,2024,1150000
-87,Honda,BR-V,SUV,1.5L V CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,570,7,2024,1295000
-88,Honda,BR-V,SUV,1.5L VX CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,570,7,2024,1390000
-89,Honda,CR-V,SUV,1.5 V Turbo CVT,FWD,1.5L; In-line 4 Cylinder,187,CVT,Gasoline,19.8,1064,7,2024,2100000
-90,Honda,CR-V,SUV,1.5 VX Turbo CVT,AWD,1.5L; In-line 4 Cylinder,187,CVT,Gasoline,19.8,1064,7,2024,2280000
-91,Honda,CR-V,SUV,RS eHEV,FWD,2.0L; 4 Cylinder,181,E-CVT,Hybrid; Gasoline,19.8,1064,7,2024,2590000
-92,Honda,Civic,Sedan,V Turbo CVT,FWD,1.5L; In-line 4 Cylinder,176,CVT,Gasoline,13.4,519,5,2024,1583000
-93,Honda,Civic,Sedan,RS Turbo CVT,FWD,1.5L; In-line 4 Cylinder,176,CVT,Gasoline,13.4,519,5,2024,1775000
-94,Honda,Civic,Sedan,RS eHEV,FWD,1.5L; In-line 4 Cylinder,184,CVT,Hybrid; Gasoline,13.4,519,5,2024,1990000
-95,Ford,Ranger,Truck,2.0L Turbo XL 4WD MT,4WD,2.0L; 4 Cylinder,168,6-Speed; Manual,Diesel,23.5,1233,5,2024,1259000
-96,Ford,Ranger,Truck,2.0L Turbo XLT 2WD AT,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,23.5,1233,5,2024,1389000
-97,Ford,Ranger,Truck,2.0L Turbo Sport 2WD AT,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,23.5,1233,5,2024,1504000
-98,Ford,Ranger,Truck,2.0L Turbo Wildtrak 2WD AT,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,23.5,1233,5,2024,1614000
-99,Ford,Ranger,Truck,2.0L Turbo Sport 4WD AT,4WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,23.5,1233,5,2024,1624000
-100,Ford,Ranger,Truck,2.0L Bi-Turbo Wildtrak 4WD AT,4WD,2.0L; 4 Cylinder,168,10-Speed; Automatic,Diesel,23.5,1233,5,2024,1940000
-101,Ford ,Everest,SUV,2.0L Turbo Trend,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,22.3,199,7,2024,1829000
-102,Ford ,Everest,SUV,2.0L Turbo Sport,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,22.3,199,7,2024,2139000
-103,Ford ,Everest,SUV,2.0L Turbo Titanium Plus,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,22.3,199,7,2024,2259000
-104,Ford ,Everest,SUV,2.0L Bi-Turbo Titanium Plus,4WD,2.0L; 4 Cylinder,207,10-Speed; Automatic,Diesel,22.3,199,7,2024,2555000
-105,Ford ,Everest,SUV,Wildtrak ,2WD,2.0L; 4 Cylinder,170,6-Speed; Automatic,Diesel,22.3,199,7,2024,2439000
-106,Mazda,Mazda 2,Hatchback,1.5L Sport,FWD,1.5L ; In-line 4,108,6-Speed; Automatic,Gasoline,14.3,220,5,2024,1250000
-107,Mazda,Mazda 3,Hatchback,2.0L Sport,FWD,2.0L; In-line 4 Cylinder,153,6-Speed; Automatic,Gasoline,13.5,334,5,2024,1510000
-108,Mazda,Mazda 3,Hatchback,2.0L HEV,FWD,2.0L; In-line 4 Cylinder,162,6-Speed; Automatic,Gasoline,13.5,334,5,2024,1790000
-109,Mazda,Mazda 3,Sedan,2.0L Sport,FWD,2.0L; In-line 4 Cylinder,153,6-Speed; Automatic,Gasoline,13.5,454,5,2024,1510000
-110,Mazda,Mazda 3,Sedan,2.0L HEV,FWD,2.0L; In-line 4 Cylinder,162,6-Speed; Automatic,Gasoline,13.5,454,5,2024,1790000
-111,Mazda,MX-5,Convertible,23 Anniversary,RWD,2.0L; In-line 4 Cylinder,181,6-Speed; Manual,Gasoline,13.5,130,2,2024,2230000
-112,Mazda,MX-5,Convertible,SkyActiv-G 2.0L MT,RWD,2.0L; In-line 4 Cylinder,181,6-Speed; Manual,Gasoline,13.5,130,2,2024,2300000
-113,Mazda,MX-5,Convertible,SkyActiv-G 2.0L AT,RWD,2.0L; In-line 4 Cylinder,181,6-Speed; Manual,Gasoline,13.5,130,2,2024,2350000
-114,Mazda,MX-5 RF,Coupe,SkyActiv-G 2.0L AT,RWD,2.0L; In-line 4 Cylinder,181,6-Speed; Automatic,Gasoline,13.5,127,2,2024,2550000
-115,Mazda,CX-3,Crossover,2.0L Sport,FWD,2.0L; In-line 4 Cylinder,148,6-Speed; Automatic,Gasoline,14.5,430,5,2024,1510000
-116,Mazda,CX-5,Crossover,2.0L 2WD Sport,FWD,2.0L; In-line 4 Cylinder,154,6-Speed; Automatic,Gasoline,18.5,872,5,2024,1950000
-117,Mazda,CX-5,Crossover,2.5L AWD Sport,AWD,2.5L; In-line 4 Cylinder,187,6-Speed; Automatic,Gasoline,19.3,872,5,2024,2050000
-118,Mazda,CX-5,Crossover,2.5L AWD Turbo,AWD,2.5L; In-line 4 Cylinder,250,6-Speed; Automatic,Gasoline,19.3,872,5,2024,2430000
-119,Mazda,CX-30,SUV,2.0L M Hybrid,FWD,2.0L; In-line 4 Cylinder,152,6-Speed; Automatic,Hybrid; Gasoline,18,430,5,2024,1995000
-120,Audi,Q8 e-tron,SUV,55 quattro,AWD,Dual Electric,402,1-speed Auto,Electric,172,569,5,2024,4136638
-121,Audi,RS E-tron GT,Sedan,RS Performance,AWD,Dual Electric,845,2-speed Auto,Electric,130,405,4,2024,5559997
-122,Baojun,Yep Premium,Hatchback,Premium,RWD,Electric Motor,68,Automatic,Electric,150,715,4,2024,1290000
-123,BMW,iX,SUV,xDrive50,AWD,Single Electric,516,1-speed Auto,Electric,145,500,5,2024,4837197
-124,BYD,Atto 3,SUV,Premium,FWD,Electric Motor,201,Automatic,Electric,175,440,5,2024,1798000
-125,Ford,Mustang Mach-E,SUV,Premium AWD Extended,AWD,Dual Electric,346,1-speed Auto,Electric,145,822,5,2024,3056608
-126,Geely,Panda Knight,Hatchback,Standard,RWD,Electric Motor,30,Automatic,Electric,175,800,4,2024,845000
-127,Geely,Geometry E Firefly,SUV,Firefly,FWD,Electric Motor,60,Automatic,Electric,165,1000,5,2024,1300000
-128,Hyundai,Ioniq 5,SUV,Long Range AWD,AWD,Dual Electric,320,1-speed Auto,Electric,160,531,5,2024,2613198
-129,Kia,EV6,SUV,GT-Line AWD,AWD,Dual Electric,320,1-speed Auto,Electric,178,480,5,2024,2707718
-130,Lucid,Air,Sedan,Touring AWD,AWD,Dual Electric,620,1-speed Auto,Electric,140,456,5,2024,4864997
-131,Mercedes,EQE SUV,SUV,500 4MATIC,AWD,Dual Electric,402,1-speed Auto,Electric,181,520,5,2024,4331237
-132,Nissan,Ariya,SUV,e-4ORCE Platinum+ AWD,AWD,Dual Electric,389,1-speed Auto,Electric,170,466,5,2024,3346562
-133,Porsche,Taycan,Sedan,Performance Plus,AWD,Dual Electric,616,2-speed Auto,Electric,128,407,4,2024,5637559
-134,Tesla,Model Y,SUV,Long Range AWD,AWD,Dual Electric,514,1-speed Auto,Electric,167,2158,5,2024,2301282
-135,Tesla,Model Y,SUV,Long Range AWD,AWD,Dual Electric,514,1-speed Auto,Electric,167,2158,7,2024,2301282
-136,Volkswagen,ID.6,SUV,Long Range Pro,RWD,Electric Motor,204,Automatic,Electric,180,651,7,2024,2690000
-137,Volvo,EX30,SUV,Twin Motor Performance,AWD,Dual Electric,422,1-speed Auto,Electric,165,318,5,2024,2557598
+68,Mitsubishi,Triton,Truck,GL 2WD MT,2WD,2.4L; In-line 4 Cylinder,180,6-Speed; Manual,Diesel,22.2,2340,5,2025,1134000
+69,Mitsubishi,Triton,Truck,GL 4WD MT,4WD,2.4L; In-line 4 Cylinder,180,6-Speed; Manual,Diesel,22.2,2340,5,2025,1157000
+70,Mitsubishi,Triton,Truck,GLX 2WD MT,2WD,2.4L; In-line 4 Cylinder,180,6-Speed; Manual,Diesel,22.2,2340,5,2025,1311000
+71,Mitsubishi,Triton,Truck,GLX 2WD AT,2WD,2.4L; In-line 4 Cylinder,180,6-Speed; Automatic,Diesel,22.2,2340,5,2025,1383000
+72,Mitsubishi,Triton,Truck,GLX 4WD MT,4WD,2.4L; In-line 4 Cylinder,,6-Speed; Manual,Diesel,22.2,2340,5,2025,1561000
+73,Mitsubishi,Triton,Truck,GLS 2WD AT,2WD,2.4L; In-line 4 Cylinder,,6-Speed; Automatic,Diesel,22.2,2340,5,2025,1582000
+74,Mitsubishi,Triton,Truck,Athlete 4WD AT,4WD,2.4L; In-line 4 Cylinder,,6-Speed; Automatic,Diesel,22.2,2340,5,2025,1909000
+75,Mitsubishi,L300,Van,Exceed 2.2 Diesel,,2.2L; In-line 4 Cylinder,98,5-Speed ; Manual,Diesel,19.5,1145,3,2025,825000
+76,Honda,City,Sedan,1.5 E CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2023,973000
+77,Honda,City,Sedan,1.5 S CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2023,998000
+78,Honda,City,Sedan,1.5 V CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2023,1075000
+79,Honda,City,Sedan,1.5 RS CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2023,1130000
+80,Honda,City,Hatchback,1.5 RS CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,289,5,2023,1153000
+81,Honda,City,Sedan,1.5 E CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2024,973000
+82,Honda,City,Sedan,1.5 S CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2024,998000
+83,Honda,City,Sedan,1.5 V CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2024,1073000
+84,Honda,City,Sedan,1.5 RS CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2024,1128000
+85,Honda,City,Hatchback,1.5 RS CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,289,5,2024,1189000
+86,Honda,City,Sedan,1.5 E CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2025,973000
+87,Honda,City,Sedan,1.5 S CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2025,998000
+88,Honda,City,Sedan,1.5 V CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2025,1073000
+89,Honda,City,Sedan,1.5 RS CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2025,1128000
+90,Honda,City,Hatchback,1.5 RS CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,289,5,2025,1189000
+91,Honda,Brio,Hatchback,1.2L S MT,FWD,1.2L; In-line 4,89,5-Speed ; Manual,Gasoline,13.7,258,5,2023,650000
+92,Honda,Brio,Hatchback,1.2L V CVT,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2023,808000
+93,Honda,Brio,Hatchback,1.2L RS CVT,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2023,853000
+94,Honda,Brio,Hatchback,1.2L RS CVT Black Top,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2023,863000
+95,Honda,Brio,Hatchback,1.2L S MT,FWD,1.2L; In-line 4,89,5-Speed ; Manual,Gasoline,13.7,258,5,2024,735000
+96,Honda,Brio,Hatchback,1.2L V CVT,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2024,827000
+97,Honda,Brio,Hatchback,1.2L RS CVT,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2024,853000
+98,Honda,Brio,Hatchback,1.2L RS CVT Black Top,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2024,863000
+99,Honda,Brio,Hatchback,1.2L S MT,FWD,1.2L; In-line 4,89,5-Speed ; Manual,Gasoline,13.7,258,5,2025,735000
+100,Honda,Brio,Hatchback,1.2L V CVT,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2025,827000
+101,Honda,Brio,Hatchback,1.2L RS CVT,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2025,853000
+102,Honda,Brio,Hatchback,1.2L RS CVT Black Top,FWD,1.2L; In-line 4,89,CVT,Gasoline,13.7,258,5,2025,863000
+103,Honda,BR-V,SUV,1.5L S MT,FWD,1.5L; In-line 4 Cylinder,119,6-Speed; Manual,Gasoline,20.7,207,7,2023,1100000
+104,Honda,BR-V,SUV,1.5L S CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,207,7,2023,1190000
+105,Honda,BR-V,SUV,1.5L V CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,207,7,2023,1300000
+106,Honda,BR-V,SUV,1.5L VX CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,207,7,2023,1390000
+107,Honda,BR-V,SUV,1.5L S MT,FWD,1.5L; In-line 4 Cylinder,119,6-Speed; Manual,Gasoline,20.7,570,7,2024,1090000
+108,Honda,BR-V,SUV,1.5L S CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,570,7,2024,1150000
+109,Honda,BR-V,SUV,1.5L V CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,570,7,2024,1295000
+110,Honda,BR-V,SUV,1.5L VX CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,570,7,2024,1390000
+111,Honda,BR-V,SUV,1.5L S MT,FWD,1.5L; In-line 4 Cylinder,119,6-Speed; Manual,Gasoline,20.7,570,7,2025,1090000
+112,Honda,BR-V,SUV,1.5L S CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,570,7,2025,1150000
+113,Honda,BR-V,SUV,1.5L V CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,570,7,2025,1295000
+114,Honda,BR-V,SUV,1.5L VX CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,20.7,570,7,2025,1390000
+115,Honda,CR-V,SUV,1.5 V Turbo CVT,FWD,1.5L; In-line 4 Cylinder,187,CVT,Gasoline,19.8,1064,7,2023,2100000
+116,Honda,CR-V,SUV,1.5 VX Turbo CVT,AWD,1.5L; In-line 4 Cylinder,187,CVT,Gasoline,20.8,1064,7,2023,2290000
+117,Honda,CR-V,SUV,RS eHEV,FWD,2-motor e:HEV Hybrid,146,E-CVT,Hybrid; Gasoline,19.8,1064,5,2023,2605000
+118,Honda,CR-V,SUV,1.5 V Turbo CVT,FWD,1.5L; In-line 4 Cylinder,187,CVT,Gasoline,19.8,1064,7,2024,2100000
+119,Honda,CR-V,SUV,1.5 VX Turbo CVT,AWD,1.5L; In-line 4 Cylinder,187,CVT,Gasoline,19.8,1064,7,2024,2280000
+120,Honda,CR-V,SUV,RS eHEV,FWD,2.0L; 4 Cylinder,144,E-CVT,Hybrid; Gasoline,20.8,1064,5,2024,2590000
+121,Honda,CR-V,SUV,1.5 V Turbo CVT,FWD,1.5L; In-line 4 Cylinder,187,CVT,Gasoline,19.8,1064,7,2025,2100000
+122,Honda,CR-V,SUV,1.5 VX Turbo CVT,AWD,1.5L; In-line 4 Cylinder,187,CVT,Gasoline,19.8,1064,7,2025,2280000
+123,Honda,CR-V,SUV,RS eHEV,FWD,2.0L; 4 Cylinder,181,E-CVT,Hybrid; Gasoline,19.8,1064,7,2025,2590000
+124,Honda,Civic,Sedan,V Turbo CVT,FWD,1.5L; In-line 4 Cylinder,176,CVT,Gasoline,13.4,519,5,2023,1600000
+125,Honda,Civic,Sedan,RS Turbo CVT,FWD,1.5L; In-line 4 Cylinder,176,CVT,Gasoline,13.4,519,5,2023,1790000
+126,Honda,Civic,Sedan,RS eHEV,FWD,1.5L; In-line 4 Cylinder,184,CVT,Hybrid; Gasoline,13.4,519,5,2023,1990000
+127,Honda,Civic,Sedan,V Turbo CVT,FWD,1.5L; In-line 4 Cylinder,176,CVT,Gasoline,13.4,519,5,2024,1583000
+128,Honda,Civic,Sedan,RS Turbo CVT,FWD,1.5L; In-line 4 Cylinder,176,CVT,Gasoline,13.4,519,5,2024,1775000
+129,Honda,Civic,Sedan,RS eHEV,FWD,1.5L; In-line 4 Cylinder,184,CVT,Hybrid; Gasoline,13.4,519,5,2024,1990000
+130,Honda,Civic,Sedan,V Turbo CVT,FWD,1.5L; In-line 4 Cylinder,176,CVT,Gasoline,13.4,519,5,2025,1583000
+131,Honda,Civic,Sedan,RS Turbo CVT,FWD,1.5L; In-line 4 Cylinder,176,CVT,Gasoline,13.4,519,5,2025,1775000
+132,Honda,Civic,Sedan,RS eHEV,FWD,1.5L; In-line 4 Cylinder,184,CVT,Hybrid; Gasoline,13.4,519,5,2025,1990000
+133,Ford,Ranger,Truck,2.0L Turbo XL 4WD MT,4WD,2.0L; 4 Cylinder,168,6-Speed; Manual,Diesel,23.5,1233,5,2025,1259000
+134,Ford,Ranger,Truck,2.0L Turbo XLT 2WD AT,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,23.5,1233,5,2025,1389000
+135,Ford,Ranger,Truck,2.0L Turbo Sport 2WD AT,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,23.5,1233,5,2025,1504000
+136,Ford,Ranger,Truck,2.0L Turbo Wildtrak 2WD AT,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,23.5,1233,5,2025,1614000
+137,Ford,Ranger,Truck,2.0L Turbo Sport 4WD AT,4WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,23.5,1233,5,2025,1624000
+138,Ford,Ranger,Truck,2.0L Bi-Turbo Wildtrak 4WD AT,4WD,2.0L; 4 Cylinder,168,10-Speed; Automatic,Diesel,23.5,1233,5,2025,1940000
+139,Ford ,Everest,SUV,2.0L Turbo Trend,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,22.3,199,7,2025,1829000
+140,Ford ,Everest,SUV,2.0L Turbo Sport,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,22.3,199,7,2025,2139000
+141,Ford ,Everest,SUV,2.0L Turbo Titanium Plus,2WD,2.0L; 4 Cylinder,168,6-Speed; Automatic,Diesel,22.3,199,7,2025,2259000
+142,Ford ,Everest,SUV,2.0L Bi-Turbo Titanium Plus,4WD,2.0L; 4 Cylinder,207,10-Speed; Automatic,Diesel,22.3,199,7,2025,2555000
+143,Ford ,Everest,SUV,Wildtrak ,2WD,2.0L; 4 Cylinder,170,6-Speed; Automatic,Diesel,22.3,199,7,2025,2439000
+144,Mazda,Mazda 2,Hatchback,1.5L Sport,FWD,1.5L ; In-line 4,108,6-Speed; Automatic,Gasoline,14.3,220,5,2025,1250000
+145,Mazda,Mazda 3,Hatchback,2.0L Sport,FWD,2.0L; In-line 4 Cylinder,153,6-Speed; Automatic,Gasoline,13.5,334,5,2025,1510000
+146,Mazda,Mazda 3,Hatchback,2.0L HEV,FWD,2.0L; In-line 4 Cylinder,162,6-Speed; Automatic,Gasoline,13.5,334,5,2025,1790000
+147,Mazda,Mazda 3,Sedan,2.0L Sport,FWD,2.0L; In-line 4 Cylinder,153,6-Speed; Automatic,Gasoline,13.5,454,5,2025,1510000
+148,Mazda,Mazda 3,Sedan,2.0L HEV,FWD,2.0L; In-line 4 Cylinder,162,6-Speed; Automatic,Gasoline,13.5,454,5,2025,1790000
+149,Mazda,MX-5,Convertible,23 Anniversary,RWD,2.0L; In-line 4 Cylinder,181,6-Speed; Manual,Gasoline,13.5,130,2,2025,2230000
+150,Mazda,MX-5,Convertible,SkyActiv-G 2.0L MT,RWD,2.0L; In-line 4 Cylinder,181,6-Speed; Manual,Gasoline,13.5,130,2,2025,2300000
+151,Mazda,MX-5,Convertible,SkyActiv-G 2.0L AT,RWD,2.0L; In-line 4 Cylinder,181,6-Speed; Manual,Gasoline,13.5,130,2,2025,2350000
+152,Mazda,MX-5 RF,Coupe,SkyActiv-G 2.0L AT,RWD,2.0L; In-line 4 Cylinder,181,6-Speed; Automatic,Gasoline,13.5,127,2,2025,2550000
+153,Mazda,CX-3,Crossover,2.0L Sport,FWD,2.0L; In-line 4 Cylinder,148,6-Speed; Automatic,Gasoline,14.5,430,5,2025,1510000
+154,Mazda,CX-5,Crossover,2.0L 2WD Sport,FWD,2.0L; In-line 4 Cylinder,154,6-Speed; Automatic,Gasoline,18.5,872,5,2025,1950000
+155,Mazda,CX-5,Crossover,2.5L AWD Sport,AWD,2.5L; In-line 4 Cylinder,187,6-Speed; Automatic,Gasoline,19.3,872,5,2025,2050000
+156,Mazda,CX-5,Crossover,2.5L AWD Turbo,AWD,2.5L; In-line 4 Cylinder,250,6-Speed; Automatic,Gasoline,19.3,872,5,2025,2430000
+157,Mazda,CX-30,SUV,2.0L M Hybrid,FWD,2.0L; In-line 4 Cylinder,152,6-Speed; Automatic,Hybrid; Gasoline,18,430,5,2025,1995000
+158,Audi,Q8 e-tron,SUV,55 quattro,AWD,Dual Electric,402,1-speed Auto,Electric,172,569,5,2025,4136638
+159,Audi,RS E-tron GT,Sedan,RS Performance,AWD,Dual Electric,845,2-speed Auto,Electric,130,405,4,2025,5559997
+160,Baojun,Yep Premium,Hatchback,Premium,RWD,Electric Motor,68,Automatic,Electric,150,715,4,2025,1290000
+161,BMW,iX,SUV,xDrive50,AWD,Single Electric,516,1-speed Auto,Electric,145,500,5,2025,4837197
+162,BYD,Atto 3,SUV,Premium,FWD,Electric Motor,201,Automatic,Electric,175,440,5,2025,1798000
+163,Ford,Mustang Mach-E,SUV,Premium AWD Extended,AWD,Dual Electric,346,1-speed Auto,Electric,145,822,5,2025,3056608
+164,Geely,Panda Knight,Hatchback,Standard,RWD,Electric Motor,30,Automatic,Electric,175,800,4,2025,845000
+165,Geely,Geometry E Firefly,SUV,Firefly,FWD,Electric Motor,60,Automatic,Electric,165,1000,5,2025,1300000
+166,Hyundai,Ioniq 5,SUV,Long Range AWD,AWD,Dual Electric,320,1-speed Auto,Electric,160,531,5,2025,2613198
+167,Kia,EV6,SUV,GT-Line AWD,AWD,Dual Electric,320,1-speed Auto,Electric,178,480,5,2025,2707718
+168,Lucid,Air,Sedan,Touring AWD,AWD,Dual Electric,620,1-speed Auto,Electric,140,456,5,2025,4864997
+169,Mercedes,EQE SUV,SUV,500 4MATIC,AWD,Dual Electric,402,1-speed Auto,Electric,181,520,5,2025,4331237
+170,Nissan,Ariya,SUV,e-4ORCE Platinum+ AWD,AWD,Dual Electric,389,1-speed Auto,Electric,170,466,5,2025,3346562
+171,Porsche,Taycan,Sedan,Performance Plus,AWD,Dual Electric,616,2-speed Auto,Electric,128,407,4,2025,5637559
+172,Tesla,Model Y,SUV,Long Range AWD,AWD,Dual Electric,514,1-speed Auto,Electric,167,2158,5,2025,2301282
+173,Tesla,Model Y,SUV,Long Range AWD,AWD,Dual Electric,514,1-speed Auto,Electric,167,2158,7,2025,2301282
+174,Volkswagen,ID.6,SUV,Long Range Pro,RWD,Electric Motor,204,Automatic,Electric,180,651,7,2025,2690000
+175,Volvo,EX30,SUV,Twin Motor Performance,AWD,Dual Electric,422,1-speed Auto,Electric,165,318,5,2025,2557598

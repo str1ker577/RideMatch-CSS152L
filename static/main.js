@@ -461,7 +461,7 @@ async function applyFilters() {
     const driveTrain = document.getElementById("drive-train").value.trim().toLowerCase();
     const transmission = document.getElementById("transmission").value.trim().toLowerCase();
     const fuelType = document.getElementById("fuel-type").value.trim().toLowerCase();
-    const year = document.getElementById("year").value.trim(); // NEW: Year filter
+    const year = document.getElementById("year").value.trim(); 
     const minHp = parseFloat(document.getElementById("horsepower").value) || 50;
     const minCargo = parseFloat(document.getElementById("cargo-space").value) || 100;
     const maxPrice = parseFloat(document.getElementById("price").value) || 3000000;
