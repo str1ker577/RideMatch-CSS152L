@@ -50,6 +50,10 @@ function updateUIForAuthState() {
 window.removeFavoriteFromDisplay = removeFavoriteFromDisplay;
 window.addToFave = addToFave;
 
+
+const isComparePage = document.getElementById('compare-charts-section') !== null;
+const isFilterPage = document.getElementById('year') !== null;
+
 //////////////////////
 //Side Menu Function//
 //////////////////////
@@ -1062,6 +1066,15 @@ async function loadDefaultCars() {
 let comparedCars = [];
 let chartInstances = {};
 
+// IMPORTANT: Safety check function to prevent year-related errors
+function populateYears() {
+    const yearSelect = document.getElementById('year');
+    if (!yearSelect) return; // Prevents TypeError on compare page
+    
+    // Your existing year population code would go here
+    console.log('Year select not found - not on filter page');
+}
+
 // Function to populate models based on selected brand
 async function populateModels() {
     const brand = document.getElementById('brand').value;
@@ -1158,19 +1171,25 @@ async function compareCars() {
 
 function showSuccessMessage() {
     const successMessage = document.getElementById('compare-success-message');
-    successMessage.style.display = 'flex';
-    
-    // Hide message after 3 seconds
-    setTimeout(() => {
-        successMessage.style.display = 'none';
-    }, 3000);
+    if (successMessage) {
+        successMessage.style.display = 'flex';
+        
+        // Hide message after 3 seconds
+        setTimeout(() => {
+            successMessage.style.display = 'none';
+        }, 3000);
+    }
 }
 
 function resetCompareForm() {
     // Reset all dropdowns to default
-    document.getElementById('brand').selectedIndex = 0;
-    document.getElementById('model').innerHTML = '<option value="">Select Model</option>';
-    document.getElementById('variant').innerHTML = '<option value="">Select Variant</option>';
+    const brandSelect = document.getElementById('brand');
+    const modelSelect = document.getElementById('model');
+    const variantSelect = document.getElementById('variant');
+    
+    if (brandSelect) brandSelect.selectedIndex = 0;
+    if (modelSelect) modelSelect.innerHTML = '<option value="">Select Model</option>';
+    if (variantSelect) variantSelect.innerHTML = '<option value="">Select Variant</option>';
 }
 
 function addCarToComparison(variant, specs) {
@@ -1197,9 +1216,9 @@ function addCarToComparison(variant, specs) {
         carColumn.appendChild(imgContainer);
     }
 
-    // UPDATED: Specifications sections with Year included
+    // Specifications sections with Year included
     const specSections = {
-        "General Specifications": ["Brand", "Model", "Year"], // Added Year here
+        "General Specifications": ["Brand", "Model", "Year"],
         "Performance Specifications": ["Horsepower", "Engine", "Transmission", "DriveTrain", "FuelType"],
         "Utility Specifications": ["SeatingCapacity", "GroundClearance", "Cargospace"]
     };
@@ -1222,7 +1241,6 @@ function addCarToComparison(variant, specs) {
                 if (key === "Horsepower") formattedValue += " hp";
                 if (key === "GroundClearance") formattedValue += " cm";
                 if (key === "Cargospace") formattedValue += " L";
-                // Year doesn't need additional formatting
                 
                 specDiv.innerHTML = `<span class="spec-label">${key.replace(/([A-Z])/g, ' $1').trim()}:</span> ${formattedValue}`;
                 
@@ -1262,7 +1280,8 @@ function addCarToComparison(variant, specs) {
         
         // Hide comparison sections if no cars left
         if (comparedCars.length === 0) {
-            document.getElementById('comparison-cards-wrapper').style.display = 'none';
+            const cardsWrapper = document.getElementById('comparison-cards-wrapper');
+            if (cardsWrapper) cardsWrapper.style.display = 'none';
         }
     };
 
@@ -1270,7 +1289,8 @@ function addCarToComparison(variant, specs) {
     container.appendChild(carColumn);
     
     // Show the comparison cards wrapper
-    document.getElementById('comparison-cards-wrapper').style.display = 'block';
+    const cardsWrapper = document.getElementById('comparison-cards-wrapper');
+    if (cardsWrapper) cardsWrapper.style.display = 'block';
 }
 
 function createProgressBar(value, type) {
@@ -1319,7 +1339,12 @@ const chartBackgroundColors = [
 
 function updateBarCharts() {
     if (comparedCars.length === 0) {
-        document.getElementById('compare-charts-section').style.display = 'none';
+        const chartsSection = document.getElementById('compare-charts-section');
+        const cardsWrapper = document.getElementById('comparison-cards-wrapper');
+        
+        if (chartsSection) chartsSection.style.display = 'none';
+        if (cardsWrapper) cardsWrapper.style.display = 'none';
+        
         Object.values(chartInstances).forEach(chart => {
             if (chart) chart.destroy();
         });
@@ -1327,7 +1352,11 @@ function updateBarCharts() {
         return;
     }
 
-    document.getElementById('compare-charts-section').style.display = 'block';
+    const chartsSection = document.getElementById('compare-charts-section');
+    const cardsWrapper = document.getElementById('comparison-cards-wrapper');
+    
+    if (chartsSection) chartsSection.style.display = 'block';
+    if (cardsWrapper) cardsWrapper.style.display = 'block';
     
     updateHorsepowerChart();
     updatePriceChart();
@@ -1337,13 +1366,19 @@ function updateBarCharts() {
 }
 
 function updateHorsepowerChart() {
-    const ctx = document.getElementById('horsepowerChart').getContext('2d');
+    const canvas = document.getElementById('horsepowerChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
     
     if (chartInstances.horsepower) {
         chartInstances.horsepower.destroy();
     }
 
-    const labels = comparedCars.map(car => car.variant);
+    const labels = comparedCars.map(car => {
+        const model = car.specs.Model || '';
+        return model ? `${car.variant}\n(${model})` : car.variant;
+    });
     const data = comparedCars.map(car => parseInt(car.specs.Horsepower) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1396,13 +1431,19 @@ function updateHorsepowerChart() {
 }
 
 function updatePriceChart() {
-    const ctx = document.getElementById('priceChart').getContext('2d');
+    const canvas = document.getElementById('priceChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
     
     if (chartInstances.price) {
         chartInstances.price.destroy();
     }
 
-    const labels = comparedCars.map(car => car.variant);
+    const labels = comparedCars.map(car => {
+        const model = car.specs.Model || '';
+        return model ? `${car.variant}\n(${model})` : car.variant;
+    });
     const data = comparedCars.map(car => car.specs.Price || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1463,13 +1504,19 @@ function updatePriceChart() {
 }
 
 function updateGroundClearanceChart() {
-    const ctx = document.getElementById('groundClearanceChart').getContext('2d');
+    const canvas = document.getElementById('groundClearanceChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
     
     if (chartInstances.groundClearance) {
         chartInstances.groundClearance.destroy();
     }
 
-    const labels = comparedCars.map(car => car.variant);
+    const labels = comparedCars.map(car => {
+        const model = car.specs.Model || '';
+        return model ? `${car.variant}\n(${model})` : car.variant;
+    });
     const data = comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1522,19 +1569,26 @@ function updateGroundClearanceChart() {
 }
 
 function updateCargoSpaceChart() {
-    const ctx = document.getElementById('cargoSpaceChart').getContext('2d');
+    const canvas = document.getElementById('cargoSpaceChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
     
     if (chartInstances.cargoSpace) {
         chartInstances.cargoSpace.destroy();
     }
 
-    const labels = comparedCars.map(car => car.variant);
-    // Check for both 'Cargospace' and 'CargoSpace' (case variations)
+    const labels = comparedCars.map(car => {
+        const model = car.specs.Model || '';
+        return model ? `${car.variant}\n(${model})` : car.variant;
+    });
+    // Check for multiple cargo space field variations
     const data = comparedCars.map(car => {
         return parseFloat(car.specs.Cargospace) || 
                parseFloat(car.specs.CargoSpace) || 
                parseFloat(car.specs.cargospace) || 
-               parseFloat(car.specs.cargoSpace) || 0;
+               parseFloat(car.specs.cargoSpace) || 
+               parseFloat(car.specs['Cargo Space']) || 0;
     });
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1587,13 +1641,19 @@ function updateCargoSpaceChart() {
 }
 
 function updateSeatingCapacityChart() {
-    const ctx = document.getElementById('seatingCapacityChart').getContext('2d');
+    const canvas = document.getElementById('seatingCapacityChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
     
     if (chartInstances.seatingCapacity) {
         chartInstances.seatingCapacity.destroy();
     }
 
-    const labels = comparedCars.map(car => car.variant);
+    const labels = comparedCars.map(car => {
+        const model = car.specs.Model || '';
+        return model ? `${car.variant}\n(${model})` : car.variant;
+    });
     const data = comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1646,17 +1706,19 @@ function updateSeatingCapacityChart() {
     });
 }
 
-// Event listeners for dropdowns (if not already added in main.js)
-const brandDropdown = document.getElementById('brand');
-const modelDropdown = document.getElementById('model');
+// Event listeners for dropdowns (with safety checks)
+document.addEventListener('DOMContentLoaded', function() {
+    const brandDropdown = document.getElementById('brand');
+    const modelDropdown = document.getElementById('model');
 
-if (brandDropdown) {
-    brandDropdown.addEventListener('change', populateModels);
-}
+    if (brandDropdown) {
+        brandDropdown.addEventListener('change', populateModels);
+    }
 
-if (modelDropdown) {
-    modelDropdown.addEventListener('change', populateVariants);
-}
+    if (modelDropdown) {
+        modelDropdown.addEventListener('change', populateVariants);
+    }
+});
 
 // Handle window resize for responsive charts
 window.addEventListener('resize', function() {
