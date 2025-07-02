@@ -1171,6 +1171,7 @@ const chartBackgroundColors = [
 function updateBarCharts() {
     if (comparedCars.length === 0) {
         document.getElementById('compare-charts-section').style.display = 'none';
+        document.getElementById('comparison-cards-wrapper').style.display = 'none';
         Object.values(chartInstances).forEach(chart => {
             if (chart) chart.destroy();
         });
@@ -1179,6 +1180,7 @@ function updateBarCharts() {
     }
 
     document.getElementById('compare-charts-section').style.display = 'block';
+    document.getElementById('comparison-cards-wrapper').style.display = 'block';
     
     updateHorsepowerChart();
     updatePriceChart();
@@ -1194,7 +1196,11 @@ function updateHorsepowerChart() {
         chartInstances.horsepower.destroy();
     }
 
-    const labels = comparedCars.map(car => car.variant);
+    const labels = comparedCars.map(car => {
+        // Add model name in parentheses under variant
+        const model = car.specs.Model || '';
+        return model ? `${car.variant}\n(${model})` : car.variant;
+    });
     const data = comparedCars.map(car => parseInt(car.specs.Horsepower) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1253,7 +1259,10 @@ function updatePriceChart() {
         chartInstances.price.destroy();
     }
 
-    const labels = comparedCars.map(car => car.variant);
+    const labels = comparedCars.map(car => {
+        const model = car.specs.Model || '';
+        return model ? `${car.variant}\n(${model})` : car.variant;
+    });
     const data = comparedCars.map(car => car.specs.Price || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1320,7 +1329,10 @@ function updateGroundClearanceChart() {
         chartInstances.groundClearance.destroy();
     }
 
-    const labels = comparedCars.map(car => car.variant);
+    const labels = comparedCars.map(car => {
+        const model = car.specs.Model || '';
+        return model ? `${car.variant}\n(${model})` : car.variant;
+    });
     const data = comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1379,7 +1391,10 @@ function updateCargoSpaceChart() {
         chartInstances.cargoSpace.destroy();
     }
 
-    const labels = comparedCars.map(car => car.variant);
+    const labels = comparedCars.map(car => {
+        const model = car.specs.Model || '';
+        return model ? `${car.variant}\n(${model})` : car.variant;
+    });
     // Check for both 'Cargospace' and 'CargoSpace' (case variations)
     const data = comparedCars.map(car => {
         return parseFloat(car.specs.Cargospace) || 
@@ -1444,7 +1459,10 @@ function updateSeatingCapacityChart() {
         chartInstances.seatingCapacity.destroy();
     }
 
-    const labels = comparedCars.map(car => car.variant);
+    const labels = comparedCars.map(car => {
+        const model = car.specs.Model || '';
+        return model ? `${car.variant}\n(${model})` : car.variant;
+    });
     const data = comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
@@ -1526,6 +1544,7 @@ window.addEventListener('beforeunload', function() {
         }
     });
 });
+    
 
 //////////////////////////////////
 // Shows corresponding models  //
