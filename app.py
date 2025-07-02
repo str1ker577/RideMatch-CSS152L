@@ -1025,7 +1025,7 @@ def set_username():
         app.logger.error(f"Error retrieving favorites: {e}")
         import traceback
         app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": f"Failed to retrieve favorites: {str(e)}"}), 500']
+        return jsonify({"error": f"Failed to retrieve favorites: {str(e)}"}), 500
         
         if not username:
             return jsonify({"error": "Username is required"}), 400
@@ -1121,7 +1121,7 @@ def update_profile():
             if len(new_username) < 3 or len(new_username) > 20:
                 return jsonify({"error": "Username must be 3-20 characters"}), 400
             
-            if not re.match(r'^[a-zA-Z0-9_]+, new_username):
+            if not re.match(r'^[a-zA-Z0-9_]+$', new_username):
                 return jsonify({"error": "Username can only contain letters, numbers, and underscores"}), 400
             
             # Check if new username is available
