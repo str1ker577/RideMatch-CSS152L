@@ -1321,20 +1321,58 @@ import time
 # Forum API Routes    #
 #######################
 
-@app.route('/api/forum/posts', methods=['POST'])
-def create_forum_post():
-    """Create a new forum post"""
+@app.route('/api/forum/posts', methods=['GET'])
+def get_forum_posts():
+    """Get all forum posts with username support"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
     
-    # Use the new authentication check
-    if not check_authentication():
+    try:
+        posts_ref = realtime_db_ref.child('forum-posts')
+        posts_data = posts_ref.get() or {}
+        
+        # Convert to list with IDs and updated usernames
+        posts_list = []
+        for post_id, post_data in posts_data.items():
+            post_data['id'] = post_id
+            
+            # Update username if not anonymous and has userId
+            if not post_data.get('isAnonymous', False) and post_data.get('userId'):
+                try:
+                    updated_name = get_user_display_name(post_data['userId'])
+                    if updated_name != 'Anonymous':
+                        post_data['authorName'] = updated_name
+                except Exception as e:
+                    app.logger.error(f"Error updating post author name: {e}")
+            
+            posts_list.append(post_data)
+        
+        # Sort by creation date (newest first)
+        posts_list.sort(key=lambda x: x.get('createdAt', 0), reverse=True)
+        
+        return jsonify(posts_list)
+    except Exception as e:
+        app.logger.error(f"Error fetching forum posts: {e}")
+        return jsonify({"error": "Failed to fetch posts"}), 500
+
+@app.route('/api/forum/posts', methods=['POST'])
+def create_forum_post():
+    """Create a new forum post with username support"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    # Use session check instead of check_authentication for now
+    if 'user' not in session:
         app.logger.warning("Unauthenticated forum post attempt")
         return jsonify({"error": "Not authenticated"}), 401
     
     try:
         data = request.get_json()
         user_id = session['user']
+        
+        # Validate input
+        if not data.get('title') or not data.get('body'):
+            return jsonify({'error': 'Title and body are required'}), 400
         
         # Get user's display name
         username = get_user_display_name(user_id)
@@ -1366,15 +1404,14 @@ def create_forum_post():
     except Exception as e:
         app.logger.error(f"Error creating forum post: {e}")
         return jsonify({"error": "Failed to create post"}), 500
-
+    
 @app.route('/api/forum/posts/<post_id>/comments', methods=['POST'])
 def create_comment():
     """Create a comment on a forum post"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
     
-    # Use the new authentication check
-    if not check_authentication():
+    if 'user' not in session:
         return jsonify({"error": "Not authenticated"}), 401
     
     try:
@@ -1490,5 +1527,6 @@ def debug_session():
         'has_user': 'user' in session,
         'user_id': session.get('user'),
         'email': session.get('email'),
+        'authenticated': session.get('authenticated'),
         'session_keys': list(session.keys())
     })

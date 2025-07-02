@@ -1892,6 +1892,10 @@ async function populateVariants() {
 //FAVOURITES Function//
 //////////////////////
 async function addToFave(event, variant) {
+
+    if (typeof originalColor === 'undefined') {
+          const originalColor = element.style.color || '#000000';
+      }
     // Prevent event bubbling
     event.stopPropagation();
     
