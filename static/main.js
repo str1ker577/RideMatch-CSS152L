@@ -678,9 +678,9 @@ function displayFilteredCars(data) {
     // ✅ Clear the table body before inserting new data
     resultsBody.innerHTML = "";
 
-    // ✅ Handle case when no results match
+    // ✅ Handle case when no results match - UPDATED: Changed colspan from 14 to 15 for the new Year column
     if (data.length === 0) {
-        resultsBody.innerHTML = `<tr><td colspan="14" style="text-align: center;">No matching cars found.</td></tr>`;
+        resultsBody.innerHTML = `<tr><td colspan="15" style="text-align: center;">No matching cars found.</td></tr>`;
         console.warn("⚠️ No cars found for given filters.");
         return;
     }
@@ -713,6 +713,7 @@ function displayFilteredCars(data) {
                 </span>
             </div>
         </td>
+        <td>${car.Year || "N/A"}</td>
         <td>${car.Ground_Clearance ? car.Ground_Clearance + " cm" : "N/A"}</td>
         <td>${car.Cargo_space ? car.Cargo_space + " L" : "N/A"}</td>
         <td>${car.Seating_Capacity ? car.Seating_Capacity + " seats" : "N/A"}</td>
@@ -872,7 +873,6 @@ function sortBy(type) {
             });
             break;
         
-        // NEW: Cargo Space sorting options
         case 'cargo-asc':
             sortedData.sort((a, b) => {
                 const cargoA = parseFloat(a.Cargo_space) || 0;
@@ -889,7 +889,6 @@ function sortBy(type) {
             });
             break;
         
-        // NEW: Seating Capacity sorting options
         case 'seating-asc':
             sortedData.sort((a, b) => {
                 const seatingA = parseInt(a.Seating_Capacity) || 0;
@@ -906,6 +905,23 @@ function sortBy(type) {
             });
             break;
         
+        // NEW: Year sorting options
+        case 'year-asc':
+            sortedData.sort((a, b) => {
+                const yearA = parseInt(a.Year) || 0;
+                const yearB = parseInt(b.Year) || 0;
+                return yearA - yearB;
+            });
+            break;
+        
+        case 'year-desc':
+            sortedData.sort((a, b) => {
+                const yearA = parseInt(a.Year) || 0;
+                const yearB = parseInt(b.Year) || 0;
+                return yearB - yearA;
+            });
+            break;
+        
         default:
             console.warn("Unknown sort type:", type);
             return;
@@ -917,7 +933,7 @@ function sortBy(type) {
     // Close the dropdown after sorting
     const dropdown = document.getElementById("sortDropdown");
     dropdown.classList.remove("open");
-} 
+}
 
 ////////////////////////////
 // Reset Filter Function //
