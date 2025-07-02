@@ -4751,7 +4751,19 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
 
   function getTimeAgo(dateString) {
     const now = new Date();
-    const date = new Date(dateString);
+    let date;
+    
+    // Handle different timestamp formats
+    if (typeof dateString === 'number') {
+      // If it's a timestamp in milliseconds
+      date = new Date(dateString);
+    } else if (typeof dateString === 'string') {
+      // If it's an ISO string
+      date = new Date(dateString);
+    } else {
+      return 'Unknown time';
+    }
+    
     const diffInMinutes = Math.floor((now - date) / (1000 * 60));
 
     if (diffInMinutes < 1) return 'just now';
