@@ -988,6 +988,44 @@ def set_username():
         data = request.get_json()
         username = data.get('username', '').strip()
         user_id = session['user']
+        app.logger.info(f"Getting favorites for user: {user_id}")
+        
+        # Get favorites from Firebase Realtime Database
+        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+        favorites_data = favorites_ref.get() or {}
+        
+        app.logger.info(f"Raw favorites data for {user_id}: {favorites_data}")
+
+        # Convert to list format
+        favorite_variants = []
+        for sanitized_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                # Use the original variant name from the stored data
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
+                
+                # Ensure we have the complete variant data
+                complete_variant_data = {
+                    'variant': original_variant,
+                    'sanitized_key': sanitized_key,
+                    'timestamp': variant_data.get('timestamp', int(time.time() * 1000)),
+                    'dateAdded': variant_data.get('dateAdded', datetime.utcnow().isoformat() + 'Z'),
+                    'userEmail': variant_data.get('userEmail', session.get('email', 'Unknown'))
+                }
+                
+                favorite_variants.append(complete_variant_data)
+
+        app.logger.info(f"✅ Retrieved {len(favorite_variants)} favorites for user {user_id}")
+        
+        # Sort by timestamp (newest first)
+        favorite_variants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
+        return jsonify(favorite_variants), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error retrieving favorites: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to retrieve favorites: {str(e)}"}), 500']
         
         if not username:
             return jsonify({"error": "Username is required"}), 400
@@ -1083,7 +1121,7 @@ def update_profile():
             if len(new_username) < 3 or len(new_username) > 20:
                 return jsonify({"error": "Username must be 3-20 characters"}), 400
             
-            if not re.match(r'^[a-zA-Z0-9_]+$', new_username):
+            if not re.match(r'^[a-zA-Z0-9_]+, new_username):
                 return jsonify({"error": "Username can only contain letters, numbers, and underscores"}), 400
             
             # Check if new username is available
@@ -1425,25 +1463,6 @@ def get_user_display_name(user_id):
     except Exception as e:
         app.logger.error(f"Error getting display name for user {user_id}: {e}")
         return 'Anonymous'
-    """Increment view count for a post (unchanged)"""
-    if not realtime_db_ref:
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        post_ref = realtime_db_ref.child('forum').child('posts').child(post_id)
-        post_data = post_ref.get()
-        
-        if not post_data:
-            return jsonify({'error': 'Post not found'}), 404
-        
-        current_views = post_data.get('views', 0)
-        post_ref.update({'views': current_views + 1})
-        
-        return jsonify({'views': current_views + 1})
-        
-    except Exception as e:
-        app.logger.error(f"Error incrementing views: {e}")
-        return jsonify({'error': 'Failed to increment views'}), 500
     
 ##################
 # Error handlers #
