@@ -70,9 +70,9 @@ Car_ID,Brand,Model,Body_Type,Variant,Drive_Train,Engine,Horsepower,Transmission,
 69,Mitsubishi,Triton,Truck,GL 4WD MT,4WD,2.4L; In-line 4 Cylinder,180,6-Speed; Manual,Diesel,22.2,2340,5,2025,1157000
 70,Mitsubishi,Triton,Truck,GLX 2WD MT,2WD,2.4L; In-line 4 Cylinder,180,6-Speed; Manual,Diesel,22.2,2340,5,2025,1311000
 71,Mitsubishi,Triton,Truck,GLX 2WD AT,2WD,2.4L; In-line 4 Cylinder,180,6-Speed; Automatic,Diesel,22.2,2340,5,2025,1383000
-72,Mitsubishi,Triton,Truck,GLX 4WD MT,4WD,2.4L; In-line 4 Cylinder,,6-Speed; Manual,Diesel,22.2,2340,5,2025,1561000
-73,Mitsubishi,Triton,Truck,GLS 2WD AT,2WD,2.4L; In-line 4 Cylinder,,6-Speed; Automatic,Diesel,22.2,2340,5,2025,1582000
-74,Mitsubishi,Triton,Truck,Athlete 4WD AT,4WD,2.4L; In-line 4 Cylinder,,6-Speed; Automatic,Diesel,22.2,2340,5,2025,1909000
+72,Mitsubishi,Triton,Truck,GLX 4WD MT,4WD,2.4L; In-line 4 Cylinder,180,6-Speed; Manual,Diesel,22.2,2340,5,2025,1561000
+73,Mitsubishi,Triton,Truck,GLS 2WD AT,2WD,2.4L; In-line 4 Cylinder,180,6-Speed; Automatic,Diesel,22.2,2340,5,2025,1582000
+74,Mitsubishi,Triton,Truck,Athlete 4WD AT,4WD,2.4L; In-line 4 Cylinder,180,6-Speed; Automatic,Diesel,22.2,2340,5,2025,1909000
 75,Mitsubishi,L300,Van,Exceed 2.2 Diesel,,2.2L; In-line 4 Cylinder,98,5-Speed ; Manual,Diesel,19.5,1145,3,2025,825000
 76,Honda,City,Sedan,1.5 E CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2023,973000
 77,Honda,City,Sedan,1.5 S CVT,FWD,1.5L; In-line 4 Cylinder,119,CVT,Gasoline,13.4,519,5,2023,998000
