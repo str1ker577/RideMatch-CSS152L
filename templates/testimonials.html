@@ -38,6 +38,14 @@
   
     <div id="signup-popup" class="popup">
       <div class="popup-content">
+          <div class="input-group">
+            <label for="username-signup">Username (Optional)</label>
+            <input type="text" name="username_signup" id="username-signup" 
+                  placeholder="Choose a username" 
+                  minlength="3" maxlength="20" 
+                  pattern="[a-zA-Z0-9_]+" 
+                  title="Username must be 3-20 characters, letters, numbers, and underscores only">
+        </div>
           <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
           <h1>Sign Up</h1>
           <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
@@ -146,7 +154,6 @@
     <div class="liked"><a href="#"></a></div>
   </header>
   
-<!-- Main Container -->
 <div class="testimonials-container">
     <!-- Testimonial Form -->
     <div id="testimonial-form" class="testimonial-form">

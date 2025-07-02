@@ -940,310 +940,491 @@ def get_affordable_cars():
         return jsonify({"error": f"Failed to get affordable cars: {str(e)}"}), 500
     
     
-####################
-# Forum API Routes #
-####################
+#######################
+# Username API Routes #
+#######################
 
-@app.route('/api/forum/posts', methods=['GET'])
-def get_forum_posts():
-    """Get all forum posts (unchanged - supports filtering on frontend)"""
+@app.route('/api/check-username', methods=['POST'])
+def check_username():
+    """Check if a username is available"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
     
     try:
-        posts_ref = realtime_db_ref.child('forum').child('posts')
-        posts_data = posts_ref.get() or {}
+        data = request.get_json()
+        username = data.get('username', '').strip()
         
-        # Convert to list with IDs
-        posts_list = []
-        for post_id, post_data in posts_data.items():
-            post_data['id'] = post_id
-            posts_list.append(post_data)
+        if not username:
+            return jsonify({"available": False, "error": "Username is required"})
         
-        # Sort by creation date (newest first)
-        posts_list.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
+        if len(username) < 3 or len(username) > 20:
+            return jsonify({"available": False, "error": "Username must be 3-20 characters"})
         
-        return jsonify(posts_list)
+        if not re.match(r'^[a-zA-Z0-9_]+$', username):
+            return jsonify({"available": False, "error": "Username can only contain letters, numbers, and underscores"})
+        
+        # Check if username exists in Firebase
+        usernames_ref = realtime_db_ref.child('usernames')
+        users = usernames_ref.order_by_value().equal_to(username).get()
+        
+        available = len(users) == 0
+        return jsonify({"available": available})
+        
     except Exception as e:
-        app.logger.error(f"Error fetching forum posts: {e}")
-        return jsonify({"error": "Failed to fetch posts"}), 500
+        app.logger.error(f"Error checking username: {e}")
+        return jsonify({"error": "Failed to check username"}), 500
+
+@app.route('/api/set-username', methods=['POST'])
+def set_username():
+    """Set username for authenticated user"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    # Check if user is authenticated
+    if 'user' not in session:
+        return jsonify({"error": "Authentication required"}), 401
+    
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        user_id = session['user']
+        
+        if not username:
+            return jsonify({"error": "Username is required"}), 400
+        
+        # Validate username format
+        if len(username) < 3 or len(username) > 20:
+            return jsonify({"error": "Username must be 3-20 characters"}), 400
+        
+        if not re.match(r'^[a-zA-Z0-9_]+$', username):
+            return jsonify({"error": "Username can only contain letters, numbers, and underscores"}), 400
+        
+        # Check if username is already taken
+        usernames_ref = realtime_db_ref.child('usernames')
+        existing_users = usernames_ref.order_by_value().equal_to(username).get()
+        
+        if len(existing_users) > 0:
+            return jsonify({"error": "Username already taken"}), 400
+        
+        # Set username mapping
+        usernames_ref.child(user_id).set(username)
+        
+        # Update user profile
+        user_profile = {
+            'username': username,
+            'email': session.get('email'),
+            'createdAt': {''.join([str(x) for x in time.gmtime()]): True},
+            'profilePicture': None
+        }
+        
+        users_ref = realtime_db_ref.child('users').child(user_id)
+        users_ref.set(user_profile)
+        
+        app.logger.info(f"Username set successfully: {username} for user {user_id}")
+        return jsonify({"success": True, "message": "Username set successfully"})
+        
+    except Exception as e:
+        app.logger.error(f"Error setting username: {e}")
+        return jsonify({"error": "Failed to set username"}), 500
+
+@app.route('/api/get-user-profile', methods=['GET'])
+def get_user_profile():
+    """Get current user's profile information"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    if 'user' not in session:
+        return jsonify({"error": "Authentication required"}), 401
+    
+    try:
+        user_id = session['user']
+        
+        # Get user profile
+        users_ref = realtime_db_ref.child('users').child(user_id)
+        user_data = users_ref.get()
+        
+        if user_data:
+            return jsonify({
+                "success": True,
+                "profile": user_data
+            })
+        else:
+            return jsonify({
+                "success": True,
+                "profile": None
+            })
+        
+    except Exception as e:
+        app.logger.error(f"Error getting user profile: {e}")
+        return jsonify({"error": "Failed to get user profile"}), 500
+
+@app.route('/api/update-profile', methods=['POST'])
+def update_profile():
+    """Update user profile (username, profile picture, etc.)"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    if 'user' not in session:
+        return jsonify({"error": "Authentication required"}), 401
+    
+    try:
+        data = request.get_json()
+        user_id = session['user']
+        
+        # Get current user profile
+        users_ref = realtime_db_ref.child('users').child(user_id)
+        current_profile = users_ref.get() or {}
+        
+        # Handle username update
+        new_username = data.get('username')
+        if new_username and new_username != current_profile.get('username'):
+            # Validate new username
+            new_username = new_username.strip()
+            if len(new_username) < 3 or len(new_username) > 20:
+                return jsonify({"error": "Username must be 3-20 characters"}), 400
+            
+            if not re.match(r'^[a-zA-Z0-9_]+$', new_username):
+                return jsonify({"error": "Username can only contain letters, numbers, and underscores"}), 400
+            
+            # Check if new username is available
+            usernames_ref = realtime_db_ref.child('usernames')
+            existing_users = usernames_ref.order_by_value().equal_to(new_username).get()
+            
+            if len(existing_users) > 0:
+                return jsonify({"error": "Username already taken"}), 400
+            
+            # Remove old username mapping if exists
+            if current_profile.get('username'):
+                usernames_ref.child(user_id).delete()
+            
+            # Set new username mapping
+            usernames_ref.child(user_id).set(new_username)
+            current_profile['username'] = new_username
+        
+        # Handle profile picture update
+        if 'profilePicture' in data:
+            current_profile['profilePicture'] = data['profilePicture']
+        
+        # Update last modified timestamp
+        current_profile['lastModified'] = {''.join([str(x) for x in time.gmtime()]): True}
+        
+        # Save updated profile
+        users_ref.set(current_profile)
+        
+        app.logger.info(f"Profile updated successfully for user {user_id}")
+        return jsonify({"success": True, "message": "Profile updated successfully", "profile": current_profile})
+        
+    except Exception as e:
+        app.logger.error(f"Error updating profile: {e}")
+        return jsonify({"error": "Failed to update profile"}), 500
+
+@app.route('/api/get-username-by-id/<user_id>')
+def get_username_by_id(user_id):
+    """Get username by user ID (for displaying in testimonials/forums)"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        # Get username from mapping
+        usernames_ref = realtime_db_ref.child('usernames').child(user_id)
+        username = usernames_ref.get()
+        
+        if username:
+            return jsonify({"success": True, "username": username})
+        else:
+            # Fallback to user profile
+            users_ref = realtime_db_ref.child('users').child(user_id)
+            user_data = users_ref.get()
+            
+            if user_data and user_data.get('email'):
+                return jsonify({"success": True, "username": user_data['email']})
+            else:
+                return jsonify({"success": True, "username": "Anonymous"})
+        
+    except Exception as e:
+        app.logger.error(f"Error getting username for user {user_id}: {e}")
+        return jsonify({"success": True, "username": "Anonymous"})
+
+#########################
+# Profile Picture Routes #
+#########################
+
+@app.route('/api/upload-profile-picture', methods=['POST'])
+def upload_profile_picture():
+    """Handle profile picture upload"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    if 'user' not in session:
+        return jsonify({"error": "Authentication required"}), 401
+    
+    try:
+        if 'profile_picture' not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+        
+        file = request.files['profile_picture']
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        # Validate file type
+        allowed_extensions = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+        if not ('.' in file.filename and 
+                file.filename.rsplit('.', 1)[1].lower() in allowed_extensions):
+            return jsonify({"error": "Invalid file type. Use PNG, JPG, JPEG, GIF, or WebP"}), 400
+        
+        # Validate file size (max 5MB)
+        file.seek(0, 2)  # Seek to end
+        file_size = file.tell()
+        file.seek(0)  # Reset to beginning
+        
+        if file_size > 5 * 1024 * 1024:  # 5MB
+            return jsonify({"error": "File too large. Maximum size is 5MB"}), 400
+        
+        user_id = session['user']
+        
+        # Create uploads directory if it doesn't exist
+        uploads_dir = os.path.join(app.root_path, 'static', 'uploads', 'profile_pictures')
+        os.makedirs(uploads_dir, exist_ok=True)
+        
+        # Generate unique filename
+        file_extension = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"{user_id}_{int(time.time())}.{file_extension}"
+        file_path = os.path.join(uploads_dir, filename)
+        
+        # Save file
+        file.save(file_path)
+        
+        # Generate URL for the uploaded file
+        profile_picture_url = f"/static/uploads/profile_pictures/{filename}"
+        
+        # Update user profile with new profile picture URL
+        users_ref = realtime_db_ref.child('users').child(user_id)
+        current_profile = users_ref.get() or {}
+        current_profile['profilePicture'] = profile_picture_url
+        current_profile['lastModified'] = {''.join([str(x) for x in time.gmtime()]): True}
+        users_ref.set(current_profile)
+        
+        app.logger.info(f"Profile picture uploaded successfully for user {user_id}")
+        return jsonify({
+            "success": True, 
+            "message": "Profile picture uploaded successfully",
+            "profilePictureUrl": profile_picture_url
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error uploading profile picture: {e}")
+        return jsonify({"error": "Failed to upload profile picture"}), 500
+
+@app.route('/api/set-default-avatar', methods=['POST'])
+def set_default_avatar():
+    """Set a default avatar for the user"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    if 'user' not in session:
+        return jsonify({"error": "Authentication required"}), 401
+    
+    try:
+        data = request.get_json()
+        avatar_name = data.get('avatar')
+        
+        if not avatar_name:
+            return jsonify({"error": "Avatar name is required"}), 400
+        
+        # List of available default avatars
+        available_avatars = [
+            'avatar1.png', 'avatar2.png', 'avatar3.png', 'avatar4.png', 'avatar5.png',
+            'avatar6.png', 'avatar7.png', 'avatar8.png', 'avatar9.png', 'avatar10.png'
+        ]
+        
+        if avatar_name not in available_avatars:
+            return jsonify({"error": "Invalid avatar selection"}), 400
+        
+        user_id = session['user']
+        avatar_url = f"/static/default_avatars/{avatar_name}"
+        
+        # Update user profile
+        users_ref = realtime_db_ref.child('users').child(user_id)
+        current_profile = users_ref.get() or {}
+        current_profile['profilePicture'] = avatar_url
+        current_profile['lastModified'] = {''.join([str(x) for x in time.gmtime()]): True}
+        users_ref.set(current_profile)
+        
+        app.logger.info(f"Default avatar set for user {user_id}: {avatar_name}")
+        return jsonify({
+            "success": True,
+            "message": "Avatar updated successfully",
+            "profilePictureUrl": avatar_url
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error setting default avatar: {e}")
+        return jsonify({"error": "Failed to set avatar"}), 500
+
+##################
+# Profile Page   #
+##################
+
+@app.route('/profile')
+def profile_page():
+    """Render the user profile page"""
+    if 'user' not in session:
+        app.logger.info("Unauthorized access to profile page - redirecting to home")
+        return redirect('/')
+    
+    app.logger.info(f"Rendering profile page for user: {session.get('email')}")
+    return render_template('profile.html')
+
+# Add import for regex at the top of your file
+import re
+import time
+
+#######################
+# Forum API Routes    #
+#######################
 
 @app.route('/api/forum/posts', methods=['POST'])
 def create_forum_post():
-    """Create a new forum post with anonymous option"""
-    if 'user' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
+    """Create a new forum post"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
     
+    # Use the new authentication check
+    if not check_authentication():
+        app.logger.warning("Unauthenticated forum post attempt")
+        return jsonify({"error": "Not authenticated"}), 401
+    
     try:
-        data = request.json
+        data = request.get_json()
         user_id = session['user']
-        user_email = session.get('email', 'Anonymous')
         
-        # Validate input
-        if not data.get('title') or not data.get('body'):
-            return jsonify({'error': 'Title and body are required'}), 400
-        
-        # FEATURE 3: Handle anonymous posting
-        is_anonymous = data.get('isAnonymous', False)
-        author_name = 'Anonymous' if is_anonymous else user_email
+        # Get user's display name
+        username = get_user_display_name(user_id)
         
         post_data = {
+            'userId': user_id,
             'title': data.get('title'),
             'body': data.get('body'),
             'tags': data.get('tags', ''),
-            'authorId': user_id,
-            'authorName': author_name,
-            'isAnonymous': is_anonymous,  # Store anonymous flag
-            'createdAt': datetime.utcnow().isoformat() + 'Z',
+            'isAnonymous': data.get('isAnonymous', False),
+            'authorName': 'Anonymous' if data.get('isAnonymous', False) else username,
+            'createdAt': int(time.time() * 1000),  # Use timestamp in milliseconds
             'upvotes': 0,
             'downvotes': 0,
             'views': 0,
             'commentCount': 0
         }
         
-        # Push to Firebase Realtime Database
-        posts_ref = realtime_db_ref.child('forum').child('posts')
-        new_post = posts_ref.push(post_data)
+        # Save to Firebase
+        posts_ref = realtime_db_ref.child('forum-posts')
+        new_post_ref = posts_ref.push(post_data)
         
-        # Return the created post with its ID
-        post_data['id'] = new_post.key
+        # Add the ID to the response
+        post_data['id'] = new_post_ref.key
+        
+        app.logger.info(f"Forum post created successfully by user {user_id}")
         return jsonify(post_data), 201
         
     except Exception as e:
         app.logger.error(f"Error creating forum post: {e}")
-        return jsonify({'error': 'Failed to create post'}), 500
-
-
-@app.route('/api/forum/comments/<comment_id>/vote', methods=['POST'])
-def vote_on_comment(comment_id):
-    """Vote on a comment"""
-    if 'user' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    if not realtime_db_ref:
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        data = request.json
-        direction = data.get('direction')  # 'up' or 'down'
-        user_id = session['user']
-        
-        if direction not in ['up', 'down']:
-            return jsonify({'error': 'Invalid vote direction'}), 400
-        
-        # Find the comment in all posts (we need to search since we don't know the post_id)
-        posts_ref = realtime_db_ref.child('forum').child('posts')
-        posts_data = posts_ref.get() or {}
-        
-        comment_ref = None
-        post_id = None
-        
-        # Search for the comment across all posts
-        for pid, post_data in posts_data.items():
-            comments_ref = realtime_db_ref.child('forum').child('comments').child(pid)
-            comments_data = comments_ref.get() or {}
-            
-            if comment_id in comments_data:
-                comment_ref = comments_ref.child(comment_id)
-                post_id = pid
-                break
-        
-        if not comment_ref:
-            return jsonify({'error': 'Comment not found'}), 404
-        
-        # Check current vote
-        vote_ref = realtime_db_ref.child('forum').child('comment_votes').child(comment_id).child(user_id)
-        current_vote = vote_ref.get()
-        
-        # Get current comment data
-        comment_data = comment_ref.get()
-        upvotes = comment_data.get('upvotes', 0)
-        downvotes = comment_data.get('downvotes', 0)
-        
-        # Remove previous vote if exists
-        if current_vote == 'up':
-            upvotes -= 1
-        elif current_vote == 'down':
-            downvotes -= 1
-        
-        # Add new vote if different from current
-        if current_vote != direction:
-            if direction == 'up':
-                upvotes += 1
-            else:
-                downvotes += 1
-            vote_ref.set(direction)
-        else:
-            # Remove vote if same as current
-            vote_ref.delete()
-        
-        # Update comment vote counts
-        comment_ref.update({
-            'upvotes': upvotes,
-            'downvotes': downvotes
-        })
-        
-        return jsonify({
-            'upvotes': upvotes,
-            'downvotes': downvotes,
-            'userVote': direction if current_vote != direction else None
-        })
-        
-    except Exception as e:
-        app.logger.error(f"Error voting on comment: {e}")
-        return jsonify({'error': 'Failed to vote on comment'}), 500
-
-@app.route('/api/forum/posts/<post_id>/vote', methods=['POST'])
-def vote_on_post(post_id):
-    """Vote on a forum post (unchanged)"""
-    if 'user' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
-    if not realtime_db_ref:
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        data = request.json
-        direction = data.get('direction')  # 'up' or 'down'
-        user_id = session['user']
-        
-        if direction not in ['up', 'down']:
-            return jsonify({'error': 'Invalid vote direction'}), 400
-        
-        # Check current vote
-        vote_ref = realtime_db_ref.child('forum').child('votes').child(post_id).child(user_id)
-        current_vote = vote_ref.get()
-        
-        # Get current post data
-        post_ref = realtime_db_ref.child('forum').child('posts').child(post_id)
-        post_data = post_ref.get()
-        
-        if not post_data:
-            return jsonify({'error': 'Post not found'}), 404
-        
-        upvotes = post_data.get('upvotes', 0)
-        downvotes = post_data.get('downvotes', 0)
-        
-        # Remove previous vote if exists
-        if current_vote == 'up':
-            upvotes -= 1
-        elif current_vote == 'down':
-            downvotes -= 1
-        
-        # Add new vote if different from current
-        if current_vote != direction:
-            if direction == 'up':
-                upvotes += 1
-            else:
-                downvotes += 1
-            vote_ref.set(direction)
-        else:
-            # Remove vote if same as current
-            vote_ref.delete()
-        
-        # Update post vote counts
-        post_ref.update({
-            'upvotes': upvotes,
-            'downvotes': downvotes
-        })
-        
-        return jsonify({
-            'upvotes': upvotes,
-            'downvotes': downvotes,
-            'userVote': direction if current_vote != direction else None
-        })
-        
-    except Exception as e:
-        app.logger.error(f"Error voting on post: {e}")
-        return jsonify({'error': 'Failed to vote'}), 500
-
-
-@app.route('/api/forum/posts/<post_id>/comments', methods=['GET'])
-def get_post_comments(post_id):
-    """Get comments for a specific post (unchanged - supports replies)"""
-    if not realtime_db_ref:
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        comments_ref = realtime_db_ref.child('forum').child('comments').child(post_id)
-        comments_data = comments_ref.get() or {}
-        
-        # Convert to list with IDs
-        comments_list = []
-        for comment_id, comment_data in comments_data.items():
-            comment_data['id'] = comment_id
-            comments_list.append(comment_data)
-        
-        # Sort by creation date (oldest first for comments)
-        comments_list.sort(key=lambda x: x.get('createdAt', ''))
-        
-        return jsonify(comments_list)
-    except Exception as e:
-        app.logger.error(f"Error fetching comments: {e}")
-        return jsonify({"error": "Failed to fetch comments"}), 500
+        return jsonify({"error": "Failed to create post"}), 500
 
 @app.route('/api/forum/posts/<post_id>/comments', methods=['POST'])
-def create_comment(post_id):
-    """Create a comment on a post with anonymous option and reply support"""
-    if 'user' not in session:
-        return jsonify({'error': 'Not authenticated'}), 401
-    
+def create_comment():
+    """Create a comment on a forum post"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
     
+    # Use the new authentication check
+    if not check_authentication():
+        return jsonify({"error": "Not authenticated"}), 401
+    
     try:
-        data = request.json
+        data = request.get_json()
         user_id = session['user']
-        user_email = session.get('email', 'Anonymous')
         
-        # Validate input
-        if not data.get('text'):
-            return jsonify({'error': 'Comment text is required'}), 400
-        
-        # FEATURE 3: Handle anonymous commenting
-        is_anonymous = data.get('isAnonymous', False)
-        author_name = 'Anonymous' if is_anonymous else user_email
+        # Get user's display name
+        username = get_user_display_name(user_id)
         
         comment_data = {
+            'userId': user_id,
             'text': data.get('text'),
-            'authorId': user_id,
-            'authorName': author_name,
-            'isAnonymous': is_anonymous,
-            'postId': post_id,
-            'createdAt': datetime.utcnow().isoformat() + 'Z',
+            'isAnonymous': data.get('isAnonymous', False),
+            'authorName': 'Anonymous' if data.get('isAnonymous', False) else username,
+            'createdAt': int(time.time() * 1000),  # Use timestamp in milliseconds
             'upvotes': 0,
-            'downvotes': 0
+            'downvotes': 0,
+            'parentId': data.get('parentId')  # For replies
         }
         
-        # FEATURE 6: Handle replies to comments
-        parent_id = data.get('parentId')
-        if parent_id:
-            comment_data['parentId'] = parent_id
+        # Save comment
+        comments_ref = realtime_db_ref.child('forum-posts').child(post_id).child('comments')
+        new_comment_ref = comments_ref.push(comment_data)
         
-        # Add comment to database
-        comments_ref = realtime_db_ref.child('forum').child('comments').child(post_id)
-        new_comment = comments_ref.push(comment_data)
-        
-        # Update comment count on post
-        post_ref = realtime_db_ref.child('forum').child('posts').child(post_id)
+        # Update comment count
+        post_ref = realtime_db_ref.child('forum-posts').child(post_id)
         post_data = post_ref.get()
         if post_data:
             current_count = post_data.get('commentCount', 0)
             post_ref.update({'commentCount': current_count + 1})
         
-        # Return the created comment with its ID
-        comment_data['id'] = new_comment.key
+        comment_data['id'] = new_comment_ref.key
+        
+        app.logger.info(f"Comment created successfully by user {user_id}")
         return jsonify(comment_data), 201
         
     except Exception as e:
         app.logger.error(f"Error creating comment: {e}")
-        return jsonify({'error': 'Failed to create comment'}), 500
+        return jsonify({"error": "Failed to create comment"}), 500
 
-@app.route('/api/forum/posts/<post_id>/views', methods=['POST'])
-def increment_post_views(post_id):
+@app.route('/api/forum/posts/<post_id>/comments', methods=['GET'])
+def get_comments():
+    """Get comments for a forum post"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        comments_ref = realtime_db_ref.child('forum-posts').child(post_id).child('comments')
+        comments_data = comments_ref.get()
+        
+        if not comments_data:
+            return jsonify([])
+        
+        # Convert to list format
+        comments = []
+        for comment_id, comment_data in comments_data.items():
+            comment_data['id'] = comment_id
+            comments.append(comment_data)
+        
+        return jsonify(comments)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting comments: {e}")
+        return jsonify({"error": "Failed to get comments"}), 500
+
+def get_user_display_name(user_id):
+    """Helper function to get user's display name"""
+    try:
+        # Try to get username first
+        username_ref = realtime_db_ref.child('usernames').child(user_id)
+        username = username_ref.get()
+        
+        if username:
+            return username
+        
+        # Fallback to user profile
+        user_ref = realtime_db_ref.child('users').child(user_id)
+        user_data = user_ref.get()
+        
+        if user_data and user_data.get('username'):
+            return user_data['username']
+        
+        # Final fallback to email from session
+        return session.get('email', 'Anonymous')
+        
+    except Exception as e:
+        app.logger.error(f"Error getting display name for user {user_id}: {e}")
+        return 'Anonymous'
     """Increment view count for a post (unchanged)"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
