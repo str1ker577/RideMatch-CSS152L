@@ -1352,12 +1352,14 @@ function updateBarCharts() {
         return;
     }
 
+    // Show sections (this was key in the working version)
     const chartsSection = document.getElementById('compare-charts-section');
     const cardsWrapper = document.getElementById('comparison-cards-wrapper');
     
     if (chartsSection) chartsSection.style.display = 'block';
     if (cardsWrapper) cardsWrapper.style.display = 'block';
     
+    // Create all charts (pattern that worked)
     updateHorsepowerChart();
     updatePriceChart();
     updateGroundClearanceChart();
@@ -1366,20 +1368,28 @@ function updateBarCharts() {
 }
 
 function updateHorsepowerChart() {
-    const canvas = document.getElementById('horsepowerChart');
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
+    const ctx = document.getElementById('horsepowerChart').getContext('2d');
     
     if (chartInstances.horsepower) {
         chartInstances.horsepower.destroy();
     }
 
+    // This pattern worked - direct mapping with model names
     const labels = comparedCars.map(car => {
         const model = car.specs.Model || '';
         return model ? `${car.variant}\n(${model})` : car.variant;
     });
-    const data = comparedCars.map(car => parseInt(car.specs.Horsepower) || 0);
+    
+    const data = comparedCars.map(car => {
+        // Try multiple possible field names (this was the missing piece)
+        const hp = parseInt(car.specs.Horsepower) || 
+                   parseInt(car.specs.HP) || 
+                   parseInt(car.specs.horsepower) || 
+                   parseInt(car.specs.Power) || 0;
+        console.log(`${car.variant} HP: ${hp}`); // Debug log
+        return hp;
+    });
+    
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
 
@@ -1431,10 +1441,7 @@ function updateHorsepowerChart() {
 }
 
 function updatePriceChart() {
-    const canvas = document.getElementById('priceChart');
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
+    const ctx = document.getElementById('priceChart').getContext('2d');
     
     if (chartInstances.price) {
         chartInstances.price.destroy();
@@ -1444,7 +1451,17 @@ function updatePriceChart() {
         const model = car.specs.Model || '';
         return model ? `${car.variant}\n(${model})` : car.variant;
     });
-    const data = comparedCars.map(car => car.specs.Price || 0);
+    
+    const data = comparedCars.map(car => {
+        // Try multiple possible field names for price
+        const price = parseFloat(car.specs.Price) || 
+                     parseFloat(car.specs.price) || 
+                     parseFloat(car.specs.Cost) || 
+                     parseFloat(car.specs['Price (PHP)']) || 0;
+        console.log(`${car.variant} Price: ${price}`); // Debug log
+        return price;
+    });
+    
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
 
@@ -1504,10 +1521,7 @@ function updatePriceChart() {
 }
 
 function updateGroundClearanceChart() {
-    const canvas = document.getElementById('groundClearanceChart');
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
+    const ctx = document.getElementById('groundClearanceChart').getContext('2d');
     
     if (chartInstances.groundClearance) {
         chartInstances.groundClearance.destroy();
@@ -1517,7 +1531,17 @@ function updateGroundClearanceChart() {
         const model = car.specs.Model || '';
         return model ? `${car.variant}\n(${model})` : car.variant;
     });
-    const data = comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0);
+    
+    const data = comparedCars.map(car => {
+        // Try multiple field variations
+        const clearance = parseFloat(car.specs.GroundClearance) || 
+                         parseFloat(car.specs['Ground Clearance']) || 
+                         parseFloat(car.specs.groundClearance) || 
+                         parseFloat(car.specs.Clearance) || 0;
+        console.log(`${car.variant} Ground Clearance: ${clearance}`);
+        return clearance;
+    });
+    
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
 
@@ -1568,11 +1592,80 @@ function updateGroundClearanceChart() {
     });
 }
 
-function updateCargoSpaceChart() {
-    const canvas = document.getElementById('cargoSpaceChart');
-    if (!canvas) return;
+function updateSeatingCapacityChart() {
+    const ctx = document.getElementById('seatingCapacityChart').getContext('2d');
     
-    const ctx = canvas.getContext('2d');
+    if (chartInstances.seatingCapacity) {
+        chartInstances.seatingCapacity.destroy();
+    }
+
+    const labels = comparedCars.map(car => {
+        const model = car.specs.Model || '';
+        return model ? `${car.variant}\n(${model})` : car.variant;
+    });
+    
+    const data = comparedCars.map(car => {
+        const seating = parseInt(car.specs.SeatingCapacity) || 
+                       parseInt(car.specs['Seating Capacity']) || 
+                       parseInt(car.specs.Seats) || 
+                       parseInt(car.specs.seatingCapacity) || 0;
+        console.log(`${car.variant} Seating: ${seating}`);
+        return seating;
+    });
+    
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
+
+    chartInstances.seatingCapacity = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Seating Capacity',
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
+                borderWidth: 2,
+                borderRadius: 8,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y} seats`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Seating Capacity',
+                        color: '#b49b66',
+                        font: { weight: 'bold' }
+                    },
+                    grid: { color: 'rgba(180, 155, 102, 0.1)' },
+                    ticks: { stepSize: 1 }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { maxRotation: 45, minRotation: 0 }
+                }
+            }
+        }
+    });
+}
+
+function updateCargoSpaceChart() {
+    const ctx = document.getElementById('cargoSpaceChart').getContext('2d');
     
     if (chartInstances.cargoSpace) {
         chartInstances.cargoSpace.destroy();
@@ -1582,14 +1675,18 @@ function updateCargoSpaceChart() {
         const model = car.specs.Model || '';
         return model ? `${car.variant}\n(${model})` : car.variant;
     });
-    // Check for multiple cargo space field variations
+    
     const data = comparedCars.map(car => {
-        return parseFloat(car.specs.Cargospace) || 
-               parseFloat(car.specs.CargoSpace) || 
-               parseFloat(car.specs.cargospace) || 
-               parseFloat(car.specs.cargoSpace) || 
-               parseFloat(car.specs['Cargo Space']) || 0;
+        const cargo = parseFloat(car.specs.Cargospace) || 
+                     parseFloat(car.specs.CargoSpace) || 
+                     parseFloat(car.specs['Cargo Space']) || 
+                     parseFloat(car.specs.cargospace) || 
+                     parseFloat(car.specs.cargoSpace) || 
+                     parseFloat(car.specs.Storage) || 0;
+        console.log(`${car.variant} Cargo: ${cargo}`);
+        return cargo;
     });
+    
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
 
