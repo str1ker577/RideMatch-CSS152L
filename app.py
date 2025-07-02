@@ -120,6 +120,28 @@ try:
 except Exception as e:
     app.logger.error(f"❌ CSV loading failed: {e}")
     df = pd.DataFrame()
+    
+def find_car_image(model):
+    """Find car image based on model name"""
+    try:
+        # You can customize this logic based on your image storage structure
+        # For now, returning a placeholder or default image
+        model_clean = model.replace(' ', '_').lower()
+        
+        # Check if image exists in resources folder
+        image_path = f'/static/resources/{model_clean}.png'
+        
+        # You might want to check if file actually exists:
+        # import os
+        # if os.path.exists(f'static/resources/{model_clean}.png'):
+        #     return image_path
+        
+        # Return default image if specific model image not found
+        return '/static/resources/default_car.png'
+        
+    except Exception as e:
+        app.logger.warning(f"Error finding image for model {model}: {e}")
+        return '/static/resources/default_car.png'
 
 # Health check endpoint
 @app.route('/health')
@@ -844,73 +866,6 @@ def get_specs():
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500
 
-# ENHANCED: Better error handling for model and variant endpoints
-@app.route('/get_models', methods=['GET'])
-def get_models():
-    if df.empty:
-        app.logger.warning("No car data available for brand models")
-        return jsonify([])
-    
-    brand = request.args.get("brand", "").strip()
-    if not brand:
-        app.logger.warning("No brand specified for model lookup")
-        return jsonify([])
-
-    try:
-        app.logger.info(f"Getting models for brand: {brand}")
-        
-        # Case-insensitive brand matching
-        brand_mask = df["Brand"].str.lower() == brand.lower()
-        models = df[brand_mask]["Model"].unique().tolist()
-        
-        # Remove any NaN or empty values
-        models = [model for model in models if pd.notna(model) and str(model).strip()]
-        
-        app.logger.info(f"Retrieved {len(models)} models for brand {brand}")
-        
-        if not models:
-            available_brands = df["Brand"].unique().tolist()
-            app.logger.info(f"No models found. Available brands: {available_brands}")
-        
-        return jsonify(models)
-        
-    except Exception as e:
-        app.logger.error(f"Error getting models for brand {brand}: {e}")
-        return jsonify([])
-
-@app.route('/get_variants', methods=['GET'])
-def get_variants():
-    if df.empty:
-        app.logger.warning("No car data available for variants")
-        return jsonify([])
-    
-    model = request.args.get("model", "").strip()
-    if not model:
-        app.logger.warning("No model specified for variant lookup")
-        return jsonify([])
-
-    try:
-        app.logger.info(f"Getting variants for model: {model}")
-        
-        # Case-insensitive model matching
-        model_mask = df["Model"].str.lower() == model.lower()
-        variants = df[model_mask]["Variant"].unique().tolist()
-        
-        # Remove any NaN or empty values
-        variants = [variant for variant in variants if pd.notna(variant) and str(variant).strip()]
-        
-        app.logger.info(f"Retrieved {len(variants)} variants for model {model}")
-        
-        if not variants:
-            available_models = df["Model"].unique().tolist()
-            app.logger.info(f"No variants found. Available models: {available_models[:10]}")  # First 10 for debugging
-        
-        return jsonify(variants)
-        
-    except Exception as e:
-        app.logger.error(f"Error getting variants for model {model}: {e}")
-        return jsonify([])
-
 # ENHANCED: Debug endpoint to check data structure
 @app.route('/debug/car_data')
 def debug_car_data():
@@ -1411,29 +1366,6 @@ def increment_post_views(post_id):
     except Exception as e:
         app.logger.error(f"Error incrementing views: {e}")
         return jsonify({'error': 'Failed to increment views'}), 500
-  
-  
-def find_car_image(model):
-    """Find car image based on model name"""
-    try:
-        # You can customize this logic based on your image storage structure
-        # For now, returning a placeholder or default image
-        model_clean = model.replace(' ', '_').lower()
-        
-        # Check if image exists in resources folder
-        image_path = f'/static/resources/{model_clean}.png'
-        
-        # You might want to check if file actually exists:
-        # import os
-        # if os.path.exists(f'static/resources/{model_clean}.png'):
-        #     return image_path
-        
-        # Return default image if specific model image not found
-        return '/static/resources/default_car.png'
-        
-    except Exception as e:
-        app.logger.warning(f"Error finding image for model {model}: {e}")
-        return '/static/resources/default_car.png'
       
 ##################
 # Error handlers #
