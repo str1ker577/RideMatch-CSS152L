@@ -1066,15 +1066,6 @@ async function loadDefaultCars() {
 let comparedCars = [];
 let chartInstances = {};
 
-// IMPORTANT: Safety check function to prevent year-related errors
-function populateYears() {
-    const yearSelect = document.getElementById('year');
-    if (!yearSelect) return; // Prevents TypeError on compare page
-    
-    // Your existing year population code would go here
-    console.log('Year select not found - not on filter page');
-}
-
 // Function to populate models based on selected brand
 async function populateModels() {
     const brand = document.getElementById('brand').value;
@@ -1136,10 +1127,17 @@ async function compareCars() {
     }
 
     try {
+        console.log('Fetching specs for variant:', selectedVariant);
         const response = await fetch(`${baseUrl}/get_specs?variant=${selectedVariant}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const specs = await response.json();
+        console.log('Received specs:', specs);
 
-        if (Object.keys(specs).length === 0) {
+        if (!specs || Object.keys(specs).length === 0) {
             alert('No specifications found for this variant.');
             return;
         }
@@ -1157,7 +1155,11 @@ async function compareCars() {
 
         addCarToComparison(selectedVariant, specs);
         comparedCars.push({variant: selectedVariant, specs: specs});
-        updateBarCharts();
+        
+        // FIXED: Ensure charts are updated after DOM is ready
+        setTimeout(() => {
+            updateBarCharts();
+        }, 100);
         
         // Show success message and reset form
         showSuccessMessage();
@@ -1216,7 +1218,7 @@ function addCarToComparison(variant, specs) {
         carColumn.appendChild(imgContainer);
     }
 
-    // Specifications sections with Year included
+    // FIXED: Updated field names to match backend response
     const specSections = {
         "General Specifications": ["Brand", "Model", "Year"],
         "Performance Specifications": ["Horsepower", "Engine", "Transmission", "DriveTrain", "FuelType"],
@@ -1233,7 +1235,7 @@ function addCarToComparison(variant, specs) {
         sectionDiv.appendChild(categoryTitle);
 
         keys.forEach(key => {
-            if (specs[key] !== undefined && specs[key] !== "") {
+            if (specs[key] !== undefined && specs[key] !== "" && specs[key] !== 0) {
                 const specDiv = document.createElement('div');
                 specDiv.classList.add('spec-value');
                 
@@ -1244,7 +1246,7 @@ function addCarToComparison(variant, specs) {
                 
                 specDiv.innerHTML = `<span class="spec-label">${key.replace(/([A-Z])/g, ' $1').trim()}:</span> ${formattedValue}`;
                 
-                // Add performance bar for numeric values (not for Year)
+                // Add performance bar for numeric values
                 if (key === "Horsepower" || key === "SeatingCapacity" || key === "GroundClearance") {
                     const progressBar = createProgressBar(formattedValue, key);
                     specDiv.appendChild(progressBar);
@@ -1281,7 +1283,9 @@ function addCarToComparison(variant, specs) {
         // Hide comparison sections if no cars left
         if (comparedCars.length === 0) {
             const cardsWrapper = document.getElementById('comparison-cards-wrapper');
+            const chartsSection = document.getElementById('compare-charts-section');
             if (cardsWrapper) cardsWrapper.style.display = 'none';
+            if (chartsSection) chartsSection.style.display = 'none';
         }
     };
 
@@ -1337,7 +1341,10 @@ const chartBackgroundColors = [
     'rgba(122, 98, 71, 0.8)'
 ];
 
+// FIXED: Main chart update function
 function updateBarCharts() {
+    console.log('Updating charts for', comparedCars.length, 'cars');
+    
     if (comparedCars.length === 0) {
         const chartsSection = document.getElementById('compare-charts-section');
         const cardsWrapper = document.getElementById('comparison-cards-wrapper');
@@ -1345,6 +1352,7 @@ function updateBarCharts() {
         if (chartsSection) chartsSection.style.display = 'none';
         if (cardsWrapper) cardsWrapper.style.display = 'none';
         
+        // Destroy all existing charts
         Object.values(chartInstances).forEach(chart => {
             if (chart) chart.destroy();
         });
@@ -1352,41 +1360,46 @@ function updateBarCharts() {
         return;
     }
 
-    // Show sections (this was key in the working version)
+    // Show sections
     const chartsSection = document.getElementById('compare-charts-section');
     const cardsWrapper = document.getElementById('comparison-cards-wrapper');
     
     if (chartsSection) chartsSection.style.display = 'block';
     if (cardsWrapper) cardsWrapper.style.display = 'block';
     
-    // Create all charts (pattern that worked)
-    updateHorsepowerChart();
-    updatePriceChart();
-    updateGroundClearanceChart();
-    updateCargoSpaceChart();
-    updateSeatingCapacityChart();
+    // Wait for DOM to be ready, then create charts
+    setTimeout(() => {
+        updateHorsepowerChart();
+        updatePriceChart();
+        updateGroundClearanceChart();
+        updateCargoSpaceChart();
+        updateSeatingCapacityChart();
+    }, 200);
 }
 
+// FIXED: Horsepower chart with proper field names
 function updateHorsepowerChart() {
-    const ctx = document.getElementById('horsepowerChart').getContext('2d');
+    const canvas = document.getElementById('horsepowerChart');
+    if (!canvas) {
+        console.error('Horsepower chart canvas not found');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
     
     if (chartInstances.horsepower) {
         chartInstances.horsepower.destroy();
     }
 
-    // This pattern worked - direct mapping with model names
     const labels = comparedCars.map(car => {
         const model = car.specs.Model || '';
         return model ? `${car.variant}\n(${model})` : car.variant;
     });
     
+    // FIXED: Use correct field name from backend
     const data = comparedCars.map(car => {
-        // Try multiple possible field names (this was the missing piece)
-        const hp = parseInt(car.specs.Horsepower) || 
-                   parseInt(car.specs.HP) || 
-                   parseInt(car.specs.horsepower) || 
-                   parseInt(car.specs.Power) || 0;
-        console.log(`${car.variant} HP: ${hp}`); // Debug log
+        const hp = parseInt(car.specs.Horsepower) || 0;
+        console.log(`${car.variant} HP: ${hp}`);
         return hp;
     });
     
@@ -1440,8 +1453,15 @@ function updateHorsepowerChart() {
     });
 }
 
+// FIXED: Price chart with proper field names
 function updatePriceChart() {
-    const ctx = document.getElementById('priceChart').getContext('2d');
+    const canvas = document.getElementById('priceChart');
+    if (!canvas) {
+        console.error('Price chart canvas not found');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
     
     if (chartInstances.price) {
         chartInstances.price.destroy();
@@ -1452,13 +1472,10 @@ function updatePriceChart() {
         return model ? `${car.variant}\n(${model})` : car.variant;
     });
     
+    // FIXED: Use correct field name from backend
     const data = comparedCars.map(car => {
-        // Try multiple possible field names for price
-        const price = parseFloat(car.specs.Price) || 
-                     parseFloat(car.specs.price) || 
-                     parseFloat(car.specs.Cost) || 
-                     parseFloat(car.specs['Price (PHP)']) || 0;
-        console.log(`${car.variant} Price: ${price}`); // Debug log
+        const price = parseFloat(car.specs.Price) || 0;
+        console.log(`${car.variant} Price: ${price}`);
         return price;
     });
     
@@ -1520,8 +1537,15 @@ function updatePriceChart() {
     });
 }
 
+// FIXED: Ground clearance chart with proper field names
 function updateGroundClearanceChart() {
-    const ctx = document.getElementById('groundClearanceChart').getContext('2d');
+    const canvas = document.getElementById('groundClearanceChart');
+    if (!canvas) {
+        console.error('Ground clearance chart canvas not found');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
     
     if (chartInstances.groundClearance) {
         chartInstances.groundClearance.destroy();
@@ -1532,12 +1556,9 @@ function updateGroundClearanceChart() {
         return model ? `${car.variant}\n(${model})` : car.variant;
     });
     
+    // FIXED: Use correct field name from backend
     const data = comparedCars.map(car => {
-        // Try multiple field variations
-        const clearance = parseFloat(car.specs.GroundClearance) || 
-                         parseFloat(car.specs['Ground Clearance']) || 
-                         parseFloat(car.specs.groundClearance) || 
-                         parseFloat(car.specs.Clearance) || 0;
+        const clearance = parseFloat(car.specs.GroundClearance) || 0;
         console.log(`${car.variant} Ground Clearance: ${clearance}`);
         return clearance;
     });
@@ -1592,8 +1613,15 @@ function updateGroundClearanceChart() {
     });
 }
 
+// FIXED: Seating capacity chart with proper field names
 function updateSeatingCapacityChart() {
-    const ctx = document.getElementById('seatingCapacityChart').getContext('2d');
+    const canvas = document.getElementById('seatingCapacityChart');
+    if (!canvas) {
+        console.error('Seating capacity chart canvas not found');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
     
     if (chartInstances.seatingCapacity) {
         chartInstances.seatingCapacity.destroy();
@@ -1604,11 +1632,9 @@ function updateSeatingCapacityChart() {
         return model ? `${car.variant}\n(${model})` : car.variant;
     });
     
+    // FIXED: Use correct field name from backend
     const data = comparedCars.map(car => {
-        const seating = parseInt(car.specs.SeatingCapacity) || 
-                       parseInt(car.specs['Seating Capacity']) || 
-                       parseInt(car.specs.Seats) || 
-                       parseInt(car.specs.seatingCapacity) || 0;
+        const seating = parseInt(car.specs.SeatingCapacity) || 0;
         console.log(`${car.variant} Seating: ${seating}`);
         return seating;
     });
@@ -1664,8 +1690,15 @@ function updateSeatingCapacityChart() {
     });
 }
 
+// FIXED: Cargo space chart with proper field names
 function updateCargoSpaceChart() {
-    const ctx = document.getElementById('cargoSpaceChart').getContext('2d');
+    const canvas = document.getElementById('cargoSpaceChart');
+    if (!canvas) {
+        console.error('Cargo space chart canvas not found');
+        return;
+    }
+    
+    const ctx = canvas.getContext('2d');
     
     if (chartInstances.cargoSpace) {
         chartInstances.cargoSpace.destroy();
@@ -1676,13 +1709,9 @@ function updateCargoSpaceChart() {
         return model ? `${car.variant}\n(${model})` : car.variant;
     });
     
+    // FIXED: Use correct field name from backend (note: backend returns "Cargospace")
     const data = comparedCars.map(car => {
-        const cargo = parseFloat(car.specs.Cargospace) || 
-                     parseFloat(car.specs.CargoSpace) || 
-                     parseFloat(car.specs['Cargo Space']) || 
-                     parseFloat(car.specs.cargospace) || 
-                     parseFloat(car.specs.cargoSpace) || 
-                     parseFloat(car.specs.Storage) || 0;
+        const cargo = parseFloat(car.specs.Cargospace) || 0;
         console.log(`${car.variant} Cargo: ${cargo}`);
         return cargo;
     });
@@ -1727,72 +1756,6 @@ function updateCargoSpaceChart() {
                         font: { weight: 'bold' }
                     },
                     grid: { color: 'rgba(180, 155, 102, 0.1)' }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: { maxRotation: 45, minRotation: 0 }
-                }
-            }
-        }
-    });
-}
-
-function updateSeatingCapacityChart() {
-    const canvas = document.getElementById('seatingCapacityChart');
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    
-    if (chartInstances.seatingCapacity) {
-        chartInstances.seatingCapacity.destroy();
-    }
-
-    const labels = comparedCars.map(car => {
-        const model = car.specs.Model || '';
-        return model ? `${car.variant}\n(${model})` : car.variant;
-    });
-    const data = comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0);
-    const colors = chartBackgroundColors.slice(0, comparedCars.length);
-    const borderColors = chartColors.slice(0, comparedCars.length);
-
-    chartInstances.seatingCapacity = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Seating Capacity',
-                data: data,
-                backgroundColor: colors,
-                borderColor: borderColors,
-                borderWidth: 2,
-                borderRadius: 8,
-                borderSkipped: false,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return `${context.parsed.y} seats`;
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Seating Capacity',
-                        color: '#b49b66',
-                        font: { weight: 'bold' }
-                    },
-                    grid: { color: 'rgba(180, 155, 102, 0.1)' },
-                    ticks: { stepSize: 1 }
                 },
                 x: {
                     grid: { display: false },

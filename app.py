@@ -756,46 +756,215 @@ def get_specs():
     
     if not variant:
         app.logger.warning("No variant specified for specs lookup")
-        return jsonify({})
+        return jsonify({"error": "Variant parameter required"}), 400
 
     try:
-        # Find the car with matching variant
+        app.logger.info(f"Looking up specs for variant: {variant}")
+        
+        # Find the car with matching variant (case-insensitive)
         car_data = df[df["Variant"].str.lower() == variant.lower()]
         
         if car_data.empty:
             app.logger.warning(f"No car found for variant: {variant}")
-            return jsonify({})
+            # Return available variants for debugging
+            available_variants = df["Variant"].unique().tolist()[:10]  # First 10 for debugging
+            app.logger.info(f"Available variants (sample): {available_variants}")
+            return jsonify({"error": f"Variant '{variant}' not found"}), 404
         
         # Get the first matching car (in case of duplicates)
         car = car_data.iloc[0]
+        app.logger.info(f"Found car data for variant: {variant}")
         
-        # Build specs dictionary
+        # Build specs dictionary with proper error handling and data validation
+        def safe_get_int(value, default=0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return int(float(value))
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_float(value, default=0.0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_str(value, default=""):
+            try:
+                if pd.isna(value) or value is None:
+                    return default
+                return str(value).strip()
+            except (ValueError, TypeError):
+                return default
+        
+        # FIXED: Consistent field naming that matches frontend expectations
         specs = {
-            "Brand": str(car.get("Brand", "")),
-            "Model": str(car.get("Model", "")),
-            "BodyType": str(car.get("Body_Type", "")),
-            "Variant": str(car.get("Variant", "")),
-            "DriveTrain": str(car.get("Drive_Train", "")),
-            "Engine": str(car.get("Engine", "")),
-            "Horsepower": int(car.get("Horsepower", 0)) if pd.notna(car.get("Horsepower")) else 0,
-            "Transmission": str(car.get("Transmission", "")),
-            "FuelType": str(car.get("Fuel_Type", "")),
-            "Year": int(car.get("Year", 0)) if pd.notna(car.get("Year")) else 0,
-            "GroundClearance": float(car.get("Ground_Clearance", 0)) if pd.notna(car.get("Ground_Clearance")) else 0,
-            "Cargospace": float(car.get("Cargo_space", 0)) if pd.notna(car.get("Cargo_space")) else 0,
-            "SeatingCapacity": int(car.get("Seating_Capacity", 0)) if pd.notna(car.get("Seating_Capacity")) else 0,
-            "Price": float(car.get("Price", 0)) if pd.notna(car.get("Price")) else 0,
-            "Image": find_car_image(str(car.get("Model", "")))
+            # Basic Information
+            "Brand": safe_get_str(car.get("Brand", "")),
+            "Model": safe_get_str(car.get("Model", "")),
+            "BodyType": safe_get_str(car.get("Body_Type", "")),
+            "Variant": safe_get_str(car.get("Variant", "")),
+            "Year": safe_get_int(car.get("Year", 0)),
+            
+            # Performance Specifications
+            "Horsepower": safe_get_int(car.get("Horsepower", 0)),
+            "Engine": safe_get_str(car.get("Engine", "")),
+            "Transmission": safe_get_str(car.get("Transmission", "")),
+            "DriveTrain": safe_get_str(car.get("Drive_Train", "")),
+            "FuelType": safe_get_str(car.get("Fuel_Type", "")),
+            
+            # Utility Specifications
+            "GroundClearance": safe_get_float(car.get("Ground_Clearance", 0)),
+            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),  # Note: keeping as "Cargospace" to match JS
+            "SeatingCapacity": safe_get_int(car.get("Seating_Capacity", 0)),
+            
+            # Pricing
+            "Price": safe_get_float(car.get("Price", 0)),
+            
+            # Image
+            "Image": find_car_image(safe_get_str(car.get("Model", "")))
         }
         
-        app.logger.info(f"Retrieved specs for variant: {variant}")
+        # Log the specs for debugging
+        app.logger.info(f"Specs for {variant}: {specs}")
+        
+        # Validate that we have essential data
+        if not specs["Brand"] and not specs["Model"]:
+            app.logger.warning(f"Car found but missing essential data for variant: {variant}")
+            return jsonify({"error": "Car data incomplete"}), 404
+        
         return jsonify(specs)
         
     except Exception as e:
         app.logger.error(f"Error getting specs for variant {variant}: {e}")
         import traceback
         app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": f"Failed to get specs: {str(e)}"}), 500
+        return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500
+
+# ENHANCED: Better error handling for model and variant endpoints
+@app.route('/get_models', methods=['GET'])
+def get_models():
+    if df.empty:
+        app.logger.warning("No car data available for brand models")
+        return jsonify([])
+    
+    brand = request.args.get("brand", "").strip()
+    if not brand:
+        app.logger.warning("No brand specified for model lookup")
+        return jsonify([])
+
+    try:
+        app.logger.info(f"Getting models for brand: {brand}")
+        
+        # Case-insensitive brand matching
+        brand_mask = df["Brand"].str.lower() == brand.lower()
+        models = df[brand_mask]["Model"].unique().tolist()
+        
+        # Remove any NaN or empty values
+        models = [model for model in models if pd.notna(model) and str(model).strip()]
+        
+        app.logger.info(f"Retrieved {len(models)} models for brand {brand}")
+        
+        if not models:
+            available_brands = df["Brand"].unique().tolist()
+            app.logger.info(f"No models found. Available brands: {available_brands}")
+        
+        return jsonify(models)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting models for brand {brand}: {e}")
+        return jsonify([])
+
+@app.route('/get_variants', methods=['GET'])
+def get_variants():
+    if df.empty:
+        app.logger.warning("No car data available for variants")
+        return jsonify([])
+    
+    model = request.args.get("model", "").strip()
+    if not model:
+        app.logger.warning("No model specified for variant lookup")
+        return jsonify([])
+
+    try:
+        app.logger.info(f"Getting variants for model: {model}")
+        
+        # Case-insensitive model matching
+        model_mask = df["Model"].str.lower() == model.lower()
+        variants = df[model_mask]["Variant"].unique().tolist()
+        
+        # Remove any NaN or empty values
+        variants = [variant for variant in variants if pd.notna(variant) and str(variant).strip()]
+        
+        app.logger.info(f"Retrieved {len(variants)} variants for model {model}")
+        
+        if not variants:
+            available_models = df["Model"].unique().tolist()
+            app.logger.info(f"No variants found. Available models: {available_models[:10]}")  # First 10 for debugging
+        
+        return jsonify(variants)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting variants for model {model}: {e}")
+        return jsonify([])
+
+# ENHANCED: Debug endpoint to check data structure
+@app.route('/debug/car_data')
+def debug_car_data():
+    """Debug endpoint to check CSV data structure"""
+    if df.empty:
+        return jsonify({"error": "No data loaded"})
+    
+    try:
+        debug_info = {
+            "total_records": len(df),
+            "columns": list(df.columns),
+            "data_types": df.dtypes.to_dict(),
+            "sample_record": df.iloc[0].to_dict() if len(df) > 0 else {},
+            "unique_brands": df["Brand"].unique().tolist(),
+            "unique_models": df["Model"].unique().tolist()[:10],  # First 10
+            "unique_variants": df["Variant"].unique().tolist()[:10],  # First 10
+            "price_range": {
+                "min": float(df["Price"].min()) if "Price" in df.columns else 0,
+                "max": float(df["Price"].max()) if "Price" in df.columns else 0
+            }
+        }
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+# ENHANCED: Test endpoint for compare functionality
+@app.route('/test/compare')
+def test_compare():
+    """Test endpoint to verify compare functionality"""
+    try:
+        # Get a sample variant for testing
+        if df.empty:
+            return jsonify({"error": "No data available"})
+        
+        sample_variant = df["Variant"].iloc[0] if len(df) > 0 else None
+        
+        if not sample_variant:
+            return jsonify({"error": "No variants available"})
+        
+        # Test the get_specs functionality
+        test_result = {
+            "sample_variant": sample_variant,
+            "brands_count": len(df["Brand"].unique()),
+            "models_count": len(df["Model"].unique()),
+            "variants_count": len(df["Variant"].unique()),
+            "test_specs_url": f"/get_specs?variant={sample_variant}"
+        }
+        
+        return jsonify(test_result)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)})
     
 ###############################
 # Testimonials Function Logic #
@@ -1242,7 +1411,30 @@ def increment_post_views(post_id):
     except Exception as e:
         app.logger.error(f"Error incrementing views: {e}")
         return jsonify({'error': 'Failed to increment views'}), 500
-    
+  
+  
+def find_car_image(model):
+    """Find car image based on model name"""
+    try:
+        # You can customize this logic based on your image storage structure
+        # For now, returning a placeholder or default image
+        model_clean = model.replace(' ', '_').lower()
+        
+        # Check if image exists in resources folder
+        image_path = f'/static/resources/{model_clean}.png'
+        
+        # You might want to check if file actually exists:
+        # import os
+        # if os.path.exists(f'static/resources/{model_clean}.png'):
+        #     return image_path
+        
+        # Return default image if specific model image not found
+        return '/static/resources/default_car.png'
+        
+    except Exception as e:
+        app.logger.warning(f"Error finding image for model {model}: {e}")
+        return '/static/resources/default_car.png'
+      
 ##################
 # Error handlers #
 ##################
