@@ -763,6 +763,49 @@ def get_variants():
         app.logger.error(f"Error getting variants for model {model}: {e}")
         return jsonify([])
     
+@app.route('/get_variant_years', methods=['GET'])
+def get_variant_years():
+    """Get available years for a specific brand, model, and variant combination"""
+    if df.empty:
+        app.logger.warning("No car data available for variant years")
+        return jsonify([])
+    
+    brand = request.args.get("brand", "").strip()
+    model = request.args.get("model", "").strip()
+    variant = request.args.get("variant", "").strip()
+    
+    if not brand or not model or not variant:
+        app.logger.warning("Missing parameters for variant years lookup")
+        return jsonify([])
+
+    try:
+        app.logger.info(f"Getting years for brand: {brand}, model: {model}, variant: {variant}")
+        
+        # Filter by brand, model, and variant, then get unique years
+        filtered_df = df[
+            (df["Brand"].str.lower() == brand.lower()) &
+            (df["Model"].str.lower() == model.lower()) &
+            (df["Variant"].str.lower() == variant.lower())
+        ]
+        
+        years = filtered_df["Year"].dropna().unique().tolist()
+        
+        # Convert to integers and remove any invalid years
+        valid_years = []
+        for year in years:
+            try:
+                year_int = int(year)
+                if 1900 <= year_int <= 2030:  # Reasonable year range
+                    valid_years.append(year_int)
+            except (ValueError, TypeError):
+                continue
+        
+        app.logger.info(f"Retrieved {len(valid_years)} valid years for {variant}")
+        return jsonify(valid_years)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting variant years: {e}")
+        return jsonify([])
     
 ###########################
 # Pull Data from CSV file #
@@ -775,29 +818,46 @@ def get_specs():
         return jsonify({"error": "Car data not available"}), 500
     
     variant = request.args.get("variant", "").strip()
+    year = request.args.get("year", "").strip()  # NEW: Year parameter
     
     if not variant:
         app.logger.warning("No variant specified for specs lookup")
         return jsonify({"error": "Variant parameter required"}), 400
 
     try:
-        app.logger.info(f"Looking up specs for variant: {variant}")
+        app.logger.info(f"Looking up specs for variant: {variant}, year: {year}")
         
-        # Find the car with matching variant (case-insensitive)
-        car_data = df[df["Variant"].str.lower() == variant.lower()]
+        # Build query conditions
+        query_conditions = [df["Variant"].str.lower() == variant.lower()]
+        
+        # Add year condition if provided
+        if year:
+            try:
+                year_int = int(year)
+                query_conditions.append(df["Year"] == year_int)
+                app.logger.info(f"Including year filter: {year_int}")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
+                return jsonify({"error": "Invalid year format"}), 400
+        
+        # Combine all conditions
+        combined_condition = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_condition = combined_condition & condition
+        
+        car_data = df[combined_condition]
         
         if car_data.empty:
-            app.logger.warning(f"No car found for variant: {variant}")
-            # Return available variants for debugging
-            available_variants = df["Variant"].unique().tolist()[:10]  # First 10 for debugging
+            app.logger.warning(f"No car found for variant: {variant}, year: {year}")
+            available_variants = df["Variant"].unique().tolist()[:10]
             app.logger.info(f"Available variants (sample): {available_variants}")
-            return jsonify({"error": f"Variant '{variant}' not found"}), 404
+            return jsonify({"error": f"Variant '{variant}' with year '{year}' not found"}), 404
         
         # Get the first matching car (in case of duplicates)
         car = car_data.iloc[0]
-        app.logger.info(f"Found car data for variant: {variant}")
+        app.logger.info(f"Found car data for variant: {variant}, year: {year}")
         
-        # Build specs dictionary with proper error handling and data validation
+        # Build specs dictionary (same helper functions as before)
         def safe_get_int(value, default=0):
             try:
                 if pd.isna(value) or value == "" or value is None:
@@ -822,7 +882,7 @@ def get_specs():
             except (ValueError, TypeError):
                 return default
         
-        # FIXED: Consistent field naming that matches frontend expectations
+        # Build specs dictionary with year included
         specs = {
             # Basic Information
             "Brand": safe_get_str(car.get("Brand", "")),
@@ -840,7 +900,7 @@ def get_specs():
             
             # Utility Specifications
             "GroundClearance": safe_get_float(car.get("Ground_Clearance", 0)),
-            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),  # Note: keeping as "Cargospace" to match JS
+            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),
             "SeatingCapacity": safe_get_int(car.get("Seating_Capacity", 0)),
             
             # Pricing
@@ -851,7 +911,7 @@ def get_specs():
         }
         
         # Log the specs for debugging
-        app.logger.info(f"Specs for {variant}: {specs}")
+        app.logger.info(f"Specs for {variant} ({year}): {specs}")
         
         # Validate that we have essential data
         if not specs["Brand"] and not specs["Model"]:
@@ -861,7 +921,7 @@ def get_specs():
         return jsonify(specs)
         
     except Exception as e:
-        app.logger.error(f"Error getting specs for variant {variant}: {e}")
+        app.logger.error(f"Error getting specs for variant {variant}, year {year}: {e}")
         import traceback
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500

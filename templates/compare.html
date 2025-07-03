@@ -200,58 +200,112 @@
     </div>
   </div>
 
-  <!-- Car Comparison Cards -->
-  <div class="compare-wrapper" id="comparison-cards-wrapper" style="display: none;">
-    <div class="comp_table_frame">
-      <div class="comp_table_content">
-        <div id="comparison-container">
-          <!-- CAR SPECS HERE -->
+  <!-- Car Selection Form -->
+  <div class="compare-outer-frame" style="margin-top:10rem;">
+    <h2 class="compare-filter-title">Compare Cars</h2>
+    <div class="compare-inner-frame">
+      <div class="compare-filter-left">
+        <form id="compare-form">
+          <label for="brand">Select Brand:</label>
+          <select id="brand" name="brand" onchange="populateModels()">
+            <option value="" selected disabled>Select Brand</option>
+            <option value="Toyota">Toyota</option>
+            <option value="Honda">Honda</option>
+            <option value="Mitsubishi">Mitsubishi</option>
+            <option value="Mazda">Mazda</option>
+            <option value="Ford">Ford</option>
+            <option value="Hyundai">Hyundai</option>
+            <option value="Suzuki">Suzuki</option>
+          </select>
+
+          <label for="model">Select Model:</label>
+          <select id="model" name="model" onchange="populateVariants()">
+            <option value="">Select Model</option>
+          </select>
+
+          <label for="variant">Select Variant:</label>
+          <select id="variant" name="variant" onchange="populateYears()">
+            <option value="">Select Variant</option>
+          </select>
+
+          <!-- NEW: Year Selection -->
+          <label for="year">Select Year:</label>
+          <select id="year" name="year">
+            <option value="">Select Year</option>
+          </select>
+
+          <button class="compare_btn" type="button" onclick="compareCars()">Compare Cars</button>
+        </form>
+        
+        <div id="compare-success-message" class="compare-success-message" style="display: none;">
+          <i class='bx bx-check-circle'></i>
+          <span>Car added to comparison successfully!</span>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Footer -->
-  <footer>
-    <div class="footer-container">
-      <div class="footer-section">
-        <h3>About Us</h3>
-        <p>RideMatch helps you find the perfect car with ease. Explore our collection and filter cars based on your preferences.</p>
-      </div>
-      <div class="footer-section">
-        <h3>Quick Links</h3>
-        <ul>
-          <li><a href="{{url_for('home')}}">Home</a></li>
-          <li><a href="{{url_for('about')}}">About Us</a></li>
-          <li><a href="{{url_for('testimonials')}}">Client Testimonials</a></li>
-          <li><a href="{{url_for('contacts')}}">Contact Us</a></li>
-        </ul>
-      </div>
-      <div class="footer-section">
-        <h3>Contact Us</h3>
-        <p>Email: <a href="mailto:ridematchhelp@gmail.com">ridematchhelp@gmail.com</a></p>
-        <p>Phone: +63 961 993 7494</p>
-      </div>
-      <div class="footer-section">
-        <h3>Follow Us</h3>
-        <div class="social-icons">
-          <a href="https://www.facebook.com/profile.php?id=61573973933095&mibextid=LQQJ4d&rdid=URdqqHEOsH0kR36P&share_url=https%3A%2F%2Fwww.facebook.com%2Fshare%2F18gKTe9eNT%2F%3Fmibextid%3DLQQJ4d" 
-          target="_blank" 
-          rel="noopener noreferrer">
-          <i class='bx bxl-facebook'></i>
-          </a>
-          <a href="https://x.com/ridematch_help" target="_blank" rel="noopener noreferrer">
-            <i class='bx bxl-twitter'></i>
-          </a>
-          <a href="https://www.instagram.com/ridematch_support/" target="_blank" rel="noopener noreferrer">
-            <i class='bx bxl-instagram'></i>
-          </a>
+  <!-- Bar Charts & Radar Chart Visualization Section -->
+  <div class="compare-wrapper">
+    <div class="compare-charts-section" id="compare-charts-section" style="display: none;">
+      <h2 class="compare-charts-title">
+        <i class='bx bx-bar-chart-alt-2' style='margin-right: 0.5rem;'></i>
+        Performance Analysis
+      </h2>
+      
+      <div class="compare-charts-grid">
+        <!-- NEW: Radar Chart (Full Width at Top) -->
+        <div class="compare-chart-container radar-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-radar' style='color: #b49b66;'></i>
+            <h3>Overall Performance Radar</h3>
+          </div>
+          <canvas id="radarChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-tachometer' style='color: #b49b66;'></i>
+            <h3>Horsepower Comparison</h3>
+          </div>
+          <canvas id="horsepowerChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-money' style='color: #b49b66;'></i>
+            <h3>Price Comparison</h3>
+          </div>
+          <canvas id="priceChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-trending-up' style='color: #b49b66;'></i>
+            <h3>Ground Clearance</h3>
+          </div>
+          <canvas id="groundClearanceChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-package' style='color: #b49b66;'></i>
+            <h3>Cargo Space</h3>
+          </div>
+          <canvas id="cargoSpaceChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-group' style='color: #b49b66;'></i>
+            <h3>Seating Capacity</h3>
+          </div>
+          <canvas id="seatingCapacityChart"></canvas>
         </div>
       </div>
     </div>
-    <div class="footer-bottom">
-      <p>&copy; 2025 RideMatch. All Rights Reserved.</p>
-    </div>
+  </div>
+  
   </footer>
   
   <!-- Chart.js for visualizations -->

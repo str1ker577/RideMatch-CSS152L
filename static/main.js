@@ -1058,35 +1058,51 @@ async function loadDefaultCars() {
     }
 }
 
-///////////////////////
-// COMPARE Function //
-/////////////////////
-
 // Global variables for compare page
 let comparedCars = [];
 let chartInstances = {};
 
+// UPDATED: More distinct color palette
+const chartColors = [
+    '#2d5016', // Forest Green
+    '#722f37', // Burgundy  
+    '#1e3a8a', // Navy Blue
+    '#7c2d12', // Earth Brown
+    '#6b7280'  // Warm Gray
+];
+
+const chartBackgroundColors = [
+    'rgba(45, 80, 22, 0.8)',   // Forest Green
+    'rgba(114, 47, 55, 0.8)',  // Burgundy
+    'rgba(30, 58, 138, 0.8)',  // Navy Blue
+    'rgba(124, 45, 18, 0.8)',  // Earth Brown
+    'rgba(107, 114, 128, 0.8)' // Warm Gray
+];
+
 // Function to populate models based on selected brand
 async function populateModels() {
     const brand = document.getElementById('brand').value;
+    const modelDropdown = document.getElementById('model');
+    const variantDropdown = document.getElementById('variant');
+    const yearDropdown = document.getElementById('year');
+    
+    // Reset dependent dropdowns
+    modelDropdown.innerHTML = '<option value="">Select Model</option>';
+    variantDropdown.innerHTML = '<option value="">Select Variant</option>';
+    yearDropdown.innerHTML = '<option value="">Select Year</option>';
+    
     if (!brand) return;
 
     try {
         const response = await fetch(`${baseUrl}/get_models?brand=${brand}`);
         const models = await response.json();
         
-        const modelDropdown = document.getElementById('model');
-        modelDropdown.innerHTML = '<option value="">Select Model</option>';
         models.forEach(model => {
             const option = document.createElement('option');
             option.value = model;
             option.textContent = model;
             modelDropdown.appendChild(option);
         });
-        
-        // Clear variants when brand changes
-        const variantDropdown = document.getElementById('variant');
-        variantDropdown.innerHTML = '<option value="">Select Variant</option>';
         
     } catch (error) {
         console.error('Error fetching models:', error);
@@ -1097,14 +1113,19 @@ async function populateModels() {
 // Function to populate variants based on selected model
 async function populateVariants() {
     const model = document.getElementById('model').value;
+    const variantDropdown = document.getElementById('variant');
+    const yearDropdown = document.getElementById('year');
+    
+    // Reset dependent dropdowns
+    variantDropdown.innerHTML = '<option value="">Select Variant</option>';
+    yearDropdown.innerHTML = '<option value="">Select Year</option>';
+    
     if (!model) return;
 
     try {
         const response = await fetch(`${baseUrl}/get_variants?model=${model}`);
         const variants = await response.json();
         
-        const variantDropdown = document.getElementById('variant');
-        variantDropdown.innerHTML = '<option value="">Select Variant</option>';
         variants.forEach(variant => {
             const option = document.createElement('option');
             option.value = variant;
@@ -1118,17 +1139,59 @@ async function populateVariants() {
     }
 }
 
-// Compare Cars Function
+// NEW: Function to populate years based on selected variant
+async function populateYears() {
+    const brand = document.getElementById('brand').value;
+    const model = document.getElementById('model').value;
+    const variant = document.getElementById('variant').value;
+    const yearDropdown = document.getElementById('year');
+    
+    // Reset year dropdown
+    yearDropdown.innerHTML = '<option value="">Select Year</option>';
+    
+    if (!brand || !model || !variant) return;
+
+    try {
+        // Fetch years for this specific variant
+        const response = await fetch(`${baseUrl}/get_variant_years?brand=${brand}&model=${model}&variant=${variant}`);
+        const years = await response.json();
+        
+        // Sort years in descending order (newest first)
+        years.sort((a, b) => b - a);
+        
+        years.forEach(year => {
+            const option = document.createElement('option');
+            option.value = year;
+            option.textContent = year;
+            yearDropdown.appendChild(option);
+        });
+        
+    } catch (error) {
+        console.error('Error fetching years:', error);
+        alert('Error fetching years. Please try again.');
+    }
+}
+
+// UPDATED: Compare Cars Function with Year
 async function compareCars() {
     const selectedVariant = document.getElementById('variant').value;
+    const selectedYear = document.getElementById('year').value;
+    
     if (!selectedVariant) {
         alert("Please select a variant to compare.");
         return;
     }
+    
+    if (!selectedYear) {
+        alert("Please select a year to compare.");
+        return;
+    }
 
     try {
-        console.log('Fetching specs for variant:', selectedVariant);
-        const response = await fetch(`${baseUrl}/get_specs?variant=${selectedVariant}`);
+        console.log('Fetching specs for variant:', selectedVariant, 'year:', selectedYear);
+        
+        // Include year in the API call
+        const response = await fetch(`${baseUrl}/get_specs?variant=${selectedVariant}&year=${selectedYear}`);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -1138,12 +1201,15 @@ async function compareCars() {
         console.log('Received specs:', specs);
 
         if (!specs || Object.keys(specs).length === 0) {
-            alert('No specifications found for this variant.');
+            alert('No specifications found for this variant and year.');
             return;
         }
 
-        if (document.getElementById(`car-${selectedVariant}`)) {
-            alert(`${selectedVariant} is already in the comparison.`);
+        // Create unique identifier including year
+        const carId = `${selectedVariant}-${selectedYear}`;
+        
+        if (document.getElementById(`car-${carId}`)) {
+            alert(`${selectedVariant} (${selectedYear}) is already in the comparison.`);
             return;
         }
 
@@ -1153,12 +1219,17 @@ async function compareCars() {
             return;
         }
 
-        addCarToComparison(selectedVariant, specs);
-        comparedCars.push({variant: selectedVariant, specs: specs});
+        addCarToComparison(carId, selectedVariant, selectedYear, specs);
+        comparedCars.push({
+            id: carId,
+            variant: selectedVariant, 
+            year: selectedYear,
+            specs: specs
+        });
         
-        // FIXED: Ensure charts are updated after DOM is ready
+        // Update all charts including radar
         setTimeout(() => {
-            updateBarCharts();
+            updateAllCharts();
         }, 100);
         
         // Show success message and reset form
@@ -1188,22 +1259,25 @@ function resetCompareForm() {
     const brandSelect = document.getElementById('brand');
     const modelSelect = document.getElementById('model');
     const variantSelect = document.getElementById('variant');
+    const yearSelect = document.getElementById('year');
     
     if (brandSelect) brandSelect.selectedIndex = 0;
     if (modelSelect) modelSelect.innerHTML = '<option value="">Select Model</option>';
     if (variantSelect) variantSelect.innerHTML = '<option value="">Select Variant</option>';
+    if (yearSelect) yearSelect.innerHTML = '<option value="">Select Year</option>';
 }
 
-function addCarToComparison(variant, specs) {
+// UPDATED: Add car to comparison with year display
+function addCarToComparison(carId, variant, year, specs) {
     const container = document.getElementById('comparison-container');
     const carColumn = document.createElement('div');
-    carColumn.id = `car-${variant}`;
+    carColumn.id = `car-${carId}`;
     carColumn.classList.add('car-column');
 
-    // Car title
+    // Car title with year
     const carTitle = document.createElement('div');
     carTitle.classList.add('car-title');
-    carTitle.textContent = variant;
+    carTitle.textContent = `${variant} (${year})`;
     carColumn.appendChild(carTitle);
 
     // Car image
@@ -1212,13 +1286,13 @@ function addCarToComparison(variant, specs) {
         imgContainer.classList.add('car-image-container');
         const img = document.createElement('img');
         img.src = specs['Image'];
-        img.alt = `Image of ${variant}`;
+        img.alt = `Image of ${variant} ${year}`;
         img.classList.add('car-image');
         imgContainer.appendChild(img);
         carColumn.appendChild(imgContainer);
     }
 
-    // FIXED: Updated field names to match backend response
+    // Spec sections with year included
     const specSections = {
         "General Specifications": ["Brand", "Model", "Year"],
         "Performance Specifications": ["Horsepower", "Engine", "Transmission", "DriveTrain", "FuelType"],
@@ -1277,8 +1351,8 @@ function addCarToComparison(variant, specs) {
     removeBtn.textContent = "Remove Car";
     removeBtn.onclick = () => {
         carColumn.remove();
-        comparedCars = comparedCars.filter(car => car.variant !== variant);
-        updateBarCharts();
+        comparedCars = comparedCars.filter(car => car.id !== carId);
+        updateAllCharts();
         
         // Hide comparison sections if no cars left
         if (comparedCars.length === 0) {
@@ -1328,22 +1402,9 @@ function createProgressBar(value, type) {
     return progressContainer;
 }
 
-// Chart color palette using established colors
-const chartColors = [
-    '#b49b66', '#d4af37', '#9e8a56', '#8b7355', '#7a6247'
-];
-
-const chartBackgroundColors = [
-    'rgba(180, 155, 102, 0.8)',
-    'rgba(212, 175, 55, 0.8)',
-    'rgba(158, 138, 86, 0.8)',
-    'rgba(139, 115, 85, 0.8)',
-    'rgba(122, 98, 71, 0.8)'
-];
-
-// FIXED: Main chart update function
-function updateBarCharts() {
-    console.log('Updating charts for', comparedCars.length, 'cars');
+// UPDATED: Main chart update function including radar
+function updateAllCharts() {
+    console.log('Updating all charts for', comparedCars.length, 'cars');
     
     if (comparedCars.length === 0) {
         const chartsSection = document.getElementById('compare-charts-section');
@@ -1367,8 +1428,9 @@ function updateBarCharts() {
     if (chartsSection) chartsSection.style.display = 'block';
     if (cardsWrapper) cardsWrapper.style.display = 'block';
     
-    // Wait for DOM to be ready, then create charts
+    // Wait for DOM to be ready, then create all charts
     setTimeout(() => {
+        updateRadarChart();        // NEW: Radar chart
         updateHorsepowerChart();
         updatePriceChart();
         updateGroundClearanceChart();
@@ -1377,13 +1439,111 @@ function updateBarCharts() {
     }, 200);
 }
 
-// FIXED: Horsepower chart with proper field names
-function updateHorsepowerChart() {
-    const canvas = document.getElementById('horsepowerChart');
+// NEW: Radar Chart Implementation
+function updateRadarChart() {
+    const canvas = document.getElementById('radarChart');
     if (!canvas) {
-        console.error('Horsepower chart canvas not found');
+        console.error('Radar chart canvas not found');
         return;
     }
+    
+    const ctx = canvas.getContext('2d');
+    
+    if (chartInstances.radar) {
+        chartInstances.radar.destroy();
+    }
+
+    // Prepare datasets for each car
+    const datasets = comparedCars.map((car, index) => {
+        const specs = car.specs;
+        
+        // Normalize values to 0-100 scale for radar chart
+        const horsepower = Math.min((parseInt(specs.Horsepower) || 0) / 5, 100); // Max ~500HP
+        const priceScore = Math.max(0, 100 - ((parseFloat(specs.Price) || 0) / 30000)); // Lower price = higher score
+        const groundClearance = Math.min((parseFloat(specs.GroundClearance) || 0) * 4, 100); // Max ~25cm
+        const cargoSpace = Math.min((parseFloat(specs.Cargospace) || 0) / 10, 100); // Max ~1000L
+        const seatingCapacity = Math.min((parseInt(specs.SeatingCapacity) || 0) * 12.5, 100); // Max 8 seats
+        
+        return {
+            label: `${car.variant} (${car.year})`,
+            data: [horsepower, priceScore, groundClearance, cargoSpace, seatingCapacity],
+            backgroundColor: chartBackgroundColors[index % chartBackgroundColors.length],
+            borderColor: chartColors[index % chartColors.length],
+            borderWidth: 3,
+            pointBackgroundColor: chartColors[index % chartColors.length],
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 6
+        };
+    });
+
+    chartInstances.radar = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: ['Power', 'Value', 'Clearance', 'Cargo', 'Seating'],
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: true,
+                    position: 'bottom',
+                    labels: {
+                        color: '#b49b66',
+                        font: { weight: 'bold' }
+                    }
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const labels = ['Power', 'Value', 'Clearance', 'Cargo', 'Seating'];
+                            const car = comparedCars[context.datasetIndex];
+                            const specs = car.specs;
+                            
+                            switch(context.dataIndex) {
+                                case 0: return `Power: ${specs.Horsepower || 0} HP`;
+                                case 1: return `Price: ₱${parseInt(specs.Price || 0).toLocaleString()}`;
+                                case 2: return `Clearance: ${specs.GroundClearance || 0} cm`;
+                                case 3: return `Cargo: ${specs.Cargospace || 0} L`;
+                                case 4: return `Seating: ${specs.SeatingCapacity || 0} seats`;
+                                default: return '';
+                            }
+                        }
+                    }
+                }
+            },
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 100,
+                    ticks: {
+                        display: false // Hide the scale numbers
+                    },
+                    grid: {
+                        color: 'rgba(180, 155, 102, 0.2)'
+                    },
+                    angleLines: {
+                        color: 'rgba(180, 155, 102, 0.3)'
+                    },
+                    pointLabels: {
+                        color: '#b49b66',
+                        font: { 
+                            weight: 'bold',
+                            size: 14
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+// UPDATED: Bar chart functions with new colors (keeping existing logic, just updating colors)
+function updateHorsepowerChart() {
+    const canvas = document.getElementById('horsepowerChart');
+    if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
     
@@ -1391,18 +1551,8 @@ function updateHorsepowerChart() {
         chartInstances.horsepower.destroy();
     }
 
-    const labels = comparedCars.map(car => {
-        const model = car.specs.Model || '';
-        return model ? `${car.variant}\n(${model})` : car.variant;
-    });
-    
-    // FIXED: Use correct field name from backend
-    const data = comparedCars.map(car => {
-        const hp = parseInt(car.specs.Horsepower) || 0;
-        console.log(`${car.variant} HP: ${hp}`);
-        return hp;
-    });
-    
+    const labels = comparedCars.map(car => `${car.variant}\n(${car.year})`);
+    const data = comparedCars.map(car => parseInt(car.specs.Horsepower) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
 
@@ -1453,13 +1603,9 @@ function updateHorsepowerChart() {
     });
 }
 
-// FIXED: Price chart with proper field names
 function updatePriceChart() {
     const canvas = document.getElementById('priceChart');
-    if (!canvas) {
-        console.error('Price chart canvas not found');
-        return;
-    }
+    if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
     
@@ -1467,18 +1613,8 @@ function updatePriceChart() {
         chartInstances.price.destroy();
     }
 
-    const labels = comparedCars.map(car => {
-        const model = car.specs.Model || '';
-        return model ? `${car.variant}\n(${model})` : car.variant;
-    });
-    
-    // FIXED: Use correct field name from backend
-    const data = comparedCars.map(car => {
-        const price = parseFloat(car.specs.Price) || 0;
-        console.log(`${car.variant} Price: ${price}`);
-        return price;
-    });
-    
+    const labels = comparedCars.map(car => `${car.variant}\n(${car.year})`);
+    const data = comparedCars.map(car => parseFloat(car.specs.Price) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
 
@@ -1537,13 +1673,9 @@ function updatePriceChart() {
     });
 }
 
-// FIXED: Ground clearance chart with proper field names
 function updateGroundClearanceChart() {
     const canvas = document.getElementById('groundClearanceChart');
-    if (!canvas) {
-        console.error('Ground clearance chart canvas not found');
-        return;
-    }
+    if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
     
@@ -1551,18 +1683,8 @@ function updateGroundClearanceChart() {
         chartInstances.groundClearance.destroy();
     }
 
-    const labels = comparedCars.map(car => {
-        const model = car.specs.Model || '';
-        return model ? `${car.variant}\n(${model})` : car.variant;
-    });
-    
-    // FIXED: Use correct field name from backend
-    const data = comparedCars.map(car => {
-        const clearance = parseFloat(car.specs.GroundClearance) || 0;
-        console.log(`${car.variant} Ground Clearance: ${clearance}`);
-        return clearance;
-    });
-    
+    const labels = comparedCars.map(car => `${car.variant}\n(${car.year})`);
+    const data = comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
 
@@ -1613,13 +1735,9 @@ function updateGroundClearanceChart() {
     });
 }
 
-// FIXED: Seating capacity chart with proper field names
 function updateSeatingCapacityChart() {
     const canvas = document.getElementById('seatingCapacityChart');
-    if (!canvas) {
-        console.error('Seating capacity chart canvas not found');
-        return;
-    }
+    if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
     
@@ -1627,18 +1745,8 @@ function updateSeatingCapacityChart() {
         chartInstances.seatingCapacity.destroy();
     }
 
-    const labels = comparedCars.map(car => {
-        const model = car.specs.Model || '';
-        return model ? `${car.variant}\n(${model})` : car.variant;
-    });
-    
-    // FIXED: Use correct field name from backend
-    const data = comparedCars.map(car => {
-        const seating = parseInt(car.specs.SeatingCapacity) || 0;
-        console.log(`${car.variant} Seating: ${seating}`);
-        return seating;
-    });
-    
+    const labels = comparedCars.map(car => `${car.variant}\n(${car.year})`);
+    const data = comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
 
@@ -1690,13 +1798,9 @@ function updateSeatingCapacityChart() {
     });
 }
 
-// FIXED: Cargo space chart with proper field names
 function updateCargoSpaceChart() {
     const canvas = document.getElementById('cargoSpaceChart');
-    if (!canvas) {
-        console.error('Cargo space chart canvas not found');
-        return;
-    }
+    if (!canvas) return;
     
     const ctx = canvas.getContext('2d');
     
@@ -1704,18 +1808,8 @@ function updateCargoSpaceChart() {
         chartInstances.cargoSpace.destroy();
     }
 
-    const labels = comparedCars.map(car => {
-        const model = car.specs.Model || '';
-        return model ? `${car.variant}\n(${model})` : car.variant;
-    });
-    
-    // FIXED: Use correct field name from backend (note: backend returns "Cargospace")
-    const data = comparedCars.map(car => {
-        const cargo = parseFloat(car.specs.Cargospace) || 0;
-        console.log(`${car.variant} Cargo: ${cargo}`);
-        return cargo;
-    });
-    
+    const labels = comparedCars.map(car => `${car.variant}\n(${car.year})`);
+    const data = comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0);
     const colors = chartBackgroundColors.slice(0, comparedCars.length);
     const borderColors = chartColors.slice(0, comparedCars.length);
 
@@ -1766,17 +1860,20 @@ function updateCargoSpaceChart() {
     });
 }
 
-// Event listeners for dropdowns (with safety checks)
+// Event listeners for dropdowns
 document.addEventListener('DOMContentLoaded', function() {
     const brandDropdown = document.getElementById('brand');
     const modelDropdown = document.getElementById('model');
+    const variantDropdown = document.getElementById('variant');
 
     if (brandDropdown) {
         brandDropdown.addEventListener('change', populateModels);
     }
-
     if (modelDropdown) {
         modelDropdown.addEventListener('change', populateVariants);
+    }
+    if (variantDropdown) {
+        variantDropdown.addEventListener('change', populateYears);
     }
 });
 
