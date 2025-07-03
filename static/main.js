@@ -1159,11 +1159,23 @@ async function populateYears() {
         const response = await fetch(`${baseUrl}/get_variant_years?brand=${brand}&model=${model}&variant=${variant}`);
         const years = await response.json();
         
-        // Ensure years are numbers and remove duplicates, then sort
-        const numericYears = years.map(year => parseInt(year)).filter(year => !isNaN(year));
-        const uniqueYears = [...new Set(numericYears)].sort((a, b) => b - a);
+        console.log('Raw years from API:', years); // Debug log
         
-        uniqueYears.forEach(year => {
+        // More robust duplicate removal and cleaning
+        const cleanedYears = years
+            .map(year => {
+                // Handle both string and number inputs, trim whitespace
+                const cleaned = String(year).trim();
+                const parsed = parseInt(cleaned, 10);
+                return isNaN(parsed) ? null : parsed;
+            })
+            .filter(year => year !== null) // Remove invalid years
+            .filter((year, index, array) => array.indexOf(year) === index) // Remove duplicates manually
+            .sort((a, b) => b - a); // Sort newest first
+        
+        console.log('Cleaned and deduplicated years:', cleanedYears); // Debug log
+        
+        cleanedYears.forEach(year => {
             const option = document.createElement('option');
             option.value = year;
             option.textContent = year;
