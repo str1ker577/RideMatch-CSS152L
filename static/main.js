@@ -1523,7 +1523,7 @@ function updateRadarChart() {
     canvas.style.width = rect.width + 'px';
     canvas.style.height = rect.height + 'px';
 
-    // UPDATED: Calculate dynamic maximum values based on current cars with 10% padding
+    // UPDATED: Calculate actual maximum values from current cars
     const actualMaxValues = {
         horsepower: Math.max(...comparedCars.map(car => parseInt(car.specs.Horsepower) || 0)),
         price: Math.max(...comparedCars.map(car => parseFloat(car.specs.Price) || 0)),
@@ -1532,32 +1532,34 @@ function updateRadarChart() {
         seatingCapacity: Math.max(...comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0))
     };
 
-    // Add 10% padding to each maximum value for better visualization
-    const maxValues = {
-        horsepower: Math.max(actualMaxValues.horsepower * 1.1, 100),      // Min 100 HP
-        price: Math.max(actualMaxValues.price * 1.1, 500000),             // Min 500k PHP
-        groundClearance: Math.max(actualMaxValues.groundClearance * 1.1, 15), // Min 15cm
-        cargoSpace: Math.max(actualMaxValues.cargoSpace * 1.1, 200),      // Min 200L
-        seatingCapacity: Math.max(actualMaxValues.seatingCapacity * 1.1, 4)   // Min 4 seats
-    };
-
-    console.log('🎯 Dynamic Max Values:', maxValues);
-    console.log('📊 Actual Max Values:', actualMaxValues);
-
     // Store for tooltip reference
     window.radarActualMaxValues = actualMaxValues;
-    window.radarMaxValues = maxValues;
 
-    // Prepare datasets for each car with dynamic scaling
+    console.log('📊 Actual Max Values for percentage calculation:', actualMaxValues);
+
+    // UPDATED: Prepare datasets with percentage-based scaling
     const datasets = comparedCars.map((car, index) => {
         const specs = car.specs;
         
-        // Scale to 0-100 based on dynamic maximums
-        const horsepower = Math.min(((parseInt(specs.Horsepower) || 0) / maxValues.horsepower) * 100, 100);
-        const priceScore = Math.min(((parseFloat(specs.Price) || 0) / maxValues.price) * 100, 100);
-        const groundClearance = Math.min(((parseFloat(specs.GroundClearance) || 0) / maxValues.groundClearance) * 100, 100);
-        const cargoSpace = Math.min(((parseFloat(specs.Cargospace) || 0) / maxValues.cargoSpace) * 100, 100);
-        const seatingCapacity = Math.min(((parseInt(specs.SeatingCapacity) || 0) / maxValues.seatingCapacity) * 100, 100);
+        // Calculate percentage of maximum for each category (0-100)
+        const horsepower = actualMaxValues.horsepower > 0 ? 
+            ((parseInt(specs.Horsepower) || 0) / actualMaxValues.horsepower) * 100 : 0;
+        const priceScore = actualMaxValues.price > 0 ? 
+            ((parseFloat(specs.Price) || 0) / actualMaxValues.price) * 100 : 0;
+        const groundClearance = actualMaxValues.groundClearance > 0 ? 
+            ((parseFloat(specs.GroundClearance) || 0) / actualMaxValues.groundClearance) * 100 : 0;
+        const cargoSpace = actualMaxValues.cargoSpace > 0 ? 
+            ((parseFloat(specs.Cargospace) || 0) / actualMaxValues.cargoSpace) * 100 : 0;
+        const seatingCapacity = actualMaxValues.seatingCapacity > 0 ? 
+            ((parseInt(specs.SeatingCapacity) || 0) / actualMaxValues.seatingCapacity) * 100 : 0;
+        
+        console.log(`🎯 Car ${index + 1} percentages:`, {
+            horsepower: horsepower.toFixed(1),
+            priceScore: priceScore.toFixed(1),
+            groundClearance: groundClearance.toFixed(1),
+            cargoSpace: cargoSpace.toFixed(1),
+            seatingCapacity: seatingCapacity.toFixed(1)
+        });
         
         return {
             label: `${car.variant} (${car.year})`,
@@ -1569,7 +1571,7 @@ function updateRadarChart() {
             pointBorderColor: '#fff',
             pointBorderWidth: 2,
             pointRadius: 6,
-            hidden: false // Initialize as visible
+            hidden: false
         };
     });
 
@@ -1639,39 +1641,36 @@ function updateRadarChart() {
                             }
                         },
                         afterLabel: function(context) {
-                            // Show percentage of current maximum (not fixed maximum)
-                            const car = comparedCars[context.datasetIndex];
-                            const specs = car.specs;
-                            const maxValues = window.radarMaxValues;
+                            const percentage = context.parsed.r.toFixed(1);
+                            const maxValues = window.radarActualMaxValues;
                             
-                            let actualValue = 0;
-                            let maxValue = 0;
+                            let categoryName = '';
+                            let maxValue = '';
                             
                             switch(context.dataIndex) {
                                 case 0: 
-                                    actualValue = parseInt(specs.Horsepower) || 0;
-                                    maxValue = maxValues.horsepower;
+                                    categoryName = 'Power';
+                                    maxValue = `${maxValues.horsepower} HP`;
                                     break;
                                 case 1: 
-                                    actualValue = parseFloat(specs.Price) || 0;
-                                    maxValue = maxValues.price;
+                                    categoryName = 'Price';
+                                    maxValue = `₱${(maxValues.price / 1000000).toFixed(1)}M`;
                                     break;
                                 case 2: 
-                                    actualValue = parseFloat(specs.GroundClearance) || 0;
-                                    maxValue = maxValues.groundClearance;
+                                    categoryName = 'Clearance';
+                                    maxValue = `${maxValues.groundClearance} cm`;
                                     break;
                                 case 3: 
-                                    actualValue = parseFloat(specs.Cargospace) || 0;
-                                    maxValue = maxValues.cargoSpace;
+                                    categoryName = 'Cargo';
+                                    maxValue = `${maxValues.cargoSpace} L`;
                                     break;
                                 case 4: 
-                                    actualValue = parseInt(specs.SeatingCapacity) || 0;
-                                    maxValue = maxValues.seatingCapacity;
+                                    categoryName = 'Seating';
+                                    maxValue = `${maxValues.seatingCapacity} seats`;
                                     break;
                             }
                             
-                            const percentage = ((actualValue / maxValue) * 100).toFixed(1);
-                            return `${percentage}% of current max (${formatMaxValue(maxValue, context.dataIndex)})`;
+                            return `${percentage}% of best ${categoryName} (${maxValue})`;
                         }
                     }
                 }
@@ -1681,8 +1680,13 @@ function updateRadarChart() {
                     beginAtZero: true,
                     max: 100,
                     ticks: {
-                        display: false,
-                        stepSize: 20
+                        display: true,
+                        stepSize: 25,
+                        color: '#b49b66',
+                        font: { size: 12 },
+                        callback: function(value) {
+                            return value + '%';
+                        }
                     },
                     grid: {
                         color: 'rgba(180, 155, 102, 0.2)',
@@ -1735,7 +1739,6 @@ function formatMaxValue(maxValue, dataIndex) {
 
 // UPDATED: Helper function to add dynamic instructions for radar chart
 function addRadarInstructions() {
-    // Remove existing instructions
     const existingInstructions = document.querySelector('.radar-instructions');
     if (existingInstructions) {
         existingInstructions.remove();
@@ -1746,9 +1749,7 @@ function addRadarInstructions() {
         const instructionsDiv = document.createElement('div');
         instructionsDiv.className = 'radar-instructions';
         
-        // Get current max values for display
-        const maxValues = window.radarMaxValues;
-        const actualMaxValues = window.radarActualMaxValues;
+        const maxValues = window.radarActualMaxValues;
         
         instructionsDiv.innerHTML = `
             <div style="
@@ -1763,8 +1764,9 @@ function addRadarInstructions() {
                 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             ">
                 <i class='bx bx-info-circle' style='color: #b49b66; margin-right: 0.5rem;'></i>
-                <strong>🎯 Dynamic Scale:</strong> Chart adjusts automatically based on your selected cars (max values: ${formatMaxValue(maxValues.horsepower, 0)}, ${formatMaxValue(maxValues.price, 1)}, ${formatMaxValue(maxValues.groundClearance, 2)}, ${formatMaxValue(maxValues.cargoSpace, 3)}, ${formatMaxValue(maxValues.seatingCapacity, 4)})
-                <br><small>Each axis scales to 110% of the highest value among selected cars for optimal comparison!</small>
+                <strong>📊 Percentage Scale:</strong> Each car shows as a percentage of the best performer in each category
+                <br><strong>Current Leaders:</strong> ${maxValues.horsepower} HP • ₱${(maxValues.price / 1000000).toFixed(1)}M • ${maxValues.groundClearance} cm • ${maxValues.cargoSpace} L • ${maxValues.seatingCapacity} seats
+                <br><small>100% = category leader, 50% = half of leader's value, etc. All cars stay visible!</small>
             </div>
         `;
         radarContainer.appendChild(instructionsDiv);
