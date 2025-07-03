@@ -537,32 +537,91 @@ async function applyFilters() {
 
 // NEW: Function to populate years dropdown
 async function populateYears() {
+    const brand = document.getElementById('brand').value;
+    const model = document.getElementById('model').value;
+    const variant = document.getElementById('variant').value;
+    const yearDropdown = document.getElementById('year');
+    
+    // Reset year dropdown
+    yearDropdown.innerHTML = '<option value="">Select Year</option>';
+    
+    if (!brand || !model || !variant) return;
+
     try {
-        const response = await fetch(`${baseUrl}/get_years`);
+        console.log(`🔍 Fetching years for: brand=${brand}, model=${model}, variant=${variant}`);
+        const response = await fetch(`${baseUrl}/get_variant_years?brand=${brand}&model=${model}&variant=${variant}`);
         const years = await response.json();
         
-        const yearSelect = document.getElementById("year");
+        console.log('📦 Raw API response:', years);
         
-        // Clear existing options except the first two
-        yearSelect.innerHTML = `
-            <option value="" selected disabled>Choose Year...</option>
-            <option value="">Any Year</option>
-        `;
+        if (!Array.isArray(years)) {
+            console.error('❌ API did not return an array:', years);
+            return;
+        }
         
-        // Sort years in descending order (newest first)
-        years.sort((a, b) => b - a);
+        // FIXED: Handle duplicates properly with string consistency
+        const processedYears = years
+            .map(year => String(year).trim()) // Convert to string and trim
+            .filter(yearStr => {
+                const yearNum = parseInt(yearStr, 10);
+                return !isNaN(yearNum) && yearNum >= 1900 && yearNum <= 2030;
+            });
         
-        // Add year options
-        years.forEach(year => {
-            const option = document.createElement("option");
-            option.value = year;
-            option.textContent = year;
-            yearSelect.appendChild(option);
+        console.log('✨ Processed years (strings):', processedYears);
+        
+        // Use Set to remove duplicates (now working with strings)
+        const uniqueYearStrings = [...new Set(processedYears)];
+        console.log('🔧 After Set deduplication:', uniqueYearStrings);
+        
+        // Convert back to numbers for sorting
+        const uniqueYears = uniqueYearStrings
+            .map(yearStr => parseInt(yearStr, 10))
+            .sort((a, b) => b - a); // Sort descending (newest first)
+        
+        console.log('📅 Final sorted years:', uniqueYears);
+        
+        // Populate dropdown (convert back to strings for HTML)
+        uniqueYears.forEach(year => {
+            const option = document.createElement('option');
+            option.value = String(year); // Ensure string value
+            option.textContent = String(year); // Ensure string text
+            yearDropdown.appendChild(option);
         });
         
-        console.log("Years populated successfully");
+        console.log(`✅ Successfully populated ${uniqueYears.length} unique years`);
+        
+        // FIXED: Proper duplicate verification
+        const dropdownValues = Array.from(yearDropdown.options)
+            .slice(1) // Skip "Select Year" option
+            .map(opt => opt.value); // These are strings
+        
+        console.log('🔍 Dropdown values:', dropdownValues);
+        
+        // Check for duplicates in the dropdown values (all strings now)
+        const duplicateCheck = dropdownValues.filter((value, index) => 
+            dropdownValues.indexOf(value) !== index
+        );
+        
+        if (duplicateCheck.length > 0) {
+            console.error('🚨 Duplicates still found in dropdown:', duplicateCheck);
+            
+            // ADDITIONAL FIX: Remove duplicates from DOM if they exist
+            const seenValues = new Set();
+            Array.from(yearDropdown.options).forEach(option => {
+                if (option.value !== "" && seenValues.has(option.value)) {
+                    console.log('🗑️ Removing duplicate option:', option.value);
+                    option.remove();
+                } else if (option.value !== "") {
+                    seenValues.add(option.value);
+                }
+            });
+        } else {
+            console.log('✅ No duplicates in final dropdown');
+        }
+        
     } catch (error) {
-        console.error("Error loading years:", error);
+        console.error('❌ Error fetching years:', error);
+        alert('Error fetching years. Please try again.');
     }
 }
 
