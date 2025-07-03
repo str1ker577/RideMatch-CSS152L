@@ -604,6 +604,52 @@ async function populateYearsAlternative() {
     }
 }
 
+async function populateYearsForFilter() {
+    /**
+     * Populate the year dropdown on the main filter page
+     */
+    const yearDropdown = document.getElementById('year');
+    
+    if (!yearDropdown) {
+        console.log('Year dropdown not found - not on filter page');
+        return;
+    }
+
+    try {
+        console.log('🔍 Fetching all available years for filter...');
+        
+        const response = await fetch(`${baseUrl}/get_years`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const years = await response.json();
+        console.log('📅 Received years:', years);
+        
+        if (!Array.isArray(years)) {
+            console.error('❌ Expected array of years but got:', years);
+            return;
+        }
+        
+        // Sort years in descending order (newest first)
+        const sortedYears = years.sort((a, b) => b - a);
+        
+        // Add each year as an option (keep existing default options)
+        sortedYears.forEach(year => {
+            const option = document.createElement('option');
+            option.value = String(year);
+            option.textContent = String(year);
+            yearDropdown.appendChild(option);
+        });
+        
+        console.log(`✅ Successfully populated ${sortedYears.length} years in filter dropdown`);
+        
+    } catch (error) {
+        console.error('❌ Error fetching years for filter:', error);
+    }
+}
+
 // UPDATED: Helper function to reset all filters
 function resetAllFilters() {
     // Reset dropdowns
@@ -643,8 +689,8 @@ document.addEventListener("DOMContentLoaded", function () {
     // Initialize Firebase first
     initializeFirebase();
 
-    // NEW: Populate years dropdown
-    populateYears();
+    // NEW: Populate years dropdown for main filter page
+    populateYearsForFilter();
 
     // Only load favorites if the favorites container exists
     const favoritesContainer = document.getElementById("favorites-items");
@@ -681,12 +727,12 @@ document.addEventListener("DOMContentLoaded", function () {
 
     // Check if all required slider elements exist before trying to use them
     if (priceSlider && horsepowerSlider && seatingSlider) {
-        // Ensure sliders start at minimum values
-        priceSlider.value = priceSlider.max;
+        // Set sliders to their initial values
+        priceSlider.value = priceSlider.max; // This will be 25,000,000 now
         horsepowerSlider.value = horsepowerSlider.min;
         seatingSlider.value = "0";
 
-        // Update displayed values to match the min values
+        // Update displayed values to match the values
         updateSliderValue("price", "₱", true);
         updateSliderValue("horsepower", "HP", false);
         updateSliderValue("seating", "seats", false);
@@ -1022,6 +1068,7 @@ function resetAllFilters() {
     document.getElementById("drive-train").value = "";
     document.getElementById("transmission").value = "";
     document.getElementById("fuel-type").value = "";
+    document.getElementById("year").value = ""; // NEW: Reset year dropdown
     
     // Reset sliders to their initial values
     const priceSlider = document.getElementById("price");
@@ -1030,7 +1077,7 @@ function resetAllFilters() {
     const cargoSlider = document.getElementById("cargo-space");
     const groundClearanceSlider = document.getElementById("ground-clearance");
     
-    if (priceSlider) priceSlider.value = priceSlider.max;
+    if (priceSlider) priceSlider.value = priceSlider.max; // Now 25M
     if (horsepowerSlider) horsepowerSlider.value = horsepowerSlider.min;
     if (seatingSlider) seatingSlider.value = "0";
     if (cargoSlider) cargoSlider.value = cargoSlider.min;
