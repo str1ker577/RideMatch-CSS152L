@@ -1606,7 +1606,7 @@ footer {
 
 .radar-chart-container {
   width: 80%; /* 20% smaller than container */
-  max-width: 600px;
+  max-width: 80%;
   height: 500px;
   background: white;
   border: 2px solid rgba(180, 155, 102, 0.3);
