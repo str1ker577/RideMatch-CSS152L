@@ -1427,6 +1427,47 @@ def increment_post_views(post_id):
         app.logger.error(f"Error incrementing views: {e}")
         return jsonify({'error': 'Failed to increment views'}), 500
       
+      
+      
+@app.route('/debug/csv-status')
+def debug_csv_status():
+    """Quick debug to see CSV loading status"""
+    import os
+    
+    # Check DataFrame status
+    df_status = {
+        "df_empty": df.empty,
+        "df_shape": df.shape if not df.empty else "Empty",
+        "df_columns": list(df.columns) if not df.empty else []
+    }
+    
+    # Check file existence
+    file_checks = {}
+    possible_paths = [
+        'car_data.csv',
+        './car_data.csv', 
+        'static/car_data.csv',
+        'data/car_data.csv'
+    ]
+    
+    for path in possible_paths:
+        file_checks[path] = {
+            "exists": os.path.exists(path),
+            "size": os.path.getsize(path) if os.path.exists(path) else 0
+        }
+    
+    # Check current directory
+    directory_info = {
+        "current_dir": os.getcwd(),
+        "files_in_current_dir": os.listdir('.') if os.path.exists('.') else []
+    }
+    
+    return jsonify({
+        "dataframe_status": df_status,
+        "file_checks": file_checks,
+        "directory_info": directory_info,
+        "app_root_path": app.root_path if hasattr(app, 'root_path') else "Unknown"
+    })
 ##################
 # Error handlers #
 ##################
