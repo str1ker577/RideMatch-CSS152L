@@ -536,7 +536,7 @@ async function applyFilters() {
 }
 
 // NEW: Function to populate years dropdown
-async function populateYears() {
+async function populateYearsAlternative() {
     const brand = document.getElementById('brand').value;
     const model = document.getElementById('model').value;
     const variant = document.getElementById('variant').value;
@@ -559,65 +559,30 @@ async function populateYears() {
             return;
         }
         
-        // FIXED: Handle duplicates properly with string consistency
-        const processedYears = years
-            .map(year => String(year).trim()) // Convert to string and trim
-            .filter(yearStr => {
-                const yearNum = parseInt(yearStr, 10);
-                return !isNaN(yearNum) && yearNum >= 1900 && yearNum <= 2030;
-            });
+        // AGGRESSIVE APPROACH: Use Map to ensure uniqueness
+        const yearMap = new Map();
         
-        console.log('✨ Processed years (strings):', processedYears);
+        years.forEach(year => {
+            const cleanYear = parseInt(String(year).trim(), 10);
+            if (!isNaN(cleanYear) && cleanYear >= 1900 && cleanYear <= 2030) {
+                yearMap.set(cleanYear, cleanYear); // Map key = value ensures uniqueness
+            }
+        });
         
-        // Use Set to remove duplicates (now working with strings)
-        const uniqueYearStrings = [...new Set(processedYears)];
-        console.log('🔧 After Set deduplication:', uniqueYearStrings);
+        // Get unique years and sort
+        const uniqueYears = Array.from(yearMap.values()).sort((a, b) => b - a);
         
-        // Convert back to numbers for sorting
-        const uniqueYears = uniqueYearStrings
-            .map(yearStr => parseInt(yearStr, 10))
-            .sort((a, b) => b - a); // Sort descending (newest first)
+        console.log('📅 Final unique years:', uniqueYears);
         
-        console.log('📅 Final sorted years:', uniqueYears);
-        
-        // Populate dropdown (convert back to strings for HTML)
+        // Populate dropdown
         uniqueYears.forEach(year => {
             const option = document.createElement('option');
-            option.value = String(year); // Ensure string value
-            option.textContent = String(year); // Ensure string text
+            option.value = String(year);
+            option.textContent = String(year);
             yearDropdown.appendChild(option);
         });
         
-        console.log(`✅ Successfully populated ${uniqueYears.length} unique years`);
-        
-        // FIXED: Proper duplicate verification
-        const dropdownValues = Array.from(yearDropdown.options)
-            .slice(1) // Skip "Select Year" option
-            .map(opt => opt.value); // These are strings
-        
-        console.log('🔍 Dropdown values:', dropdownValues);
-        
-        // Check for duplicates in the dropdown values (all strings now)
-        const duplicateCheck = dropdownValues.filter((value, index) => 
-            dropdownValues.indexOf(value) !== index
-        );
-        
-        if (duplicateCheck.length > 0) {
-            console.error('🚨 Duplicates still found in dropdown:', duplicateCheck);
-            
-            // ADDITIONAL FIX: Remove duplicates from DOM if they exist
-            const seenValues = new Set();
-            Array.from(yearDropdown.options).forEach(option => {
-                if (option.value !== "" && seenValues.has(option.value)) {
-                    console.log('🗑️ Removing duplicate option:', option.value);
-                    option.remove();
-                } else if (option.value !== "") {
-                    seenValues.add(option.value);
-                }
-            });
-        } else {
-            console.log('✅ No duplicates in final dropdown');
-        }
+        console.log(`✅ Successfully populated ${uniqueYears.length} unique years using Map approach`);
         
     } catch (error) {
         console.error('❌ Error fetching years:', error);
