@@ -1391,10 +1391,25 @@ function addCarToComparison(carId, variant, year, specs) {
     carColumn.id = `car-${carId}`;
     carColumn.classList.add('car-column');
 
-    // Car title with year
+    // Check if car is already liked and set appropriate heart style
+    const isLiked = userFavorites.has(variant);
+    const heartClass = isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
+    const heartColor = isLiked ? '#e74c3c' : '#b49b66'; // Red if liked, gold if not
+
+    // Car title with year and heart icon
     const carTitle = document.createElement('div');
     carTitle.classList.add('car-title');
-    carTitle.textContent = `${variant} (${year})`;
+    carTitle.innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+            <span style="flex: 1; text-align: center;">${variant} (${year})</span>
+            <div class="heart-container" style="margin-left: 10px;">
+                <i class="${heartClass}" 
+                   id="compare-like-icon" 
+                   style="color: ${heartColor}; cursor: pointer; font-size: 1.2rem;" 
+                   onclick="addToFave(event, '${variant}')"></i>
+            </div>
+        </div>
+    `;
     carColumn.appendChild(carTitle);
 
     // Car image
@@ -1462,7 +1477,7 @@ function addCarToComparison(carId, variant, year, specs) {
         carColumn.appendChild(priceDiv);
     }
 
-    // UPDATED: Remove button to use new remove function
+    // Remove button
     const removeBtn = document.createElement('button');
     removeBtn.classList.add('remove-btn');
     removeBtn.textContent = "Remove Car";
@@ -2527,6 +2542,24 @@ function updateHeartColorsOnPage() {
         const onclick = heart.getAttribute('onclick');
         if (onclick) {
             const match = onclick.match(/addToFaveFromCalculator\(event,\s*['"`]([^'"`]+)['"`]\)/);
+            if (match) {
+                const variant = match[1];
+                if (userFavorites.has(variant)) {
+                    heart.className = 'fa-solid fa-heart';
+                    heart.style.color = '#e74c3c'; // Red
+                } else {
+                    heart.className = 'fa-regular fa-heart';
+                    heart.style.color = '#b49b66'; // Gold
+                }
+            }
+        }
+    });
+
+    // NEW: Update comparison page hearts
+    document.querySelectorAll('[id="compare-like-icon"]').forEach(heart => {
+        const onclick = heart.getAttribute('onclick');
+        if (onclick) {
+            const match = onclick.match(/addToFave\(event,\s*['"`]([^'"`]+)['"`]\)/);
             if (match) {
                 const variant = match[1];
                 if (userFavorites.has(variant)) {
