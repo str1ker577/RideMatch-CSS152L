@@ -1142,7 +1142,7 @@ async function populateVariants() {
     }
 }
 
-// Function to populate years based on selected variant
+// Function to populate years based on selected variant (ENHANCED DEBUG VERSION)
 async function populateYears() {
     const brand = document.getElementById('brand').value;
     const model = document.getElementById('model').value;
@@ -1156,36 +1156,90 @@ async function populateYears() {
 
     try {
         // Fetch years for this specific variant
+        console.log(`🔍 Fetching years for: brand=${brand}, model=${model}, variant=${variant}`);
         const response = await fetch(`${baseUrl}/get_variant_years?brand=${brand}&model=${model}&variant=${variant}`);
         const years = await response.json();
         
-        console.log('Raw years from API:', years); // Debug log
+        console.log('📦 Raw API response:', years);
+        console.log('📦 Response type:', typeof years);
+        console.log('📦 Is array:', Array.isArray(years));
         
-        // More aggressive duplicate removal using Map for unique tracking
-        const yearMap = new Map();
+        if (!Array.isArray(years)) {
+            console.error('❌ API did not return an array:', years);
+            return;
+        }
         
-        years.forEach(year => {
-            // Convert to number and validate
-            const numYear = parseInt(String(year).trim(), 10);
-            if (!isNaN(numYear) && numYear > 1900 && numYear <= new Date().getFullYear() + 2) {
-                yearMap.set(numYear, numYear); // Use Map to ensure uniqueness
+        // SUPER AGGRESSIVE duplicate removal
+        console.log('🧹 Starting aggressive cleanup...');
+        
+        // Step 1: Convert everything to strings first, trim, then to numbers
+        const stringYears = years.map(year => String(year).trim());
+        console.log('1️⃣ After string conversion:', stringYears);
+        
+        // Step 2: Convert to numbers and filter
+        const numberYears = [];
+        const seenYears = new Set();
+        
+        for (let i = 0; i < stringYears.length; i++) {
+            const yearStr = stringYears[i];
+            const yearNum = parseInt(yearStr, 10);
+            
+            console.log(`   Processing index ${i}: "${yearStr}" → ${yearNum}`);
+            
+            // Validate year
+            if (!isNaN(yearNum) && yearNum >= 1900 && yearNum <= 2030) {
+                if (!seenYears.has(yearNum)) {
+                    seenYears.add(yearNum);
+                    numberYears.push(yearNum);
+                    console.log(`   ✅ Added year: ${yearNum}`);
+                } else {
+                    console.log(`   🚫 Duplicate rejected: ${yearNum}`);
+                }
+            } else {
+                console.log(`   ❌ Invalid year rejected: ${yearNum}`);
             }
-        });
+        }
         
-        // Convert back to array and sort
-        const uniqueYears = Array.from(yearMap.values()).sort((a, b) => b - a);
+        console.log('2️⃣ After number conversion and deduplication:', numberYears);
         
-        console.log('Final unique years:', uniqueYears); // Debug log
+        // Step 3: Sort
+        const sortedYears = [...numberYears].sort((a, b) => b - a);
+        console.log('3️⃣ After sorting:', sortedYears);
         
-        uniqueYears.forEach(year => {
+        // Step 4: Final verification - check for duplicates again
+        const finalCheck = new Set(sortedYears);
+        if (finalCheck.size !== sortedYears.length) {
+            console.error('🚨 DUPLICATES STILL EXIST AFTER PROCESSING!');
+            console.error('Original array:', sortedYears);
+            console.error('Unique set:', Array.from(finalCheck));
+        } else {
+            console.log('✅ No duplicates detected in final result');
+        }
+        
+        // Step 5: Populate dropdown
+        console.log(`🎯 Populating dropdown with ${sortedYears.length} years...`);
+        sortedYears.forEach((year, index) => {
             const option = document.createElement('option');
             option.value = year;
             option.textContent = year;
             yearDropdown.appendChild(option);
+            console.log(`   Added option ${index + 1}: ${year}`);
         });
         
+        console.log('✅ Years populated successfully');
+        
+        // Extra check: verify dropdown contents
+        const dropdownOptions = Array.from(yearDropdown.options);
+        const dropdownValues = dropdownOptions.slice(1).map(opt => opt.value); // Skip first "Select Year" option
+        console.log('🔍 Final dropdown values:', dropdownValues);
+        
+        const duplicatesInDropdown = dropdownValues.filter((value, index) => dropdownValues.indexOf(value) !== index);
+        if (duplicatesInDropdown.length > 0) {
+            console.error('🚨 DUPLICATES FOUND IN DROPDOWN!', duplicatesInDropdown);
+        }
+        
     } catch (error) {
-        console.error('Error fetching years:', error);
+        console.error('❌ Error fetching years:', error);
         alert('Error fetching years. Please try again.');
     }
 }
@@ -1471,7 +1525,7 @@ function updateAllCharts() {
     }, 200);
 }
 
-// Radar Chart Implementation with Dynamic Scaling
+// Radar Chart Implementation with Proper Scaling
 function updateRadarChart() {
     const canvas = document.getElementById('radarChart');
     if (!canvas) {
@@ -1494,61 +1548,37 @@ function updateRadarChart() {
     canvas.style.width = rect.width + 'px';
     canvas.style.height = rect.height + 'px';
 
-    // Calculate dynamic ranges from current compared cars
-    const allValues = {
-        horsepower: comparedCars.map(car => parseInt(car.specs.Horsepower) || 0),
-        price: comparedCars.map(car => parseFloat(car.specs.Price) || 0),
-        groundClearance: comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0),
-        cargoSpace: comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0),
-        seatingCapacity: comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0)
+    // Define reasonable maximum values for scaling (fixed ranges)
+    const maxValues = {
+        horsepower: 500,      // 500 HP max
+        price: 5000000,       // 5M PHP max
+        groundClearance: 30,  // 30cm max
+        cargoSpace: 2000,     // 2000L max
+        seatingCapacity: 8    // 8 seats max
     };
 
-    // Calculate min/max with some padding for better visualization
-    const ranges = {
-        horsepower: {
-            min: Math.min(...allValues.horsepower),
-            max: Math.max(...allValues.horsepower) * 1.1 // 10% padding
-        },
-        price: {
-            min: Math.min(...allValues.price),
-            max: Math.max(...allValues.price) * 1.1
-        },
-        groundClearance: {
-            min: Math.min(...allValues.groundClearance),
-            max: Math.max(...allValues.groundClearance) * 1.1
-        },
-        cargoSpace: {
-            min: Math.min(...allValues.cargoSpace),
-            max: Math.max(...allValues.cargoSpace) * 1.1
-        },
-        seatingCapacity: {
-            min: Math.min(...allValues.seatingCapacity),
-            max: Math.max(...allValues.seatingCapacity) * 1.1
-        }
+    // Get actual max values from current cars for display in tooltips
+    const actualMaxValues = {
+        horsepower: Math.max(...comparedCars.map(car => parseInt(car.specs.Horsepower) || 0)),
+        price: Math.max(...comparedCars.map(car => parseFloat(car.specs.Price) || 0)),
+        groundClearance: Math.max(...comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0)),
+        cargoSpace: Math.max(...comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0)),
+        seatingCapacity: Math.max(...comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0))
     };
 
-    // Store ranges for tooltip reference
-    window.radarRanges = ranges;
+    // Store for tooltip reference
+    window.radarActualMaxValues = actualMaxValues;
 
-    // Prepare datasets for each car with dynamic scaling
+    // Prepare datasets for each car with consistent scaling
     const datasets = comparedCars.map((car, index) => {
         const specs = car.specs;
         
-        // Dynamic normalization to 0-100 scale based on current data
-        const horsepower = ranges.horsepower.max > ranges.horsepower.min ? 
-            ((parseInt(specs.Horsepower) || 0) - ranges.horsepower.min) / (ranges.horsepower.max - ranges.horsepower.min) * 100 : 50;
-            
-        const priceScore = ranges.price.max > ranges.price.min ? 
-            ((parseFloat(specs.Price) || 0) - ranges.price.min) / (ranges.price.max - ranges.price.min) * 100 : 50;
-            
-        const groundClearance = ranges.groundClearance.max > ranges.groundClearance.min ? 
-            ((parseFloat(specs.GroundClearance) || 0) - ranges.groundClearance.min) / (ranges.groundClearance.max - ranges.groundClearance.min) * 100 : 50;
-            
-        const cargoSpace = ranges.cargoSpace.max > ranges.cargoSpace.min ? 
-            ((parseFloat(specs.Cargospace) || 0) - ranges.cargoSpace.min) / (ranges.cargoSpace.max - ranges.cargoSpace.min) * 100 : 50;
-            
-        const seatingCapacity = ranges.seatingCapacity.max > ranges.seatingCapacity.min ? 
-            ((parseInt(specs.SeatingCapacity) || 0) - ranges.seatingCapacity.min) / (ranges.seatingCapacity.max - ranges.seatingCapacity.min) * 100 : 50;
+        // Scale to 0-100 based on fixed reasonable maximums
+        const horsepower = Math.min(((parseInt(specs.Horsepower) || 0) / maxValues.horsepower) * 100, 100);
+        const priceScore = Math.min(((parseFloat(specs.Price) || 0) / maxValues.price) * 100, 100);
+        const groundClearance = Math.min(((parseFloat(specs.GroundClearance) || 0) / maxValues.groundClearance) * 100, 100);
+        const cargoSpace = Math.min(((parseFloat(specs.Cargospace) || 0) / maxValues.cargoSpace) * 100, 100);
+        const seatingCapacity = Math.min(((parseInt(specs.SeatingCapacity) || 0) / maxValues.seatingCapacity) * 100, 100);
         
         return {
             label: `${car.variant} (${car.year})`,
@@ -1630,18 +1660,46 @@ function updateRadarChart() {
                             }
                         },
                         afterLabel: function(context) {
-                            // Show the scaling info in tooltip
-                            const ranges = window.radarRanges;
-                            if (!ranges) return '';
+                            // Show percentage of maximum possible value
+                            const maxValues = {
+                                0: 500,      // HP
+                                1: 5000000,  // Price
+                                2: 30,       // Clearance
+                                3: 2000,     // Cargo
+                                4: 8         // Seating
+                            };
+                            
+                            const car = comparedCars[context.datasetIndex];
+                            const specs = car.specs;
+                            
+                            let actualValue = 0;
+                            let maxValue = 0;
                             
                             switch(context.dataIndex) {
-                                case 0: return `Range: ${ranges.horsepower.min.toFixed(0)} - ${ranges.horsepower.max.toFixed(0)} HP`;
-                                case 1: return `Range: ₱${ranges.price.min.toLocaleString()} - ₱${ranges.price.max.toLocaleString()}`;
-                                case 2: return `Range: ${ranges.groundClearance.min.toFixed(1)} - ${ranges.groundClearance.max.toFixed(1)} cm`;
-                                case 3: return `Range: ${ranges.cargoSpace.min.toFixed(0)} - ${ranges.cargoSpace.max.toFixed(0)} L`;
-                                case 4: return `Range: ${ranges.seatingCapacity.min.toFixed(0)} - ${ranges.seatingCapacity.max.toFixed(0)} seats`;
-                                default: return '';
+                                case 0: 
+                                    actualValue = parseInt(specs.Horsepower) || 0;
+                                    maxValue = maxValues[0];
+                                    break;
+                                case 1: 
+                                    actualValue = parseFloat(specs.Price) || 0;
+                                    maxValue = maxValues[1];
+                                    break;
+                                case 2: 
+                                    actualValue = parseFloat(specs.GroundClearance) || 0;
+                                    maxValue = maxValues[2];
+                                    break;
+                                case 3: 
+                                    actualValue = parseFloat(specs.Cargospace) || 0;
+                                    maxValue = maxValues[3];
+                                    break;
+                                case 4: 
+                                    actualValue = parseInt(specs.SeatingCapacity) || 0;
+                                    maxValue = maxValues[4];
+                                    break;
                             }
+                            
+                            const percentage = ((actualValue / maxValue) * 100).toFixed(1);
+                            return `${percentage}% of maximum scale`;
                         }
                     }
                 }
@@ -1716,8 +1774,8 @@ function addRadarInstructions() {
                 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             ">
                 <i class='bx bx-info-circle' style='color: #b49b66; margin-right: 0.5rem;'></i>
-                <strong>💡 Dynamic Scaling:</strong> Each axis scales automatically based on your compared cars for optimal comparison! 
-                <br><small>Hover over data points to see actual values and current ranges.</small>
+                <strong>📊 Fixed Scale:</strong> Each axis uses consistent maximums (500HP, ₱5M, 30cm, 2000L, 8 seats) for true proportional comparison! 
+                <br><small>Hover over data points to see actual values and percentage of maximum scale.</small>
             </div>
         `;
         radarContainer.appendChild(instructionsDiv);
