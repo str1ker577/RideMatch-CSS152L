@@ -1057,6 +1057,9 @@ async function loadDefaultCars() {
         alert("An error occurred while fetching cars. Please try again later.");
     }
 }
+///////////////////////
+// Comparison  Page //
+/////////////////////
 
 // Global variables for compare page
 let comparedCars = [];
@@ -1139,7 +1142,7 @@ async function populateVariants() {
     }
 }
 
-// NEW: Function to populate years based on selected variant
+// Function to populate years based on selected variant
 async function populateYears() {
     const brand = document.getElementById('brand').value;
     const model = document.getElementById('model').value;
@@ -1172,7 +1175,7 @@ async function populateYears() {
     }
 }
 
-// UPDATED: Compare Cars Function with Year
+// Compare Cars Function with Year
 async function compareCars() {
     const selectedVariant = document.getElementById('variant').value;
     const selectedYear = document.getElementById('year').value;
@@ -1267,7 +1270,29 @@ function resetCompareForm() {
     if (yearSelect) yearSelect.innerHTML = '<option value="">Select Year</option>';
 }
 
-// UPDATED: Add car to comparison with year display
+// UPDATED: Remove car function to handle separate radar section
+function removeCarFromComparison(carId) {
+    const cardElement = document.querySelector(`#car-${carId}`);
+    if (cardElement) {
+        cardElement.remove();
+    }
+    
+    comparedCars = comparedCars.filter(car => car.id !== carId);
+    updateAllCharts();
+    
+    // Hide comparison sections if no cars left
+    if (comparedCars.length === 0) {
+        const cardsWrapper = document.getElementById('comparison-cards-wrapper');
+        const chartsSection = document.getElementById('compare-charts-section');
+        const radarSection = document.getElementById('radar-chart-section');
+        
+        if (cardsWrapper) cardsWrapper.style.display = 'none';
+        if (chartsSection) chartsSection.style.display = 'none';
+        if (radarSection) radarSection.style.display = 'none';
+    }
+}
+
+// UPDATED: Add car to comparison with year display and new remove function
 function addCarToComparison(carId, variant, year, specs) {
     const container = document.getElementById('comparison-container');
     const carColumn = document.createElement('div');
@@ -1345,23 +1370,11 @@ function addCarToComparison(carId, variant, year, specs) {
         carColumn.appendChild(priceDiv);
     }
 
-    // Remove button
+    // UPDATED: Remove button to use new remove function
     const removeBtn = document.createElement('button');
     removeBtn.classList.add('remove-btn');
     removeBtn.textContent = "Remove Car";
-    removeBtn.onclick = () => {
-        carColumn.remove();
-        comparedCars = comparedCars.filter(car => car.id !== carId);
-        updateAllCharts();
-        
-        // Hide comparison sections if no cars left
-        if (comparedCars.length === 0) {
-            const cardsWrapper = document.getElementById('comparison-cards-wrapper');
-            const chartsSection = document.getElementById('compare-charts-section');
-            if (cardsWrapper) cardsWrapper.style.display = 'none';
-            if (chartsSection) chartsSection.style.display = 'none';
-        }
-    };
+    removeBtn.onclick = () => removeCarFromComparison(carId);
 
     carColumn.appendChild(removeBtn);
     container.appendChild(carColumn);
@@ -1402,15 +1415,17 @@ function createProgressBar(value, type) {
     return progressContainer;
 }
 
-// UPDATED: Main chart update function including radar
+// UPDATED: Main chart update function with separate radar section
 function updateAllCharts() {
     console.log('Updating all charts for', comparedCars.length, 'cars');
     
     if (comparedCars.length === 0) {
         const chartsSection = document.getElementById('compare-charts-section');
+        const radarSection = document.getElementById('radar-chart-section');
         const cardsWrapper = document.getElementById('comparison-cards-wrapper');
         
         if (chartsSection) chartsSection.style.display = 'none';
+        if (radarSection) radarSection.style.display = 'none';
         if (cardsWrapper) cardsWrapper.style.display = 'none';
         
         // Destroy all existing charts
@@ -1421,25 +1436,27 @@ function updateAllCharts() {
         return;
     }
 
-    // Show sections
+    // Show all sections
     const chartsSection = document.getElementById('compare-charts-section');
+    const radarSection = document.getElementById('radar-chart-section');
     const cardsWrapper = document.getElementById('comparison-cards-wrapper');
     
     if (chartsSection) chartsSection.style.display = 'block';
+    if (radarSection) radarSection.style.display = 'block';
     if (cardsWrapper) cardsWrapper.style.display = 'block';
     
     // Wait for DOM to be ready, then create all charts
     setTimeout(() => {
-        updateRadarChart();        // NEW: Radar chart
         updateHorsepowerChart();
         updatePriceChart();
         updateGroundClearanceChart();
         updateCargoSpaceChart();
         updateSeatingCapacityChart();
+        updateRadarChart(); // Radar chart updated last
     }, 200);
 }
 
-// NEW: Radar Chart Implementation
+// Radar Chart Implementation
 function updateRadarChart() {
     const canvas = document.getElementById('radarChart');
     if (!canvas) {
@@ -1540,7 +1557,7 @@ function updateRadarChart() {
     });
 }
 
-// UPDATED: Bar chart functions with new colors (keeping existing logic, just updating colors)
+// Bar chart functions with updated colors
 function updateHorsepowerChart() {
     const canvas = document.getElementById('horsepowerChart');
     if (!canvas) return;

@@ -137,7 +137,6 @@
             <option value="">Select Variant</option>
           </select>
 
-          <!-- NEW: Year Selection -->
           <label for="year">Select Year:</label>
           <select id="year" name="year">
             <option value="">Select Year</option>
@@ -154,7 +153,7 @@
     </div>
   </div>
 
-  <!-- Bar Charts & Radar Chart Visualization Section -->
+  <!-- Bar Charts Visualization Section (Original Layout) -->
   <div class="compare-wrapper">
     <div class="compare-charts-section" id="compare-charts-section" style="display: none;">
       <h2 class="compare-charts-title">
@@ -163,15 +162,6 @@
       </h2>
       
       <div class="compare-charts-grid">
-        <!-- NEW: Radar Chart (Full Width at Top) -->
-        <div class="compare-chart-container radar-chart-container">
-          <div class="compare-chart-header">
-            <i class='bx bx-radar' style='color: #b49b66;'></i>
-            <h3>Overall Performance Radar</h3>
-          </div>
-          <canvas id="radarChart"></canvas>
-        </div>
-
         <div class="compare-chart-container">
           <div class="compare-chart-header">
             <i class='bx bx-tachometer' style='color: #b49b66;'></i>
@@ -215,17 +205,32 @@
     </div>
   </div>
 
-  <!-- Car Comparison Cards -->
-  <div class="compare-wrapper" id="comparison-cards-wrapper" style="display: none;">
-    <div class="comp_table_frame">
-      <div class="comp_table_content">
-        <div id="comparison-container">
-          <!-- CAR SPECS HERE -->
+  <!-- NEW: Separate Radar Chart Section -->
+  <div class="compare-wrapper">
+    <div class="radar-chart-section" id="radar-chart-section" style="display: none;">
+      <h2 class="compare-charts-title">
+        <i class='bx bx-radar' style='margin-right: 0.5rem;'></i>
+        Overall Performance Radar
+      </h2>
+      
+      <div class="radar-chart-wrapper">
+        <div class="radar-chart-container">
+          <canvas id="radarChart"></canvas>
         </div>
       </div>
     </div>
   </div>
 
+  <!-- Car Comparison Cards -->
+  <div class="compare-wrapper" id="comparison-cards-wrapper" style="display: none;">
+    <div class="comp_table_frame">
+      <div class="comp_table_content">
+        <div id="comparison-container">
+          <!-- CAR SPECS WILL APPEAR HERE -->
+        </div>
+      </div>
+    </div>
+  </div>
   <!-- Footer -->
   <footer>
     <div class="footer-container">

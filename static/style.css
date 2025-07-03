@@ -1319,9 +1319,17 @@ footer {
 .compare-charts-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: 400px 400px 400px 400px; /* Added extra row for radar */
+  grid-template-rows: 400px 400px 400px; /* Back to 2x3 layout */
   gap: 2.5rem;
-  height: auto; /* Changed from fixed height */
+  height: 1300px; /* Restore original height */
+}
+
+.compare-chart-container:nth-child(5) {
+  grid-column: 1 / -1;
+  max-width: 800px;
+  margin: 0 auto;
+  width: 100%;
+  height: 400px;
 }
 
 /* Radar Chart Container - Full Width at Top */
@@ -1576,6 +1584,53 @@ footer {
   box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
 }
 
+/* NEW: Separate Radar Chart Section */
+.radar-chart-section {
+  width: 100%;
+  margin: 3rem auto;
+  padding: 3rem;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid var(--second-color);
+  border-radius: 20px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.radar-chart-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem 0;
+}
+
+.radar-chart-container {
+  width: 80%; /* 20% smaller than container */
+  max-width: 600px;
+  height: 500px;
+  background: white;
+  border: 2px solid rgba(180, 155, 102, 0.3);
+  border-radius: 15px;
+  padding: 2rem;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.radar-chart-container:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+  border-color: var(--second-color);
+}
+
+.radar-chart-container canvas {
+  flex: 1;
+  width: 100% !important;
+  height: 100% !important;
+}
+
 /* Animation */
 @keyframes fadeInUp {
   from {
@@ -1592,13 +1647,21 @@ footer {
 @media (max-width: 1200px) {
   .compare-charts-grid {
     grid-template-columns: 1fr;
-    grid-template-rows: repeat(6, 400px); /* 6 charts total including radar */
+    grid-template-rows: repeat(5, 400px); /* 5 charts in single column */
     gap: 2rem;
     height: auto;
+  }
+
+  .compare-chart-container:nth-child(5) {
+    grid-column: 1;
   }
   
   .radar-chart-container {
     grid-column: 1;
+  }
+
+  .radar-chart-container {
+    width: 90%; /* Slightly larger on smaller screens */
   }
 }
 
@@ -1627,6 +1690,15 @@ footer {
 
   .radar-chart-container {
     height: 350px;
+  }
+
+  .radar-chart-container {
+    height: 400px;
+    width: 95%;
+  }
+  
+  .radar-chart-section {
+    padding: 2rem;
   }
 }
 
@@ -1664,11 +1736,18 @@ footer {
   }
   
   .compare-charts-grid {
-    grid-template-rows: repeat(6, 320px);
+    grid-template-rows: repeat(5, 320px);
   }
 
-  .radar-chart-container {
-    height: 320px;
+    .radar-chart-container {
+    height: 350px;
+    width: 100%;
+    padding: 1rem;
+  }
+  
+  .radar-chart-section {
+    padding: 1.5rem;
+    margin: 2rem auto;
   }
   
   .radar-chart-container canvas {
@@ -1688,12 +1767,15 @@ footer {
   }
   
   .compare-charts-grid {
-    gap: 1rem;
-    grid-template-rows: repeat(6, 300px);
+    grid-template-rows: repeat(5, 320px);
   }
-  
+
   .radar-chart-container {
     height: 300px;
+    padding: 1rem;
+  }
+  
+  .radar-chart-section {
     padding: 1rem;
   }
   
