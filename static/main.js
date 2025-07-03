@@ -522,16 +522,30 @@ async function applyFilters() {
         const data = await response.json();
         console.log("📥 Received data:", data);
         
+        // NEW: Check if the response is an error object
+        if (data.error) {
+            console.error("❌ Server returned error:", data.error);
+            alert(`Server Error: ${data.error}\n\nThis usually means the car database is not loaded. Please contact support.`);
+            return;
+        }
+        
+        // NEW: Check if data is actually an array
+        if (!Array.isArray(data)) {
+            console.error("❌ Expected array but got:", typeof data, data);
+            alert("Unexpected data format from server. Please try refreshing the page.");
+            return;
+        }
+        
         if (data.length === 0) {
             console.warn("⚠️ No cars found for given filters.");
             alert("No matching cars found. Please try different filters.");
         } else {
             displayFilteredCars(data);
-            defaultCarsLoaded = true; // Set flag to true after any successful data load
+            defaultCarsLoaded = true;
         }
     } catch (error) {
         console.error("🚨 Error fetching data:", error);
-        alert("An error occurred while fetching data. Please try again later.");
+        alert("Network error occurred while fetching data. Please check your connection and try again.");
     }
 }
 
@@ -1065,22 +1079,41 @@ async function loadDefaultCars() {
     try {
         // Fetch all cars without any filters
         const response = await fetch(`${baseUrl}/get_cars`);
-        const data = await response.json();
         
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
         console.log("📥 Received default data:", data);
+        
+        // NEW: Check for error response
+        if (data.error) {
+            console.error("❌ Server error loading default cars:", data.error);
+            alert(`Unable to load cars: ${data.error}\n\nThe car database may not be available. Please try again later.`);
+            return;
+        }
+        
+        // NEW: Validate data format
+        if (!Array.isArray(data)) {
+            console.error("❌ Expected array but got:", typeof data, data);
+            alert("Unexpected data format from server. Please refresh the page.");
+            return;
+        }
         
         if (data.length === 0) {
             console.warn("⚠️ No cars found in database.");
             alert("No cars available in the database.");
         } else {
             displayFilteredCars(data);
-            defaultCarsLoaded = true; // Set flag to true after loading default cars
+            defaultCarsLoaded = true;
         }
     } catch (error) {
         console.error("🚨 Error fetching default cars:", error);
-        alert("An error occurred while fetching cars. Please try again later.");
+        alert("Network error occurred while loading cars. Please check your connection and try again.");
     }
 }
+
 ///////////////////////
 // Comparison  Page //
 /////////////////////
@@ -3260,7 +3293,6 @@ async function fetchAffordableCars(maxPrice) {
     console.log(`🔍 Fetching affordable cars with max price: ₱${maxPrice.toLocaleString()}`);
     
     try {
-        // Use the same endpoint as main filter but only with price parameter
         const url = new URL(`${baseUrl}/get_cars`);
         url.searchParams.append("max_price", Math.floor(maxPrice));
         
@@ -3268,16 +3300,28 @@ async function fetchAffordableCars(maxPrice) {
         
         const response = await fetch(url);
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
         }
         
         const data = await response.json();
         console.log("📥 Received calculator cars data:", data);
         
+        // NEW: Check for error response
+        if (data.error) {
+            console.error("❌ Server error in calculator:", data.error);
+            throw new Error(`Server Error: ${data.error}`);
+        }
+        
+        // NEW: Validate data format
+        if (!Array.isArray(data)) {
+            console.error("❌ Expected array but got:", typeof data, data);
+            throw new Error("Invalid data format from server");
+        }
+        
         return data;
     } catch (error) {
         console.error("🚨 Error fetching affordable cars:", error);
-        throw error;
+        throw error; // Re-throw so the calling function can handle it
     }
 }
 

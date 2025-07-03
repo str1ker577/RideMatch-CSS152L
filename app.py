@@ -106,16 +106,41 @@ try:
         app.logger.error(f"❌ CSV file not found at {csv_path}")
         app.logger.info(f"Current directory contents: {os.listdir('.')}")
     else:
-        df = pd.read_csv(csv_path, encoding='utf-8')
+        # Try multiple encodings since the file is likely in cp1252
+        encodings_to_try = ['cp1252', 'utf-8', 'latin-1', 'iso-8859-1']
         
-        # Ensure all relevant columns are strings before extraction (FIXED REGEX PATTERNS)
-        df["Cargo_space"] = df["Cargo_space"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
-        df["Ground_Clearance"] = df["Ground_Clearance"].astype(str).str.extract(r"([\d.]+)", expand=False).astype(float)
-        df["Horsepower"] = df["Horsepower"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
-        df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
+        for encoding in encodings_to_try:
+            try:
+                app.logger.info(f"🔄 Trying to load CSV with encoding: {encoding}")
+                df = pd.read_csv(csv_path, encoding=encoding)
+                app.logger.info(f"✅ CSV loaded successfully with {encoding} encoding")
+                break
+            except UnicodeDecodeError as e:
+                app.logger.warning(f"⚠️ Encoding {encoding} failed: {e}")
+                continue
+            except Exception as e:
+                app.logger.error(f"❌ Error with {encoding}: {e}")
+                continue
+        else:
+            app.logger.error("❌ Failed to load CSV with any encoding")
+            df = pd.DataFrame()
         
-        app.logger.info(f"✅ CSV data loaded successfully - {len(df)} records")
-        app.logger.info(f"CSV columns: {list(df.columns)}")
+        if not df.empty:
+            # Clean and process the data
+            app.logger.info(f"📊 Original CSV shape: {df.shape}")
+            
+            # Ensure all relevant columns are strings before extraction
+            df["Cargo_space"] = df["Cargo_space"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
+            df["Ground_Clearance"] = df["Ground_Clearance"].astype(str).str.extract(r"([\d.]+)", expand=False).astype(float)
+            df["Horsepower"] = df["Horsepower"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
+            df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
+            
+            app.logger.info(f"✅ CSV data processed successfully - {len(df)} records")
+            app.logger.info(f"CSV columns: {list(df.columns)}")
+            
+            # Log sample data for verification
+            app.logger.info("Sample data:")
+            app.logger.info(df.head().to_string())
         
 except Exception as e:
     app.logger.error(f"❌ CSV loading failed: {e}")
