@@ -1142,7 +1142,7 @@ async function populateVariants() {
     }
 }
 
-// Function to populate years based on selected variant (ENHANCED DEBUG VERSION)
+// UPDATED: Simplified and more reliable populateYears function
 async function populateYears() {
     const brand = document.getElementById('brand').value;
     const model = document.getElementById('model').value;
@@ -1161,81 +1161,56 @@ async function populateYears() {
         const years = await response.json();
         
         console.log('📦 Raw API response:', years);
-        console.log('📦 Response type:', typeof years);
-        console.log('📦 Is array:', Array.isArray(years));
         
         if (!Array.isArray(years)) {
             console.error('❌ API did not return an array:', years);
             return;
         }
         
-        // SUPER AGGRESSIVE duplicate removal
-        console.log('🧹 Starting aggressive cleanup...');
+        // SIMPLIFIED: Clean and deduplicate years in one step
+        const uniqueYears = [...new Set(
+            years
+                .map(year => {
+                    // Convert to string, trim whitespace, then to number
+                    const cleanYear = parseInt(String(year).trim(), 10);
+                    return cleanYear;
+                })
+                .filter(year => {
+                    // Only keep valid years between 1900 and 2030
+                    return !isNaN(year) && year >= 1900 && year <= 2030;
+                })
+        )];
         
-        // Step 1: Convert everything to strings first, trim, then to numbers
-        const stringYears = years.map(year => String(year).trim());
-        console.log('1️⃣ After string conversion:', stringYears);
+        console.log('✨ Cleaned and deduplicated years:', uniqueYears);
         
-        // Step 2: Convert to numbers and filter
-        const numberYears = [];
-        const seenYears = new Set();
+        // Sort years in descending order (newest first)
+        uniqueYears.sort((a, b) => b - a);
         
-        for (let i = 0; i < stringYears.length; i++) {
-            const yearStr = stringYears[i];
-            const yearNum = parseInt(yearStr, 10);
-            
-            console.log(`   Processing index ${i}: "${yearStr}" → ${yearNum}`);
-            
-            // Validate year
-            if (!isNaN(yearNum) && yearNum >= 1900 && yearNum <= 2030) {
-                if (!seenYears.has(yearNum)) {
-                    seenYears.add(yearNum);
-                    numberYears.push(yearNum);
-                    console.log(`   ✅ Added year: ${yearNum}`);
-                } else {
-                    console.log(`   🚫 Duplicate rejected: ${yearNum}`);
-                }
-            } else {
-                console.log(`   ❌ Invalid year rejected: ${yearNum}`);
-            }
-        }
+        console.log('📅 Final sorted years:', uniqueYears);
         
-        console.log('2️⃣ After number conversion and deduplication:', numberYears);
-        
-        // Step 3: Sort
-        const sortedYears = [...numberYears].sort((a, b) => b - a);
-        console.log('3️⃣ After sorting:', sortedYears);
-        
-        // Step 4: Final verification - check for duplicates again
-        const finalCheck = new Set(sortedYears);
-        if (finalCheck.size !== sortedYears.length) {
-            console.error('🚨 DUPLICATES STILL EXIST AFTER PROCESSING!');
-            console.error('Original array:', sortedYears);
-            console.error('Unique set:', Array.from(finalCheck));
-        } else {
-            console.log('✅ No duplicates detected in final result');
-        }
-        
-        // Step 5: Populate dropdown
-        console.log(`🎯 Populating dropdown with ${sortedYears.length} years...`);
-        sortedYears.forEach((year, index) => {
+        // Populate dropdown with unique years
+        uniqueYears.forEach(year => {
             const option = document.createElement('option');
             option.value = year;
             option.textContent = year;
             yearDropdown.appendChild(option);
-            console.log(`   Added option ${index + 1}: ${year}`);
         });
         
-        console.log('✅ Years populated successfully');
+        console.log(`✅ Successfully populated ${uniqueYears.length} unique years`);
         
-        // Extra check: verify dropdown contents
-        const dropdownOptions = Array.from(yearDropdown.options);
-        const dropdownValues = dropdownOptions.slice(1).map(opt => opt.value); // Skip first "Select Year" option
-        console.log('🔍 Final dropdown values:', dropdownValues);
+        // Verify no duplicates in dropdown
+        const dropdownValues = Array.from(yearDropdown.options)
+            .slice(1) // Skip "Select Year" option
+            .map(opt => opt.value);
         
-        const duplicatesInDropdown = dropdownValues.filter((value, index) => dropdownValues.indexOf(value) !== index);
-        if (duplicatesInDropdown.length > 0) {
-            console.error('🚨 DUPLICATES FOUND IN DROPDOWN!', duplicatesInDropdown);
+        const duplicateCheck = dropdownValues.filter((value, index) => 
+            dropdownValues.indexOf(value) !== index
+        );
+        
+        if (duplicateCheck.length > 0) {
+            console.error('🚨 Duplicates still found in dropdown:', duplicateCheck);
+        } else {
+            console.log('✅ No duplicates in final dropdown');
         }
         
     } catch (error) {
@@ -1525,7 +1500,7 @@ function updateAllCharts() {
     }, 200);
 }
 
-// Radar Chart Implementation with Proper Scaling
+// UPDATED: Dynamic Radar Chart Implementation with Dynamic Scaling
 function updateRadarChart() {
     const canvas = document.getElementById('radarChart');
     if (!canvas) {
@@ -1548,16 +1523,7 @@ function updateRadarChart() {
     canvas.style.width = rect.width + 'px';
     canvas.style.height = rect.height + 'px';
 
-    // Define reasonable maximum values for scaling (fixed ranges)
-    const maxValues = {
-        horsepower: 500,      // 500 HP max
-        price: 5000000,       // 5M PHP max
-        groundClearance: 30,  // 30cm max
-        cargoSpace: 2000,     // 2000L max
-        seatingCapacity: 8    // 8 seats max
-    };
-
-    // Get actual max values from current cars for display in tooltips
+    // UPDATED: Calculate dynamic maximum values based on current cars with 10% padding
     const actualMaxValues = {
         horsepower: Math.max(...comparedCars.map(car => parseInt(car.specs.Horsepower) || 0)),
         price: Math.max(...comparedCars.map(car => parseFloat(car.specs.Price) || 0)),
@@ -1566,14 +1532,27 @@ function updateRadarChart() {
         seatingCapacity: Math.max(...comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0))
     };
 
+    // Add 10% padding to each maximum value for better visualization
+    const maxValues = {
+        horsepower: Math.max(actualMaxValues.horsepower * 1.1, 100),      // Min 100 HP
+        price: Math.max(actualMaxValues.price * 1.1, 500000),             // Min 500k PHP
+        groundClearance: Math.max(actualMaxValues.groundClearance * 1.1, 15), // Min 15cm
+        cargoSpace: Math.max(actualMaxValues.cargoSpace * 1.1, 200),      // Min 200L
+        seatingCapacity: Math.max(actualMaxValues.seatingCapacity * 1.1, 4)   // Min 4 seats
+    };
+
+    console.log('🎯 Dynamic Max Values:', maxValues);
+    console.log('📊 Actual Max Values:', actualMaxValues);
+
     // Store for tooltip reference
     window.radarActualMaxValues = actualMaxValues;
+    window.radarMaxValues = maxValues;
 
-    // Prepare datasets for each car with consistent scaling
+    // Prepare datasets for each car with dynamic scaling
     const datasets = comparedCars.map((car, index) => {
         const specs = car.specs;
         
-        // Scale to 0-100 based on fixed reasonable maximums
+        // Scale to 0-100 based on dynamic maximums
         const horsepower = Math.min(((parseInt(specs.Horsepower) || 0) / maxValues.horsepower) * 100, 100);
         const priceScore = Math.min(((parseFloat(specs.Price) || 0) / maxValues.price) * 100, 100);
         const groundClearance = Math.min(((parseFloat(specs.GroundClearance) || 0) / maxValues.groundClearance) * 100, 100);
@@ -1660,17 +1639,10 @@ function updateRadarChart() {
                             }
                         },
                         afterLabel: function(context) {
-                            // Show percentage of maximum possible value
-                            const maxValues = {
-                                0: 500,      // HP
-                                1: 5000000,  // Price
-                                2: 30,       // Clearance
-                                3: 2000,     // Cargo
-                                4: 8         // Seating
-                            };
-                            
+                            // Show percentage of current maximum (not fixed maximum)
                             const car = comparedCars[context.datasetIndex];
                             const specs = car.specs;
+                            const maxValues = window.radarMaxValues;
                             
                             let actualValue = 0;
                             let maxValue = 0;
@@ -1678,28 +1650,28 @@ function updateRadarChart() {
                             switch(context.dataIndex) {
                                 case 0: 
                                     actualValue = parseInt(specs.Horsepower) || 0;
-                                    maxValue = maxValues[0];
+                                    maxValue = maxValues.horsepower;
                                     break;
                                 case 1: 
                                     actualValue = parseFloat(specs.Price) || 0;
-                                    maxValue = maxValues[1];
+                                    maxValue = maxValues.price;
                                     break;
                                 case 2: 
                                     actualValue = parseFloat(specs.GroundClearance) || 0;
-                                    maxValue = maxValues[2];
+                                    maxValue = maxValues.groundClearance;
                                     break;
                                 case 3: 
                                     actualValue = parseFloat(specs.Cargospace) || 0;
-                                    maxValue = maxValues[3];
+                                    maxValue = maxValues.cargoSpace;
                                     break;
                                 case 4: 
                                     actualValue = parseInt(specs.SeatingCapacity) || 0;
-                                    maxValue = maxValues[4];
+                                    maxValue = maxValues.seatingCapacity;
                                     break;
                             }
                             
                             const percentage = ((actualValue / maxValue) * 100).toFixed(1);
-                            return `${percentage}% of maximum scale`;
+                            return `${percentage}% of current max (${formatMaxValue(maxValue, context.dataIndex)})`;
                         }
                     }
                 }
@@ -1749,7 +1721,19 @@ function updateRadarChart() {
     addIndividualToggleControls();
 }
 
-// Helper function to add interactive instructions for radar chart
+// UPDATED: Helper function to format max values for tooltips
+function formatMaxValue(maxValue, dataIndex) {
+    switch(dataIndex) {
+        case 0: return `${Math.round(maxValue)} HP`;
+        case 1: return `₱${(maxValue / 1000000).toFixed(1)}M`;
+        case 2: return `${maxValue.toFixed(1)} cm`;
+        case 3: return `${Math.round(maxValue)} L`;
+        case 4: return `${Math.round(maxValue)} seats`;
+        default: return maxValue.toString();
+    }
+}
+
+// UPDATED: Helper function to add dynamic instructions for radar chart
 function addRadarInstructions() {
     // Remove existing instructions
     const existingInstructions = document.querySelector('.radar-instructions');
@@ -1761,6 +1745,11 @@ function addRadarInstructions() {
     if (radarContainer) {
         const instructionsDiv = document.createElement('div');
         instructionsDiv.className = 'radar-instructions';
+        
+        // Get current max values for display
+        const maxValues = window.radarMaxValues;
+        const actualMaxValues = window.radarActualMaxValues;
+        
         instructionsDiv.innerHTML = `
             <div style="
                 text-align: center; 
@@ -1774,8 +1763,8 @@ function addRadarInstructions() {
                 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             ">
                 <i class='bx bx-info-circle' style='color: #b49b66; margin-right: 0.5rem;'></i>
-                <strong>📊 Fixed Scale:</strong> Each axis uses consistent maximums (500HP, ₱5M, 30cm, 2000L, 8 seats) for true proportional comparison! 
-                <br><small>Hover over data points to see actual values and percentage of maximum scale.</small>
+                <strong>🎯 Dynamic Scale:</strong> Chart adjusts automatically based on your selected cars (max values: ${formatMaxValue(maxValues.horsepower, 0)}, ${formatMaxValue(maxValues.price, 1)}, ${formatMaxValue(maxValues.groundClearance, 2)}, ${formatMaxValue(maxValues.cargoSpace, 3)}, ${formatMaxValue(maxValues.seatingCapacity, 4)})
+                <br><small>Each axis scales to 110% of the highest value among selected cars for optimal comparison!</small>
             </div>
         `;
         radarContainer.appendChild(instructionsDiv);
