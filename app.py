@@ -343,6 +343,33 @@ def serve_resources(filename):
         return "Resource not found", 404
     return send_from_directory(resources_path, filename)
 
+@app.route('/debug/price-range')
+def debug_price_range():
+    """Check the actual price range in your data"""
+    if df.empty:
+        return jsonify({"error": "No data loaded"})
+    
+    try:
+        prices = df['Price'].dropna()
+        
+        price_stats = {
+            "total_cars": len(df),
+            "min_price": int(prices.min()) if len(prices) > 0 else 0,
+            "max_price": int(prices.max()) if len(prices) > 0 else 0,
+            "avg_price": int(prices.mean()) if len(prices) > 0 else 0
+        }
+        
+        # Get top 10 most expensive cars
+        top_expensive = df.nlargest(10, 'Price')[['Brand', 'Model', 'Variant', 'Year', 'Price']].to_dict('records')
+        
+        return jsonify({
+            "price_statistics": price_stats,
+            "top_10_expensive": top_expensive
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 ##########################
 # Firebase Configuration #
 ##########################
@@ -731,7 +758,7 @@ def get_cars():
         year = request.args.get("year", "").strip()  # NEW: Year filter parameter
         min_hp = request.args.get("min_hp", type=int, default=50)
         min_cargo = request.args.get("min_cargo", type=int, default=100)
-        max_price = request.args.get("max_price", type=int, default=3000000)
+        max_price = request.args.get("max_price", type=int, default=25000000)
         min_ground_clearance = request.args.get("min_ground_clearance", type=float, default=13.3)
         seating = request.args.get("seating", type=int, default=None)
 
@@ -1252,7 +1279,7 @@ def get_affordable_cars():
     app.logger.info("🧮 Processing calculator car request")
     
     try:
-        max_price = request.args.get("max_price", type=int, default=3000000)
+        max_price = request.args.get("max_price", type=int, default=25000000)
         
         # Filter cars by price only
         filtered_df = df[
@@ -1274,7 +1301,7 @@ def get_affordable_cars():
         app.logger.error(f"Error in calculator endpoint: {e}")
         return jsonify({"error": f"Failed to get affordable cars: {str(e)}"}), 500
     
-    
+   
 ####################
 # Forum API Routes #
 ####################

@@ -468,7 +468,7 @@ async function applyFilters() {
     const year = document.getElementById("year").value.trim(); 
     const minHp = parseFloat(document.getElementById("horsepower").value) || 50;
     const minCargo = parseFloat(document.getElementById("cargo-space").value) || 100;
-    const maxPrice = parseFloat(document.getElementById("price").value) || 3000000;
+    const maxPrice = parseFloat(document.getElementById("price").value) || 25000000;
     const minGroundClearance = parseFloat(document.getElementById("ground-clearance").value) || 2;
     const seating = parseInt(document.getElementById("seating").value) || 0;
 
