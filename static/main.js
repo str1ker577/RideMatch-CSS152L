@@ -1159,8 +1159,9 @@ async function populateYears() {
         const response = await fetch(`${baseUrl}/get_variant_years?brand=${brand}&model=${model}&variant=${variant}`);
         const years = await response.json();
         
-        // Remove duplicates using Set and sort years in descending order (newest first)
-        const uniqueYears = [...new Set(years)].sort((a, b) => b - a);
+        // Ensure years are numbers and remove duplicates, then sort
+        const numericYears = years.map(year => parseInt(year)).filter(year => !isNaN(year));
+        const uniqueYears = [...new Set(numericYears)].sort((a, b) => b - a);
         
         uniqueYears.forEach(year => {
             const option = document.createElement('option');
@@ -1485,7 +1486,8 @@ function updateRadarChart() {
         
         // Normalize values to 0-100 scale for radar chart
         const horsepower = Math.min((parseInt(specs.Horsepower) || 0) / 5, 100); // Max ~500HP
-        const priceScore = Math.max(0, 100 - ((parseFloat(specs.Price) || 0) / 30000)); // Lower price = higher score
+        // UPDATED: Higher price = higher score (opposite of previous logic)
+        const priceScore = Math.min(((parseFloat(specs.Price) || 0) / 50000) * 100, 100); // Higher price = larger spread
         const groundClearance = Math.min((parseFloat(specs.GroundClearance) || 0) * 4, 100); // Max ~25cm
         const cargoSpace = Math.min((parseFloat(specs.Cargospace) || 0) / 10, 100); // Max ~1000L
         const seatingCapacity = Math.min((parseInt(specs.SeatingCapacity) || 0) * 12.5, 100); // Max 8 seats
@@ -1499,14 +1501,15 @@ function updateRadarChart() {
             pointBackgroundColor: chartColors[index % chartColors.length],
             pointBorderColor: '#fff',
             pointBorderWidth: 2,
-            pointRadius: 6
+            pointRadius: 6,
+            hidden: false // Initialize as visible
         };
     });
 
     chartInstances.radar = new Chart(ctx, {
         type: 'radar',
         data: {
-            labels: ['Power', 'Value', 'Clearance', 'Cargo', 'Seating'],
+            labels: ['Power', 'Price', 'Clearance', 'Cargo', 'Seating'], // Changed "Value" to "Price"
             datasets: datasets
         },
         options: {
@@ -1528,7 +1531,7 @@ function updateRadarChart() {
                             const labels = original.call(this, chart);
                             
                             labels.forEach(label => {
-                                label.text = `📊 ${label.text} (Click to toggle)`;
+                                label.text = `📊 ${label.text}`;
                             });
                             
                             return labels;
@@ -1539,12 +1542,23 @@ function updateRadarChart() {
                     },
                     onLeave: function(evt, item, legend) {
                         evt.native.target.style.cursor = 'default';
+                    },
+                    onClick: function(evt, item, legend) {
+                        const index = item.datasetIndex;
+                        const chart = legend.chart;
+                        
+                        if (chart.isDatasetVisible(index)) {
+                            chart.hide(index);
+                        } else {
+                            chart.show(index);
+                        }
+                        
+                        chart.update();
                     }
                 },
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            const labels = ['Power', 'Value', 'Clearance', 'Cargo', 'Seating'];
                             const car = comparedCars[context.datasetIndex];
                             const specs = car.specs;
                             
@@ -1600,8 +1614,9 @@ function updateRadarChart() {
         }
     });
 
-    // Add instruction text below the radar chart
+    // Add instruction text and toggle controls
     addRadarInstructions();
+    addIndividualToggleControls();
 }
 
 // Helper function to add interactive instructions for radar chart
@@ -1633,6 +1648,118 @@ function addRadarInstructions() {
             </div>
         `;
         radarContainer.appendChild(instructionsDiv);
+    }
+}
+
+// NEW: Add individual toggle controls for better UX
+function addIndividualToggleControls() {
+    // Remove existing toggle controls
+    const existingToggles = document.querySelector('.individual-toggles');
+    if (existingToggles) {
+        existingToggles.remove();
+    }
+
+    const radarContainer = document.querySelector('.radar-chart-container');
+    if (radarContainer && comparedCars.length > 1) {
+        const togglesDiv = document.createElement('div');
+        togglesDiv.className = 'individual-toggles';
+        togglesDiv.style.cssText = `
+            margin-top: 1rem;
+            padding: 1rem;
+            background: rgba(180, 155, 102, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(180, 155, 102, 0.3);
+        `;
+
+        const titleDiv = document.createElement('div');
+        titleDiv.innerHTML = `
+            <div style="
+                text-align: center; 
+                font-weight: bold; 
+                color: #b49b66; 
+                margin-bottom: 0.8rem;
+                font-size: 0.95rem;
+            ">
+                <i class='bx bx-show' style='margin-right: 0.5rem;'></i>
+                Individual Car Visibility Controls
+            </div>
+        `;
+        togglesDiv.appendChild(titleDiv);
+
+        const controlsContainer = document.createElement('div');
+        controlsContainer.style.cssText = `
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            justify-content: center;
+            align-items: center;
+        `;
+
+        comparedCars.forEach((car, index) => {
+            const checkboxContainer = document.createElement('div');
+            checkboxContainer.style.cssText = `
+                display: flex;
+                align-items: center;
+                gap: 0.5rem;
+                padding: 0.5rem;
+                background: white;
+                border-radius: 6px;
+                border: 1px solid rgba(180, 155, 102, 0.3);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            `;
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.id = `toggle-car-${index}`;
+            checkbox.checked = true;
+            checkbox.style.cssText = `
+                width: 16px;
+                height: 16px;
+                accent-color: #b49b66;
+                cursor: pointer;
+            `;
+
+            const label = document.createElement('label');
+            label.htmlFor = `toggle-car-${index}`;
+            label.textContent = `${car.variant} (${car.year})`;
+            label.style.cssText = `
+                font-size: 0.85rem;
+                color: #333;
+                cursor: pointer;
+                font-weight: 500;
+            `;
+
+            // Color indicator
+            const colorIndicator = document.createElement('div');
+            colorIndicator.style.cssText = `
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                background-color: ${chartColors[index % chartColors.length]};
+                border: 1px solid #fff;
+                box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+            `;
+
+            checkbox.addEventListener('change', function() {
+                const chart = chartInstances.radar;
+                if (chart) {
+                    if (this.checked) {
+                        chart.show(index);
+                    } else {
+                        chart.hide(index);
+                    }
+                    chart.update();
+                }
+            });
+
+            checkboxContainer.appendChild(colorIndicator);
+            checkboxContainer.appendChild(checkbox);
+            checkboxContainer.appendChild(label);
+            controlsContainer.appendChild(checkboxContainer);
+        });
+
+        togglesDiv.appendChild(controlsContainer);
+        radarContainer.appendChild(togglesDiv);
     }
 }
 
