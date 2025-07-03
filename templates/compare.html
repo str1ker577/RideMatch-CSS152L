@@ -117,16 +117,9 @@
         <form id="compare-form">
           <label for="brand">Select Brand:</label>
           <select id="brand" name="brand" onchange="populateModels()">
-            <option value="" selected disabled>Select Brand</option>
-            <option value="Toyota">Toyota</option>
-            <option value="Honda">Honda</option>
-            <option value="Mitsubishi">Mitsubishi</option>
-            <option value="Mazda">Mazda</option>
-            <option value="Ford">Ford</option>
-            <option value="Hyundai">Hyundai</option>
-            <option value="Suzuki">Suzuki</option>
+            <option value="" selected disabled>Loading brands...</option>
           </select>
-
+          
           <label for="model">Select Model:</label>
           <select id="model" name="model" onchange="populateVariants()">
             <option value="">Select Model</option>

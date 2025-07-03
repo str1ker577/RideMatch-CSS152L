@@ -1301,7 +1301,26 @@ def get_affordable_cars():
         app.logger.error(f"Error in calculator endpoint: {e}")
         return jsonify({"error": f"Failed to get affordable cars: {str(e)}"}), 500
     
-   
+####################
+# Compare function #
+####################
+
+@app.route('/get_brands', methods=['GET'])
+def get_brands():
+    """Get all available brands from the CSV data"""
+    if df.empty:
+        app.logger.warning("No car data available for brands")
+        return jsonify([])
+    
+    try:
+        brands = df["Brand"].dropna().unique().tolist()
+        brands.sort()  # Sort alphabetically
+        app.logger.info(f"Retrieved {len(brands)} brands")
+        return jsonify(brands)
+    except Exception as e:
+        app.logger.error(f"Error getting brands: {e}")
+        return jsonify([])
+
 ####################
 # Forum API Routes #
 ####################
@@ -1522,7 +1541,6 @@ def vote_on_post(post_id):
         app.logger.error(f"Error voting on post: {e}")
         return jsonify({'error': 'Failed to vote'}), 500
 
-
 @app.route('/api/forum/posts/<post_id>/comments', methods=['GET'])
 def get_post_comments(post_id):
     """Get comments for a specific post (unchanged - supports replies)"""
@@ -1625,9 +1643,7 @@ def increment_post_views(post_id):
     except Exception as e:
         app.logger.error(f"Error incrementing views: {e}")
         return jsonify({'error': 'Failed to increment views'}), 500
-      
-      
-      
+           
 @app.route('/debug/csv-status')
 def debug_csv_status():
     """Quick debug to see CSV loading status"""
@@ -1683,7 +1699,9 @@ def favicon():
     from flask import Response
     return Response(status=204)  # No content response
 
-# Enhanced debug endpoints
+############################
+# Enhanced debug endpoints #
+############################
 @app.route('/debug/csv-detailed')
 def debug_csv_detailed():
     """Detailed CSV debug information"""
@@ -1765,7 +1783,7 @@ def debug_files():
         }
     
     return jsonify(debug_info)  
-    
+
 ##################
 # Error handlers #
 ##################

@@ -1417,6 +1417,66 @@ async function compareCars() {
     }
 }
 
+// NEW: Function to populate brands dynamically
+async function populateBrandsForCompare() {
+    const brandDropdown = document.getElementById('brand');
+    
+    if (!brandDropdown) {
+        console.log('Brand dropdown not found - not on compare page');
+        return;
+    }
+
+    try {
+        console.log('🔍 Fetching all available brands for compare...');
+        
+        const response = await fetch(`${baseUrl}/get_brands`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const brands = await response.json();
+        console.log('📅 Received brands:', brands);
+        
+        if (!Array.isArray(brands)) {
+            console.error('❌ Expected array of brands but got:', brands);
+            return;
+        }
+        
+        // Clear loading message and populate with brands
+        brandDropdown.innerHTML = '<option value="" selected disabled>Select Brand</option>';
+        
+        brands.forEach(brand => {
+            const option = document.createElement('option');
+            option.value = brand;
+            option.textContent = brand;
+            brandDropdown.appendChild(option);
+        });
+        
+        console.log(`✅ Successfully populated ${brands.length} brands in compare dropdown`);
+        
+    } catch (error) {
+        console.error('❌ Error fetching brands for compare:', error);
+        // Show error state in dropdown
+        brandDropdown.innerHTML = '<option value="" disabled>Error loading brands</option>';
+    }
+}
+
+function initializeComparePage() {
+    // Check if we're on the compare page
+    const brandDropdown = document.getElementById('brand');
+    const isComparePage = brandDropdown && document.getElementById('compare-charts-section');
+    
+    if (isComparePage) {
+        console.log('🔧 Initializing compare page...');
+        
+        // Populate brands when page loads
+        populateBrandsForCompare();
+        
+        console.log('✅ Compare page initialized');
+    }
+}
+
 function showSuccessMessage() {
     const successMessage = document.getElementById('compare-success-message');
     if (successMessage) {
@@ -1872,8 +1932,6 @@ function formatMaxValue(maxValue, dataIndex) {
         default: return maxValue.toString();
     }
 }
-
-
 
 // NEW: Add individual toggle controls for better UX
 function addIndividualToggleControls() {
@@ -2363,29 +2421,46 @@ window.addEventListener('beforeunload', function() {
 async function populateModels() {
     const selectedBrand = document.getElementById('brand').value;
     const modelSelect = document.getElementById('model');
+    const variantSelect = document.getElementById('variant');
+    const yearSelect = document.getElementById('year');
+
+    // Reset dependent dropdowns
+    modelSelect.innerHTML = '<option value="">Select Model</option>';
+    variantSelect.innerHTML = '<option value="">Select Variant</option>';
+    yearSelect.innerHTML = '<option value="">Select Year</option>';
 
     if (!selectedBrand) {
-        // If no brand is selected, fetch all models
-        const response = await fetch(`${baseUrl}/get_all_models`);
-        const models = await response.json();
-        modelSelect.innerHTML = '<option value="">Select Model</option>'; // Reset models
-        models.forEach(model => {
-          const option = document.createElement('option');
-          option.value = model;
-          option.textContent = model;
-          modelSelect.appendChild(option);
-        });
-    } else {
-        // If a brand is selected, fetch models for that brand
+        return;
+    }
+
+    try {
+        console.log(`🔍 Fetching models for brand: ${selectedBrand}`);
+        modelSelect.innerHTML = '<option value="">Loading models...</option>';
+        
         const response = await fetch(`${baseUrl}/get_models?brand=${selectedBrand}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
         const models = await response.json();
-        modelSelect.innerHTML = '<option value="">Select Model</option>'; // Reset models
+        console.log(`📦 Received ${models.length} models for ${selectedBrand}:`, models);
+        
+        modelSelect.innerHTML = '<option value="">Select Model</option>';
+        
         models.forEach(model => {
-          const option = document.createElement('option');
-          option.value = model;
-          option.textContent = model;
-          modelSelect.appendChild(option);
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            modelSelect.appendChild(option);
         });
+        
+        console.log(`✅ Successfully populated ${models.length} models for ${selectedBrand}`);
+        
+    } catch (error) {
+        console.error('❌ Error fetching models:', error);
+        modelSelect.innerHTML = '<option value="">Error loading models</option>';
+        alert('Error fetching models. Please try again.');
     }
 }
 
@@ -2397,21 +2472,46 @@ async function populateModels() {
 
 async function populateVariants() {
     const selectedModel = document.getElementById('model').value;
-    if (!selectedModel) return; // Exit if no model is selected
-
-    const response = await fetch(`${baseUrl}/get_variants?model=${selectedModel}`);
-
-    const variants = await response.json();
-    
     const variantSelect = document.getElementById('variant');
-    variantSelect.innerHTML = '<option value="">Select Variant</option>'; // Reset models
+    const yearSelect = document.getElementById('year');
+    
+    // Reset dependent dropdowns
+    variantSelect.innerHTML = '<option value="">Select Variant</option>';
+    yearSelect.innerHTML = '<option value="">Select Year</option>';
+    
+    if (!selectedModel) {
+        return;
+    }
 
-    variants.forEach(variant => {
-        const option = document.createElement('option');
-        option.value = variant;
-        option.textContent = variant;
-        variantSelect.appendChild(option);
-    });
+    try {
+        console.log(`🔍 Fetching variants for model: ${selectedModel}`);
+        variantSelect.innerHTML = '<option value="">Loading variants...</option>';
+        
+        const response = await fetch(`${baseUrl}/get_variants?model=${selectedModel}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const variants = await response.json();
+        console.log(`📦 Received ${variants.length} variants for ${selectedModel}:`, variants);
+        
+        variantSelect.innerHTML = '<option value="">Select Variant</option>';
+        
+        variants.forEach(variant => {
+            const option = document.createElement('option');
+            option.value = variant;
+            option.textContent = variant;
+            variantSelect.appendChild(option);
+        });
+        
+        console.log(`✅ Successfully populated ${variants.length} variants for ${selectedModel}`);
+        
+    } catch (error) {
+        console.error('❌ Error fetching variants:', error);
+        variantSelect.innerHTML = '<option value="">Error loading variants</option>';
+        alert('Error fetching variants. Please try again.');
+    }
 }
 
 ////////////////////////
@@ -3634,6 +3734,9 @@ document.addEventListener("DOMContentLoaded", function () {
     
     // Initialize Firebase first
     initializeFirebase();
+
+    // NEW: Initialize compare page
+    initializeComparePage();
 
     // Set up auth state listener to load favorites when user logs in
     const setupFavoritesLoader = () => {
