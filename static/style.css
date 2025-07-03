@@ -1332,48 +1332,6 @@ footer {
   height: 400px;
 }
 
-/* Radar Chart Container - Full Width at Top */
-.radar-chart-container {
-  grid-column: 1 / -1; /* Span full width */
-  max-width: 800px;
-  margin: 0 auto;
-  width: 100%;
-  height: 400px;
-  background: white;
-  border: 2px solid rgba(180, 155, 102, 0.3);
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-  transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-/* Radar Chart Container - Full Width at Top */
-.radar-chart-container {
-  grid-column: 1 / -1; /* Span full width */
-  max-width: 800px;
-  margin: 0 auto;
-  width: 100%;
-  height: 400px;
-  background: white;
-  border: 2px solid rgba(180, 155, 102, 0.3);
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-  transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.radar-chart-container:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 15px 35px rgba(0,0,0,0.15);
-  border-color: var(--second-color);
-}
-
 .compare-chart-container {
   background: white;
   border: 2px solid rgba(180, 155, 102, 0.3);
@@ -1391,14 +1349,6 @@ footer {
   transform: translateY(-8px);
   box-shadow: 0 15px 35px rgba(0,0,0,0.15);
   border-color: var(--second-color);
-}
-
-.compare-chart-container:nth-child(5) {
-  grid-column: 1 / -1;
-  max-width: 800px;
-  margin: 0 auto;
-  width: 100%;
-  height: 400px;
 }
 
 .compare-chart-header {
@@ -1426,6 +1376,65 @@ footer {
   height: 300px !important;
   max-height: 300px !important;
   width: 100% !important;
+}
+
+/* NEW: Separate Radar Chart Section - IMPROVED CLARITY */
+.radar-chart-section {
+  width: 100%;
+  margin: 3rem auto;
+  padding: 3rem;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid var(--second-color);
+  border-radius: 20px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  animation: fadeInUp 0.6s ease-out;
+}
+
+.radar-chart-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 2rem 0;
+}
+
+.radar-chart-container {
+  width: 90%; /* Increased from 80% for better visibility */
+  max-width: 900px; /* Increased max-width */
+  height: 600px; /* Increased height for better clarity */
+  background: white;
+  border: 2px solid rgba(180, 155, 102, 0.3);
+  border-radius: 15px;
+  padding: 2rem;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+}
+
+.radar-chart-container:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+  border-color: var(--second-color);
+}
+
+.radar-chart-container canvas {
+  flex: 1;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 400px !important;
+}
+
+/* Radar Instructions Styling */
+.radar-instructions {
+  animation: fadeIn 0.5s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Existing Compare Cards Styles (Enhanced) */
@@ -1584,53 +1593,6 @@ footer {
   box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
 }
 
-/* NEW: Separate Radar Chart Section */
-.radar-chart-section {
-  width: 100%;
-  margin: 3rem auto;
-  padding: 3rem;
-  background: rgba(255, 255, 255, 0.95);
-  border: 2px solid var(--second-color);
-  border-radius: 20px;
-  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
-  backdrop-filter: blur(10px);
-  animation: fadeInUp 0.6s ease-out;
-}
-
-.radar-chart-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 2rem 0;
-}
-
-.radar-chart-container {
-  width: 80%; /* 20% smaller than container */
-  max-width: 80%;
-  height: 500px;
-  background: white;
-  border: 2px solid rgba(180, 155, 102, 0.3);
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-  transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.radar-chart-container:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 15px 35px rgba(0,0,0,0.15);
-  border-color: var(--second-color);
-}
-
-.radar-chart-container canvas {
-  flex: 1;
-  width: 100% !important;
-  height: 100% !important;
-}
-
 /* Animation */
 @keyframes fadeInUp {
   from {
@@ -1647,7 +1609,7 @@ footer {
 @media (max-width: 1200px) {
   .compare-charts-grid {
     grid-template-columns: 1fr;
-    grid-template-rows: repeat(5, 400px); /* 5 charts in single column */
+    grid-template-rows: repeat(5, 400px);
     gap: 2rem;
     height: auto;
   }
@@ -1655,13 +1617,10 @@ footer {
   .compare-chart-container:nth-child(5) {
     grid-column: 1;
   }
-  
-  .radar-chart-container {
-    grid-column: 1;
-  }
 
   .radar-chart-container {
-    width: 90%; /* Slightly larger on smaller screens */
+    width: 95%;
+    height: 550px;
   }
 }
 
@@ -1689,12 +1648,8 @@ footer {
   }
 
   .radar-chart-container {
-    height: 350px;
-  }
-
-  .radar-chart-container {
-    height: 400px;
-    width: 95%;
+    height: 450px;
+    width: 98%;
   }
   
   .radar-chart-section {
@@ -1739,8 +1694,8 @@ footer {
     grid-template-rows: repeat(5, 320px);
   }
 
-    .radar-chart-container {
-    height: 350px;
+  .radar-chart-container {
+    height: 400px;
     width: 100%;
     padding: 1rem;
   }
@@ -1751,8 +1706,7 @@ footer {
   }
   
   .radar-chart-container canvas {
-    height: 220px !important;
-    max-height: 220px !important;
+    min-height: 300px !important;
   }
 
   .compare-inner-frame {
@@ -1771,7 +1725,7 @@ footer {
   }
 
   .radar-chart-container {
-    height: 300px;
+    height: 350px;
     padding: 1rem;
   }
   
@@ -1780,8 +1734,7 @@ footer {
   }
   
   .radar-chart-container canvas {
-    height: 200px !important;
-    max-height: 200px !important;
+    min-height: 250px !important;
   }
   
   .compare-chart-container {

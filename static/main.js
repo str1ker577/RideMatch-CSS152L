@@ -1159,10 +1159,10 @@ async function populateYears() {
         const response = await fetch(`${baseUrl}/get_variant_years?brand=${brand}&model=${model}&variant=${variant}`);
         const years = await response.json();
         
-        // Sort years in descending order (newest first)
-        years.sort((a, b) => b - a);
+        // Remove duplicates using Set and sort years in descending order (newest first)
+        const uniqueYears = [...new Set(years)].sort((a, b) => b - a);
         
-        years.forEach(year => {
+        uniqueYears.forEach(year => {
             const option = document.createElement('option');
             option.value = year;
             option.textContent = year;
@@ -1470,6 +1470,15 @@ function updateRadarChart() {
         chartInstances.radar.destroy();
     }
 
+    // Set canvas size for better clarity
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    ctx.scale(dpr, dpr);
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+
     // Prepare datasets for each car
     const datasets = comparedCars.map((car, index) => {
         const specs = car.specs;
@@ -1503,13 +1512,33 @@ function updateRadarChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            devicePixelRatio: dpr,
             plugins: {
                 legend: {
                     display: true,
                     position: 'bottom',
                     labels: {
                         color: '#b49b66',
-                        font: { weight: 'bold' }
+                        font: { weight: 'bold', size: 14 },
+                        padding: 20,
+                        usePointStyle: true,
+                        pointStyle: 'circle',
+                        generateLabels: function(chart) {
+                            const original = Chart.defaults.plugins.legend.labels.generateLabels;
+                            const labels = original.call(this, chart);
+                            
+                            labels.forEach(label => {
+                                label.text = `📊 ${label.text} (Click to toggle)`;
+                            });
+                            
+                            return labels;
+                        }
+                    },
+                    onHover: function(evt, item, legend) {
+                        evt.native.target.style.cursor = 'pointer';
+                    },
+                    onLeave: function(evt, item, legend) {
+                        evt.native.target.style.cursor = 'default';
                     }
                 },
                 tooltip: {
@@ -1536,25 +1565,75 @@ function updateRadarChart() {
                     beginAtZero: true,
                     max: 100,
                     ticks: {
-                        display: false // Hide the scale numbers
+                        display: false,
+                        stepSize: 20
                     },
                     grid: {
-                        color: 'rgba(180, 155, 102, 0.2)'
+                        color: 'rgba(180, 155, 102, 0.2)',
+                        lineWidth: 2
                     },
                     angleLines: {
-                        color: 'rgba(180, 155, 102, 0.3)'
+                        color: 'rgba(180, 155, 102, 0.3)',
+                        lineWidth: 2
                     },
                     pointLabels: {
                         color: '#b49b66',
                         font: { 
                             weight: 'bold',
-                            size: 14
+                            size: 16
                         }
                     }
+                }
+            },
+            interaction: {
+                intersect: false
+            },
+            elements: {
+                line: {
+                    borderWidth: 3
+                },
+                point: {
+                    radius: 6,
+                    hoverRadius: 8
                 }
             }
         }
     });
+
+    // Add instruction text below the radar chart
+    addRadarInstructions();
+}
+
+// Helper function to add interactive instructions for radar chart
+function addRadarInstructions() {
+    // Remove existing instructions
+    const existingInstructions = document.querySelector('.radar-instructions');
+    if (existingInstructions) {
+        existingInstructions.remove();
+    }
+
+    const radarContainer = document.querySelector('.radar-chart-container');
+    if (radarContainer) {
+        const instructionsDiv = document.createElement('div');
+        instructionsDiv.className = 'radar-instructions';
+        instructionsDiv.innerHTML = `
+            <div style="
+                text-align: center; 
+                margin-top: 1rem; 
+                padding: 0.8rem; 
+                background: linear-gradient(135deg, #f8f9fa, #e9ecef); 
+                border-radius: 8px; 
+                border: 2px solid rgba(180, 155, 102, 0.3);
+                font-size: 0.9rem;
+                color: #666;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                <i class='bx bx-info-circle' style='color: #b49b66; margin-right: 0.5rem;'></i>
+                <strong>💡 Tip:</strong> Click on any car name in the legend below to hide/show it for better individual comparison!
+            </div>
+        `;
+        radarContainer.appendChild(instructionsDiv);
+    }
 }
 
 // Bar chart functions with updated colors
