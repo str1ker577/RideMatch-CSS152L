@@ -1161,21 +1161,23 @@ async function populateYears() {
         
         console.log('Raw years from API:', years); // Debug log
         
-        // More robust duplicate removal and cleaning
-        const cleanedYears = years
-            .map(year => {
-                // Handle both string and number inputs, trim whitespace
-                const cleaned = String(year).trim();
-                const parsed = parseInt(cleaned, 10);
-                return isNaN(parsed) ? null : parsed;
-            })
-            .filter(year => year !== null) // Remove invalid years
-            .filter((year, index, array) => array.indexOf(year) === index) // Remove duplicates manually
-            .sort((a, b) => b - a); // Sort newest first
+        // More aggressive duplicate removal using Map for unique tracking
+        const yearMap = new Map();
         
-        console.log('Cleaned and deduplicated years:', cleanedYears); // Debug log
+        years.forEach(year => {
+            // Convert to number and validate
+            const numYear = parseInt(String(year).trim(), 10);
+            if (!isNaN(numYear) && numYear > 1900 && numYear <= new Date().getFullYear() + 2) {
+                yearMap.set(numYear, numYear); // Use Map to ensure uniqueness
+            }
+        });
         
-        cleanedYears.forEach(year => {
+        // Convert back to array and sort
+        const uniqueYears = Array.from(yearMap.values()).sort((a, b) => b - a);
+        
+        console.log('Final unique years:', uniqueYears); // Debug log
+        
+        uniqueYears.forEach(year => {
             const option = document.createElement('option');
             option.value = year;
             option.textContent = year;
@@ -1469,7 +1471,7 @@ function updateAllCharts() {
     }, 200);
 }
 
-// Radar Chart Implementation
+// Radar Chart Implementation with Dynamic Scaling
 function updateRadarChart() {
     const canvas = document.getElementById('radarChart');
     if (!canvas) {
@@ -1492,17 +1494,61 @@ function updateRadarChart() {
     canvas.style.width = rect.width + 'px';
     canvas.style.height = rect.height + 'px';
 
-    // Prepare datasets for each car
+    // Calculate dynamic ranges from current compared cars
+    const allValues = {
+        horsepower: comparedCars.map(car => parseInt(car.specs.Horsepower) || 0),
+        price: comparedCars.map(car => parseFloat(car.specs.Price) || 0),
+        groundClearance: comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0),
+        cargoSpace: comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0),
+        seatingCapacity: comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0)
+    };
+
+    // Calculate min/max with some padding for better visualization
+    const ranges = {
+        horsepower: {
+            min: Math.min(...allValues.horsepower),
+            max: Math.max(...allValues.horsepower) * 1.1 // 10% padding
+        },
+        price: {
+            min: Math.min(...allValues.price),
+            max: Math.max(...allValues.price) * 1.1
+        },
+        groundClearance: {
+            min: Math.min(...allValues.groundClearance),
+            max: Math.max(...allValues.groundClearance) * 1.1
+        },
+        cargoSpace: {
+            min: Math.min(...allValues.cargoSpace),
+            max: Math.max(...allValues.cargoSpace) * 1.1
+        },
+        seatingCapacity: {
+            min: Math.min(...allValues.seatingCapacity),
+            max: Math.max(...allValues.seatingCapacity) * 1.1
+        }
+    };
+
+    // Store ranges for tooltip reference
+    window.radarRanges = ranges;
+
+    // Prepare datasets for each car with dynamic scaling
     const datasets = comparedCars.map((car, index) => {
         const specs = car.specs;
         
-        // Normalize values to 0-100 scale for radar chart
-        const horsepower = Math.min((parseInt(specs.Horsepower) || 0) / 5, 100); // Max ~500HP
-        // UPDATED: Higher price = higher score (opposite of previous logic)
-        const priceScore = Math.min(((parseFloat(specs.Price) || 0) / 50000) * 100, 100); // Higher price = larger spread
-        const groundClearance = Math.min((parseFloat(specs.GroundClearance) || 0) * 4, 100); // Max ~25cm
-        const cargoSpace = Math.min((parseFloat(specs.Cargospace) || 0) / 10, 100); // Max ~1000L
-        const seatingCapacity = Math.min((parseInt(specs.SeatingCapacity) || 0) * 12.5, 100); // Max 8 seats
+        // Dynamic normalization to 0-100 scale based on current data
+        const horsepower = ranges.horsepower.max > ranges.horsepower.min ? 
+            ((parseInt(specs.Horsepower) || 0) - ranges.horsepower.min) / (ranges.horsepower.max - ranges.horsepower.min) * 100 : 50;
+            
+        const priceScore = ranges.price.max > ranges.price.min ? 
+            ((parseFloat(specs.Price) || 0) - ranges.price.min) / (ranges.price.max - ranges.price.min) * 100 : 50;
+            
+        const groundClearance = ranges.groundClearance.max > ranges.groundClearance.min ? 
+            ((parseFloat(specs.GroundClearance) || 0) - ranges.groundClearance.min) / (ranges.groundClearance.max - ranges.groundClearance.min) * 100 : 50;
+            
+        const cargoSpace = ranges.cargoSpace.max > ranges.cargoSpace.min ? 
+            ((parseFloat(specs.Cargospace) || 0) - ranges.cargoSpace.min) / (ranges.cargoSpace.max - ranges.cargoSpace.min) * 100 : 50;
+            
+        const seatingCapacity = ranges.seatingCapacity.max > ranges.seatingCapacity.min ? 
+            ((parseInt(specs.SeatingCapacity) || 0) - ranges.seatingCapacity.min) / (ranges.seatingCapacity.max - ranges.seatingCapacity.min) * 100 : 50;
         
         return {
             label: `${car.variant} (${car.year})`,
@@ -1521,7 +1567,7 @@ function updateRadarChart() {
     chartInstances.radar = new Chart(ctx, {
         type: 'radar',
         data: {
-            labels: ['Power', 'Price', 'Clearance', 'Cargo', 'Seating'], // Changed "Value" to "Price"
+            labels: ['Power', 'Price', 'Clearance', 'Cargo', 'Seating'],
             datasets: datasets
         },
         options: {
@@ -1580,6 +1626,20 @@ function updateRadarChart() {
                                 case 2: return `Clearance: ${specs.GroundClearance || 0} cm`;
                                 case 3: return `Cargo: ${specs.Cargospace || 0} L`;
                                 case 4: return `Seating: ${specs.SeatingCapacity || 0} seats`;
+                                default: return '';
+                            }
+                        },
+                        afterLabel: function(context) {
+                            // Show the scaling info in tooltip
+                            const ranges = window.radarRanges;
+                            if (!ranges) return '';
+                            
+                            switch(context.dataIndex) {
+                                case 0: return `Range: ${ranges.horsepower.min.toFixed(0)} - ${ranges.horsepower.max.toFixed(0)} HP`;
+                                case 1: return `Range: ₱${ranges.price.min.toLocaleString()} - ₱${ranges.price.max.toLocaleString()}`;
+                                case 2: return `Range: ${ranges.groundClearance.min.toFixed(1)} - ${ranges.groundClearance.max.toFixed(1)} cm`;
+                                case 3: return `Range: ${ranges.cargoSpace.min.toFixed(0)} - ${ranges.cargoSpace.max.toFixed(0)} L`;
+                                case 4: return `Range: ${ranges.seatingCapacity.min.toFixed(0)} - ${ranges.seatingCapacity.max.toFixed(0)} seats`;
                                 default: return '';
                             }
                         }
@@ -1656,7 +1716,8 @@ function addRadarInstructions() {
                 box-shadow: 0 2px 8px rgba(0,0,0,0.1);
             ">
                 <i class='bx bx-info-circle' style='color: #b49b66; margin-right: 0.5rem;'></i>
-                <strong>💡 Tip:</strong> Click on any car name in the legend below to hide/show it for better individual comparison!
+                <strong>💡 Dynamic Scaling:</strong> Each axis scales automatically based on your compared cars for optimal comparison! 
+                <br><small>Hover over data points to see actual values and current ranges.</small>
             </div>
         `;
         radarContainer.appendChild(instructionsDiv);
