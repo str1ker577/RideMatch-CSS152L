@@ -98,23 +98,35 @@ except Exception as e:
 # Load CSV data safely #
 ########################
 
-df = pd.DataFrame()
-try:
-    # Check if file exists first
-    csv_path = 'car_data.csv'
-    if not os.path.exists(csv_path):
-        app.logger.error(f"❌ CSV file not found at {csv_path}")
-        app.logger.info(f"Current directory contents: {os.listdir('.')}")
-    else:
-        # Try multiple encodings since the file is likely in cp1252
+def load_csv_data_enhanced():
+    """Load CSV data with detailed tracking and row preservation"""
+    global df
+    
+    try:
+        # Check if file exists
+        csv_path = 'car_data.csv'
+        if not os.path.exists(csv_path):
+            app.logger.error(f"❌ CSV file not found at {csv_path}")
+            app.logger.info(f"Current directory contents: {os.listdir('.')}")
+            return False
+        
+        app.logger.info(f"📁 CSV file found: {csv_path}")
+        app.logger.info(f"📊 File size: {os.path.getsize(csv_path)} bytes")
+        
+        # Try multiple encodings
         encodings_to_try = ['cp1252', 'utf-8', 'latin-1', 'iso-8859-1']
         
         for encoding in encodings_to_try:
             try:
                 app.logger.info(f"🔄 Trying to load CSV with encoding: {encoding}")
-                df = pd.read_csv(csv_path, encoding=encoding)
+                
+                # Load CSV with specific encoding
+                df_raw = pd.read_csv(csv_path, encoding=encoding)
                 app.logger.info(f"✅ CSV loaded successfully with {encoding} encoding")
+                app.logger.info(f"📊 Raw data shape: {df_raw.shape}")
+                app.logger.info(f"📋 Columns: {list(df_raw.columns)}")
                 break
+                
             except UnicodeDecodeError as e:
                 app.logger.warning(f"⚠️ Encoding {encoding} failed: {e}")
                 continue
@@ -123,62 +135,197 @@ try:
                 continue
         else:
             app.logger.error("❌ Failed to load CSV with any encoding")
-            df = pd.DataFrame()
+            return False
         
-        if not df.empty:
-            # Clean and process the data
-            app.logger.info(f"📊 Original CSV shape: {df.shape}")
-            
-            # Ensure all relevant columns are strings before extraction
-            df["Cargo_space"] = df["Cargo_space"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
-            df["Ground_Clearance"] = df["Ground_Clearance"].astype(str).str.extract(r"([\d.]+)", expand=False).astype(float)
-            df["Horsepower"] = df["Horsepower"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
-            df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
-            
-            app.logger.info(f"✅ CSV data processed successfully - {len(df)} records")
-            app.logger.info(f"CSV columns: {list(df.columns)}")
-            
-            # Log sample data for verification
-            app.logger.info("Sample data:")
-            app.logger.info(df.head().to_string())
+        # Step 1: Initial data inspection
+        app.logger.info("🔍 STEP 1: Initial data inspection")
+        app.logger.info(f"Total rows loaded: {len(df_raw)}")
+        app.logger.info(f"Columns: {list(df_raw.columns)}")
         
-except Exception as e:
-    app.logger.error(f"❌ CSV loading failed: {e}")
+        # Check for completely empty rows
+        empty_rows = df_raw.isnull().all(axis=1).sum()
+        app.logger.info(f"Completely empty rows: {empty_rows}")
+        
+        # Step 2: Remove only completely empty rows
+        app.logger.info("🧹 STEP 2: Cleaning completely empty rows")
+        df_clean = df_raw.dropna(how='all').copy()
+        app.logger.info(f"After removing empty rows: {len(df_clean)} (removed {len(df_raw) - len(df_clean)} rows)")
+        
+        # Step 3: Standardize Fuel_Type - Convert PHEV to Hybrid:Gasoline
+        app.logger.info("🔧 STEP 3: Standardizing Fuel_Type column")
+        if 'Fuel_Type' in df_clean.columns:
+            # Show original fuel types
+            original_fuel_types = df_clean['Fuel_Type'].value_counts()
+            app.logger.info(f"Original fuel types: {original_fuel_types.to_dict()}")
+            
+            # Convert PHEV to Hybrid:Gasoline
+            phev_count = (df_clean['Fuel_Type'].str.contains('PHEV', case=False, na=False)).sum()
+            if phev_count > 0:
+                app.logger.info(f"Found {phev_count} PHEV entries, converting to 'Hybrid:Gasoline'")
+                df_clean.loc[df_clean['Fuel_Type'].str.contains('PHEV', case=False, na=False), 'Fuel_Type'] = 'Hybrid:Gasoline'
+            
+            # Show updated fuel types
+            updated_fuel_types = df_clean['Fuel_Type'].value_counts()
+            app.logger.info(f"Updated fuel types: {updated_fuel_types.to_dict()}")
+        
+        # Step 4: Data transformation with row preservation
+        app.logger.info("🔧 STEP 4: Data transformation (preserving all rows)")
+        df_processed = df_clean.copy()
+        
+        # Transform Cargo_space
+        if 'Cargo_space' in df_processed.columns:
+            app.logger.info("Processing Cargo_space column...")
+            
+            # Convert to string and extract numbers, but keep original if extraction fails
+            df_processed['Cargo_space_str'] = df_processed['Cargo_space'].astype(str)
+            cargo_extracted = df_processed['Cargo_space_str'].str.extract(r'(\d+)', expand=False)
+            df_processed['Cargo_space'] = pd.to_numeric(cargo_extracted, errors='coerce')
+            
+            # Count successful conversions
+            valid_cargo = df_processed['Cargo_space'].notna().sum()
+            app.logger.info(f"Cargo_space: {valid_cargo}/{len(df_processed)} values converted successfully")
+            
+            # Drop temporary column
+            df_processed.drop('Cargo_space_str', axis=1, inplace=True)
+        
+        # Transform Ground_Clearance
+        if 'Ground_Clearance' in df_processed.columns:
+            app.logger.info("Processing Ground_Clearance column...")
+            
+            df_processed['Ground_Clearance_str'] = df_processed['Ground_Clearance'].astype(str)
+            clearance_extracted = df_processed['Ground_Clearance_str'].str.extract(r'([\d.]+)', expand=False)
+            df_processed['Ground_Clearance'] = pd.to_numeric(clearance_extracted, errors='coerce')
+            
+            valid_clearance = df_processed['Ground_Clearance'].notna().sum()
+            app.logger.info(f"Ground_Clearance: {valid_clearance}/{len(df_processed)} values converted successfully")
+            
+            df_processed.drop('Ground_Clearance_str', axis=1, inplace=True)
+        
+        # Transform Horsepower
+        if 'Horsepower' in df_processed.columns:
+            app.logger.info("Processing Horsepower column...")
+            
+            df_processed['Horsepower_str'] = df_processed['Horsepower'].astype(str)
+            hp_extracted = df_processed['Horsepower_str'].str.extract(r'(\d+)', expand=False)
+            df_processed['Horsepower'] = pd.to_numeric(hp_extracted, errors='coerce')
+            
+            valid_hp = df_processed['Horsepower'].notna().sum()
+            app.logger.info(f"Horsepower: {valid_hp}/{len(df_processed)} values converted successfully")
+            
+            df_processed.drop('Horsepower_str', axis=1, inplace=True)
+        
+        # Transform Price
+        if 'Price' in df_processed.columns:
+            app.logger.info("Processing Price column...")
+            df_processed['Price'] = pd.to_numeric(df_processed['Price'], errors='coerce')
+            valid_price = df_processed['Price'].notna().sum()
+            app.logger.info(f"Price: {valid_price}/{len(df_processed)} values converted successfully")
+        
+        # Transform other numeric columns
+        numeric_columns = ['Year', 'Seating_Capacity']
+        for col in numeric_columns:
+            if col in df_processed.columns:
+                app.logger.info(f"Processing {col} column...")
+                df_processed[col] = pd.to_numeric(df_processed[col], errors='coerce')
+                valid_count = df_processed[col].notna().sum()
+                app.logger.info(f"{col}: {valid_count}/{len(df_processed)} values converted successfully")
+        
+        # Step 5: Final validation and statistics
+        app.logger.info("📊 STEP 5: Final validation")
+        app.logger.info(f"Final DataFrame shape: {df_processed.shape}")
+        app.logger.info(f"Rows preserved: {len(df_processed)}/{len(df_raw)} ({(len(df_processed)/len(df_raw)*100):.1f}%)")
+        
+        # Check essential columns for non-null values
+        essential_columns = ['Brand', 'Model', 'Variant', 'Price']
+        for col in essential_columns:
+            if col in df_processed.columns:
+                non_null_count = df_processed[col].notna().sum()
+                app.logger.info(f"{col} non-null values: {non_null_count}/{len(df_processed)}")
+            else:
+                app.logger.warning(f"Essential column {col} not found!")
+        
+        # Count by brand to check for missing brands
+        if 'Brand' in df_processed.columns:
+            brand_counts = df_processed['Brand'].value_counts()
+            app.logger.info(f"Cars by brand: {brand_counts.to_dict()}")
+        
+        # Set the global DataFrame
+        df = df_processed
+        app.logger.info("✅ CSV data loading and processing completed successfully")
+        return True
+        
+    except Exception as e:
+        app.logger.error(f"❌ Critical error in CSV loading: {e}")
+        app.logger.error(f"Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return False
+
+# Replace your existing CSV loading section with this:
+df = pd.DataFrame()
+csv_loaded = load_csv_data_enhanced()
+
+if not csv_loaded:
+    app.logger.error("❌ CRITICAL: CSV data could not be loaded!")
     df = pd.DataFrame()
+else:
+    app.logger.info(f"✅ CSV data loaded successfully - {len(df)} records")
     
+# Finds Car images    
 def find_car_image(model):
-    """Find car image based on model name"""
+    """Find car image based on model name with better error handling"""
     try:
-        # You can customize this logic based on your image storage structure
-        # For now, returning a placeholder or default image
-        model_clean = model.replace(' ', '_').lower()
+        # Clean model name for filename
+        model_clean = model.replace(' ', '_').lower() if model else 'default'
         
         # Check if image exists in resources folder
         image_path = f'/static/resources/{model_clean}.png'
+        full_path = f'static/resources/{model_clean}.png'
         
-        # You might want to check if file actually exists:
-        # import os
-        # if os.path.exists(f'static/resources/{model_clean}.png'):
-        #     return image_path
+        # Check if file actually exists
+        if os.path.exists(full_path):
+            return image_path
         
-        # Return default image if specific model image not found
-        return '/static/resources/default_car.png'
+        # Check for common image extensions
+        for ext in ['.jpg', '.jpeg', '.gif', '.webp']:
+            alt_path = f'static/resources/{model_clean}{ext}'
+            if os.path.exists(alt_path):
+                return f'/static/resources/{model_clean}{ext}'
+        
+        # Return a placeholder image that actually exists or a data URL
+        placeholder_path = 'static/resources/default_car.png'
+        if os.path.exists(placeholder_path):
+            return '/static/resources/default_car.png'
+        
+        # Return a simple data URL placeholder to avoid 404s
+        return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkNhciBJbWFnZTwvdGV4dD48L3N2Zz4='
         
     except Exception as e:
         app.logger.warning(f"Error finding image for model {model}: {e}")
-        return '/static/resources/default_car.png'
+        # Return inline SVG placeholder
+        return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkNhciBJbWFnZTwvdGV4dD48L3N2Zz4='
 
 # Health check endpoint
 @app.route('/health')
 def health():
+    global df
+    
     status = {
-        "status": "healthy",
+        "status": "healthy" if not df.empty else "unhealthy",
         "firebase_initialized": realtime_db_ref is not None,
         "csv_loaded": not df.empty,
         "csv_records": len(df) if not df.empty else 0,
         "firebase_config_loaded": bool(firebase_config),
-        "api_key_available": api_key is not None
+        "api_key_available": api_key is not None,
+        "csv_columns": list(df.columns) if not df.empty else [],
+        "csv_file_exists": any(os.path.exists(path) for path in [
+            'car_data.csv', './car_data.csv', 'static/car_data.csv', 'data/car_data.csv'
+        ]),
+        "brand_count": len(df['Brand'].unique()) if not df.empty and 'Brand' in df.columns else 0,
+        "model_count": len(df['Model'].unique()) if not df.empty and 'Model' in df.columns else 0,
+        "variant_count": len(df['Variant'].unique()) if not df.empty and 'Variant' in df.columns else 0
     }
+    
     app.logger.info(f"Health check: {status}")
     return jsonify(status)
 
@@ -1493,6 +1640,105 @@ def debug_csv_status():
         "directory_info": directory_info,
         "app_root_path": app.root_path if hasattr(app, 'root_path') else "Unknown"
     })
+    
+@app.route('/get_colors')
+def get_colors():
+    """Placeholder for car color variants - currently not implemented"""
+    model = request.args.get('model', '')
+    app.logger.info(f"Color variants requested for model: {model}")
+    
+    # For now, return empty array since this feature isn't implemented yet
+    return jsonify([])
+
+@app.route('/favicon.ico')
+def favicon():
+    """Handle favicon requests to prevent 404 errors"""
+    from flask import Response
+    return Response(status=204)  # No content response
+
+# Enhanced debug endpoints
+@app.route('/debug/csv-detailed')
+def debug_csv_detailed():
+    """Detailed CSV debug information"""
+    global df
+    
+    debug_info = {
+        "csv_loaded": not df.empty,
+        "csv_shape": df.shape if not df.empty else None,
+        "csv_columns": list(df.columns) if not df.empty else [],
+        "csv_dtypes": df.dtypes.to_dict() if not df.empty else {},
+        "sample_data": df.head().to_dict() if not df.empty else None,
+        "brand_counts": df['Brand'].value_counts().to_dict() if not df.empty and 'Brand' in df.columns else {},
+        "fuel_type_counts": df['Fuel_Type'].value_counts().to_dict() if not df.empty and 'Fuel_Type' in df.columns else {},
+        "null_counts": df.isnull().sum().to_dict() if not df.empty else {}
+    }
+    
+    return jsonify(debug_info)
+
+@app.route('/debug/reload-csv-enhanced')
+def debug_reload_csv_enhanced():
+    """Reload CSV with enhanced logging"""
+    global df
+    
+    try:
+        success = load_csv_data_enhanced()
+        
+        return jsonify({
+            "success": success,
+            "dataframe_shape": df.shape if not df.empty else None,
+            "dataframe_columns": list(df.columns) if not df.empty else [],
+            "brand_counts": df['Brand'].value_counts().to_dict() if not df.empty and 'Brand' in df.columns else {},
+            "sample_data": df.head().to_dict() if not df.empty else None
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        })
+
+@app.route('/debug/files')
+def debug_files():
+    """Check what files exist on the server"""
+    import os
+    
+    debug_info = {
+        "current_directory": os.getcwd(),
+        "directory_contents": [],
+        "csv_file_checks": {},
+        "environment": os.environ.get('RAILWAY_ENVIRONMENT', 'unknown')
+    }
+    
+    # List all files in current directory
+    try:
+        for item in os.listdir('.'):
+            item_path = os.path.join('.', item)
+            debug_info["directory_contents"].append({
+                "name": item,
+                "is_file": os.path.isfile(item_path),
+                "is_dir": os.path.isdir(item_path),
+                "size": os.path.getsize(item_path) if os.path.isfile(item_path) else 0
+            })
+    except Exception as e:
+        debug_info["directory_error"] = str(e)
+    
+    # Check specific CSV file locations
+    csv_locations = [
+        'car_data.csv',
+        './car_data.csv',
+        'static/car_data.csv',
+        'data/car_data.csv'
+    ]
+    
+    for location in csv_locations:
+        debug_info["csv_file_checks"][location] = {
+            "exists": os.path.exists(location),
+            "size": os.path.getsize(location) if os.path.exists(location) else 0,
+            "is_readable": os.access(location, os.R_OK) if os.path.exists(location) else False
+        }
+    
+    return jsonify(debug_info)  
+    
 ##################
 # Error handlers #
 ##################
