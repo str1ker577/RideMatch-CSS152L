@@ -1173,72 +1173,96 @@ async function populateYears() {
     const variant = document.getElementById('variant').value;
     const yearDropdown = document.getElementById('year');
     
-    // Reset year dropdown
-    yearDropdown.innerHTML = '<option value="">Select Year</option>';
-    
-    if (!brand || !model || !variant) return;
+    if (!brand || !model || !variant) {
+        yearDropdown.innerHTML = '<option value="">Select Year</option>';
+        return;
+    }
 
     try {
-        // Fetch years for this specific variant
-        console.log(`🔍 Fetching years for: brand=${brand}, model=${model}, variant=${variant}`);
+        console.log(`🔍 Fetching years for: ${brand} ${model} ${variant}`);
+        
         const response = await fetch(`${baseUrl}/get_variant_years?brand=${brand}&model=${model}&variant=${variant}`);
         const years = await response.json();
         
         console.log('📦 Raw API response:', years);
         
         if (!Array.isArray(years)) {
-            console.error('❌ API did not return an array:', years);
+            console.error('❌ API did not return an array');
+            yearDropdown.innerHTML = '<option value="">Select Year</option>';
             return;
         }
+
+        // STEP 1: Completely clear the dropdown
+        yearDropdown.innerHTML = '';
         
-        // SIMPLIFIED: Clean and deduplicate years in one step
-        const uniqueYears = [...new Set(
-            years
-                .map(year => {
-                    // Convert to string, trim whitespace, then to number
-                    const cleanYear = parseInt(String(year).trim(), 10);
-                    return cleanYear;
-                })
-                .filter(year => {
-                    // Only keep valid years between 1900 and 2030
-                    return !isNaN(year) && year >= 1900 && year <= 2030;
-                })
-        )];
+        // STEP 2: Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select Year';
+        yearDropdown.appendChild(defaultOption);
         
-        console.log('✨ Cleaned and deduplicated years:', uniqueYears);
+        // STEP 3: Process years with aggressive deduplication
+        const processedYears = new Set(); // Use Set from the beginning
         
-        // Sort years in descending order (newest first)
-        uniqueYears.sort((a, b) => b - a);
+        years.forEach(year => {
+            const cleanYear = String(year).trim();
+            const numYear = parseInt(cleanYear, 10);
+            
+            // Validate year
+            if (!isNaN(numYear) && numYear >= 1900 && numYear <= 2030) {
+                processedYears.add(numYear); // Set automatically handles duplicates
+            }
+        });
+        
+        console.log('✨ Processed unique years:', Array.from(processedYears));
+        
+        // STEP 4: Convert to array and sort
+        const uniqueYears = Array.from(processedYears).sort((a, b) => b - a);
         
         console.log('📅 Final sorted years:', uniqueYears);
         
-        // Populate dropdown with unique years
+        // STEP 5: Add years to dropdown ONE BY ONE with duplicate check
+        const addedYears = new Set();
+        
         uniqueYears.forEach(year => {
-            const option = document.createElement('option');
-            option.value = year;
-            option.textContent = year;
-            yearDropdown.appendChild(option);
+            const yearString = String(year);
+            
+            // Double-check for duplicates before adding
+            if (!addedYears.has(yearString)) {
+                const option = document.createElement('option');
+                option.value = yearString;
+                option.textContent = yearString;
+                yearDropdown.appendChild(option);
+                addedYears.add(yearString);
+                console.log(`✅ Added year: ${yearString}`);
+            } else {
+                console.log(`⚠️ Skipped duplicate year: ${yearString}`);
+            }
+        });
+        
+        // STEP 6: Final verification
+        const finalOptions = Array.from(yearDropdown.options)
+            .slice(1) // Skip default option
+            .map(opt => opt.value);
+        
+        console.log('🔍 Final dropdown options:', finalOptions);
+        
+        // STEP 7: Remove any remaining duplicates from DOM
+        const seenValues = new Set(['']); // Include empty value
+        Array.from(yearDropdown.options).forEach(option => {
+            if (seenValues.has(option.value)) {
+                console.log(`🗑️ Removing duplicate DOM option: ${option.value}`);
+                option.remove();
+            } else {
+                seenValues.add(option.value);
+            }
         });
         
         console.log(`✅ Successfully populated ${uniqueYears.length} unique years`);
         
-        // Verify no duplicates in dropdown
-        const dropdownValues = Array.from(yearDropdown.options)
-            .slice(1) // Skip "Select Year" option
-            .map(opt => opt.value);
-        
-        const duplicateCheck = dropdownValues.filter((value, index) => 
-            dropdownValues.indexOf(value) !== index
-        );
-        
-        if (duplicateCheck.length > 0) {
-            console.error('🚨 Duplicates still found in dropdown:', duplicateCheck);
-        } else {
-            console.log('✅ No duplicates in final dropdown');
-        }
-        
     } catch (error) {
         console.error('❌ Error fetching years:', error);
+        yearDropdown.innerHTML = '<option value="">Select Year</option>';
         alert('Error fetching years. Please try again.');
     }
 }
@@ -1547,7 +1571,7 @@ function updateRadarChart() {
     canvas.style.width = rect.width + 'px';
     canvas.style.height = rect.height + 'px';
 
-    // UPDATED: Calculate actual maximum values from current cars
+    // IMPROVED: Balanced scaling approach
     const actualMaxValues = {
         horsepower: Math.max(...comparedCars.map(car => parseInt(car.specs.Horsepower) || 0)),
         price: Math.max(...comparedCars.map(car => parseFloat(car.specs.Price) || 0)),
@@ -1556,45 +1580,65 @@ function updateRadarChart() {
         seatingCapacity: Math.max(...comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0))
     };
 
+    const actualMinValues = {
+        horsepower: Math.min(...comparedCars.map(car => parseInt(car.specs.Horsepower) || 0)),
+        price: Math.min(...comparedCars.map(car => parseFloat(car.specs.Price) || 0)),
+        groundClearance: Math.min(...comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0)),
+        cargoSpace: Math.min(...comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0)),
+        seatingCapacity: Math.min(...comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0))
+    };
+
+    // HYBRID SCALING: Use reasonable fixed maximums, but scale down if all cars are much lower
+    const reasonableMaximums = {
+        horsepower: 400,
+        price: 4000000,
+        groundClearance: 35,
+        cargoSpace: 1500,
+        seatingCapacity: 8
+    };
+
+    const scalingMaxValues = {};
+    
+    Object.keys(actualMaxValues).forEach(key => {
+        const actualMax = actualMaxValues[key];
+        const reasonableMax = reasonableMaximums[key];
+        
+        // If the actual max is less than 70% of reasonable max, scale down
+        if (actualMax < (reasonableMax * 0.7)) {
+            scalingMaxValues[key] = actualMax * 1.3; // Make best car show at ~77%
+        } else {
+            scalingMaxValues[key] = reasonableMax;
+        }
+    });
+
+    console.log('🎯 Balanced scaling values:', scalingMaxValues);
+    console.log('📊 Actual max values:', actualMaxValues);
+
     // Store for tooltip reference
+    window.radarScalingMaxValues = scalingMaxValues;
     window.radarActualMaxValues = actualMaxValues;
 
-    console.log('📊 Actual Max Values for percentage calculation:', actualMaxValues);
-
-    // UPDATED: Prepare datasets with percentage-based scaling
+    // Prepare datasets with balanced scaling
     const datasets = comparedCars.map((car, index) => {
         const specs = car.specs;
         
-        // Calculate percentage of maximum for each category (0-100)
-        const horsepower = actualMaxValues.horsepower > 0 ? 
-            ((parseInt(specs.Horsepower) || 0) / actualMaxValues.horsepower) * 100 : 0;
-        const priceScore = actualMaxValues.price > 0 ? 
-            ((parseFloat(specs.Price) || 0) / actualMaxValues.price) * 100 : 0;
-        const groundClearance = actualMaxValues.groundClearance > 0 ? 
-            ((parseFloat(specs.GroundClearance) || 0) / actualMaxValues.groundClearance) * 100 : 0;
-        const cargoSpace = actualMaxValues.cargoSpace > 0 ? 
-            ((parseFloat(specs.Cargospace) || 0) / actualMaxValues.cargoSpace) * 100 : 0;
-        const seatingCapacity = actualMaxValues.seatingCapacity > 0 ? 
-            ((parseInt(specs.SeatingCapacity) || 0) / actualMaxValues.seatingCapacity) * 100 : 0;
-        
-        console.log(`🎯 Car ${index + 1} percentages:`, {
-            horsepower: horsepower.toFixed(1),
-            priceScore: priceScore.toFixed(1),
-            groundClearance: groundClearance.toFixed(1),
-            cargoSpace: cargoSpace.toFixed(1),
-            seatingCapacity: seatingCapacity.toFixed(1)
-        });
+        // Scale using balanced approach
+        const horsepower = Math.min(((parseInt(specs.Horsepower) || 0) / scalingMaxValues.horsepower) * 100, 100);
+        const priceScore = Math.min(((parseFloat(specs.Price) || 0) / scalingMaxValues.price) * 100, 100);
+        const groundClearance = Math.min(((parseFloat(specs.GroundClearance) || 0) / scalingMaxValues.groundClearance) * 100, 100);
+        const cargoSpace = Math.min(((parseFloat(specs.Cargospace) || 0) / scalingMaxValues.cargoSpace) * 100, 100);
+        const seatingCapacity = Math.min(((parseInt(specs.SeatingCapacity) || 0) / scalingMaxValues.seatingCapacity) * 100, 100);
         
         return {
             label: `${car.variant} (${car.year})`,
             data: [horsepower, priceScore, groundClearance, cargoSpace, seatingCapacity],
             backgroundColor: chartBackgroundColors[index % chartBackgroundColors.length],
             borderColor: chartColors[index % chartColors.length],
-            borderWidth: 3,
+            borderWidth: 4,
             pointBackgroundColor: chartColors[index % chartColors.length],
             pointBorderColor: '#fff',
-            pointBorderWidth: 2,
-            pointRadius: 6,
+            pointBorderWidth: 3,
+            pointRadius: 7,
             hidden: false
         };
     });
@@ -1615,8 +1659,8 @@ function updateRadarChart() {
                     position: 'bottom',
                     labels: {
                         color: '#b49b66',
-                        font: { weight: 'bold', size: 14 },
-                        padding: 20,
+                        font: { weight: 'bold', size: 16 }, // Increased font size
+                        padding: 25,
                         usePointStyle: true,
                         pointStyle: 'circle',
                         generateLabels: function(chart) {
@@ -1650,6 +1694,8 @@ function updateRadarChart() {
                     }
                 },
                 tooltip: {
+                    titleFont: { size: 16 },
+                    bodyFont: { size: 14 },
                     callbacks: {
                         label: function(context) {
                             const car = comparedCars[context.datasetIndex];
@@ -1666,35 +1712,7 @@ function updateRadarChart() {
                         },
                         afterLabel: function(context) {
                             const percentage = context.parsed.r.toFixed(1);
-                            const maxValues = window.radarActualMaxValues;
-                            
-                            let categoryName = '';
-                            let maxValue = '';
-                            
-                            switch(context.dataIndex) {
-                                case 0: 
-                                    categoryName = 'Power';
-                                    maxValue = `${maxValues.horsepower} HP`;
-                                    break;
-                                case 1: 
-                                    categoryName = 'Price';
-                                    maxValue = `₱${(maxValues.price / 1000000).toFixed(1)}M`;
-                                    break;
-                                case 2: 
-                                    categoryName = 'Clearance';
-                                    maxValue = `${maxValues.groundClearance} cm`;
-                                    break;
-                                case 3: 
-                                    categoryName = 'Cargo';
-                                    maxValue = `${maxValues.cargoSpace} L`;
-                                    break;
-                                case 4: 
-                                    categoryName = 'Seating';
-                                    maxValue = `${maxValues.seatingCapacity} seats`;
-                                    break;
-                            }
-                            
-                            return `${percentage}% of best ${categoryName} (${maxValue})`;
+                            return `${percentage}% on scale`;
                         }
                     }
                 }
@@ -1707,24 +1725,24 @@ function updateRadarChart() {
                         display: true,
                         stepSize: 25,
                         color: '#b49b66',
-                        font: { size: 12 },
+                        font: { size: 14, weight: 'bold' }, // Increased font size
                         callback: function(value) {
                             return value + '%';
                         }
                     },
                     grid: {
-                        color: 'rgba(180, 155, 102, 0.2)',
+                        color: 'rgba(180, 155, 102, 0.3)',
                         lineWidth: 2
                     },
                     angleLines: {
-                        color: 'rgba(180, 155, 102, 0.3)',
+                        color: 'rgba(180, 155, 102, 0.4)',
                         lineWidth: 2
                     },
                     pointLabels: {
                         color: '#b49b66',
                         font: { 
                             weight: 'bold',
-                            size: 16
+                            size: 18 // Increased font size
                         }
                     }
                 }
@@ -1734,18 +1752,17 @@ function updateRadarChart() {
             },
             elements: {
                 line: {
-                    borderWidth: 3
+                    borderWidth: 4
                 },
                 point: {
-                    radius: 6,
-                    hoverRadius: 8
+                    radius: 7,
+                    hoverRadius: 10
                 }
             }
         }
     });
 
-    // Add instruction text and toggle controls
-    addRadarInstructions();
+    // Add individual toggle controls only (no instructions)
     addIndividualToggleControls();
 }
 
@@ -1761,41 +1778,7 @@ function formatMaxValue(maxValue, dataIndex) {
     }
 }
 
-// UPDATED: Helper function to add dynamic instructions for radar chart
-function addRadarInstructions() {
-    const existingInstructions = document.querySelector('.radar-instructions');
-    if (existingInstructions) {
-        existingInstructions.remove();
-    }
 
-    const radarContainer = document.querySelector('.radar-chart-container');
-    if (radarContainer) {
-        const instructionsDiv = document.createElement('div');
-        instructionsDiv.className = 'radar-instructions';
-        
-        const maxValues = window.radarActualMaxValues;
-        
-        instructionsDiv.innerHTML = `
-            <div style="
-                text-align: center; 
-                margin-top: 1rem; 
-                padding: 0.8rem; 
-                background: linear-gradient(135deg, #f8f9fa, #e9ecef); 
-                border-radius: 8px; 
-                border: 2px solid rgba(180, 155, 102, 0.3);
-                font-size: 0.9rem;
-                color: #666;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            ">
-                <i class='bx bx-info-circle' style='color: #b49b66; margin-right: 0.5rem;'></i>
-                <strong>📊 Percentage Scale:</strong> Each car shows as a percentage of the best performer in each category
-                <br><strong>Current Leaders:</strong> ${maxValues.horsepower} HP • ₱${(maxValues.price / 1000000).toFixed(1)}M • ${maxValues.groundClearance} cm • ${maxValues.cargoSpace} L • ${maxValues.seatingCapacity} seats
-                <br><small>100% = category leader, 50% = half of leader's value, etc. All cars stay visible!</small>
-            </div>
-        `;
-        radarContainer.appendChild(instructionsDiv);
-    }
-}
 
 // NEW: Add individual toggle controls for better UX
 function addIndividualToggleControls() {
@@ -1810,10 +1793,10 @@ function addIndividualToggleControls() {
         const togglesDiv = document.createElement('div');
         togglesDiv.className = 'individual-toggles';
         togglesDiv.style.cssText = `
-            margin-top: 1rem;
-            padding: 1rem;
+            margin-top: 1.5rem;
+            padding: 1.5rem;
             background: rgba(180, 155, 102, 0.1);
-            border-radius: 8px;
+            border-radius: 10px;
             border: 1px solid rgba(180, 155, 102, 0.3);
         `;
 
@@ -1823,8 +1806,8 @@ function addIndividualToggleControls() {
                 text-align: center; 
                 font-weight: bold; 
                 color: #b49b66; 
-                margin-bottom: 0.8rem;
-                font-size: 0.95rem;
+                margin-bottom: 1rem;
+                font-size: 1.1rem;
             ">
                 <i class='bx bx-show' style='margin-right: 0.5rem;'></i>
                 Individual Car Visibility Controls
@@ -1836,7 +1819,7 @@ function addIndividualToggleControls() {
         controlsContainer.style.cssText = `
             display: flex;
             flex-wrap: wrap;
-            gap: 1rem;
+            gap: 1.2rem;
             justify-content: center;
             align-items: center;
         `;
@@ -1846,12 +1829,13 @@ function addIndividualToggleControls() {
             checkboxContainer.style.cssText = `
                 display: flex;
                 align-items: center;
-                gap: 0.5rem;
-                padding: 0.5rem;
+                gap: 0.7rem;
+                padding: 0.7rem 1rem;
                 background: white;
-                border-radius: 6px;
+                border-radius: 8px;
                 border: 1px solid rgba(180, 155, 102, 0.3);
                 box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                transition: all 0.2s ease;
             `;
 
             const checkbox = document.createElement('input');
@@ -1859,8 +1843,8 @@ function addIndividualToggleControls() {
             checkbox.id = `toggle-car-${index}`;
             checkbox.checked = true;
             checkbox.style.cssText = `
-                width: 16px;
-                height: 16px;
+                width: 18px;
+                height: 18px;
                 accent-color: #b49b66;
                 cursor: pointer;
             `;
@@ -1869,7 +1853,7 @@ function addIndividualToggleControls() {
             label.htmlFor = `toggle-car-${index}`;
             label.textContent = `${car.variant} (${car.year})`;
             label.style.cssText = `
-                font-size: 0.85rem;
+                font-size: 0.9rem;
                 color: #333;
                 cursor: pointer;
                 font-weight: 500;
@@ -1878,12 +1862,12 @@ function addIndividualToggleControls() {
             // Color indicator
             const colorIndicator = document.createElement('div');
             colorIndicator.style.cssText = `
-                width: 12px;
-                height: 12px;
+                width: 14px;
+                height: 14px;
                 border-radius: 50%;
                 background-color: ${chartColors[index % chartColors.length]};
-                border: 1px solid #fff;
-                box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+                border: 2px solid #fff;
+                box-shadow: 0 1px 3px rgba(0,0,0,0.2);
             `;
 
             checkbox.addEventListener('change', function() {
@@ -1896,6 +1880,17 @@ function addIndividualToggleControls() {
                     }
                     chart.update();
                 }
+            });
+
+            // Add hover effect
+            checkboxContainer.addEventListener('mouseenter', function() {
+                this.style.transform = 'translateY(-2px)';
+                this.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)';
+            });
+
+            checkboxContainer.addEventListener('mouseleave', function() {
+                this.style.transform = 'translateY(0)';
+                this.style.boxShadow = '0 2px 4px rgba(0,0,0,0.1)';
             });
 
             checkboxContainer.appendChild(colorIndicator);

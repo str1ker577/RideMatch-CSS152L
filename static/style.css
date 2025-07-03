@@ -1638,9 +1638,9 @@ footer {
   }
 
   .radar-chart-container {
-    width: 80%; /* Maintain 80% width */
-    height: 700px;
-  }
+        width: 90%;
+        height: 750px;
+    }
 }
 
 @media (max-width: 900px) {
@@ -1667,9 +1667,9 @@ footer {
   }
 
   .radar-chart-container {
-    height: 650px;
-    width: 80%; /* Maintain 80% width */
-  }
+        height: 700px;
+        width: 95%;
+    }
   
   .radar-chart-section {
     padding: 2rem;
@@ -1720,10 +1720,10 @@ footer {
   }
 
   .radar-chart-container {
-    height: 600px;
-    width: 80%; /* Maintain 80% width */
-    padding: 1rem;
-  }
+        height: 650px;
+        width: 95%;
+        padding: 1rem;
+    }
   
   .radar-chart-section {
     padding: 1.5rem;
@@ -1731,8 +1731,8 @@ footer {
   }
   
   .radar-chart-container canvas {
-    min-height: 250px !important;
-  }
+        min-height: 300px !important;
+    }
 
   .compare-inner-frame {
     max-width: 100%;
@@ -1761,19 +1761,19 @@ footer {
   }
 
   .radar-chart-container {
-    height: 550px;
-    width: 80%; /* Maintain 80% width */
-    padding: 1rem;
-  }
+        height: 600px;
+        width: 95%;
+        padding: 1rem;
+    }
   
   .radar-chart-section {
     padding: 1rem;
   }
   
   .radar-chart-container canvas {
-    min-height: 200px !important;
-  }
-  
+        min-height: 250px !important;
+    }
+    
   .compare-chart-container {
     padding: 1rem;
     height: 300px;
