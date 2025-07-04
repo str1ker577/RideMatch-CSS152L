@@ -1427,23 +1427,24 @@ async function populateBrandsForCompare() {
     }
 
     try {
-        console.log('🔍 Fetching all available brands for compare...');
+        console.log('🔍 Fetching cleaned brands for compare...');
         
-        const response = await fetch(`${baseUrl}/get_brands`);
+        // Use the new clean endpoint
+        const response = await fetch(`${baseUrl}/get_brands_clean`);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const brands = await response.json();
-        console.log('📅 Received brands:', brands);
+        console.log('📅 Received clean brands:', brands);
         
         if (!Array.isArray(brands)) {
             console.error('❌ Expected array of brands but got:', brands);
             return;
         }
         
-        // Clear loading message and populate with brands
+        // Clear loading message and populate with clean brands
         brandDropdown.innerHTML = '<option value="" selected disabled>Select Brand</option>';
         
         brands.forEach(brand => {
@@ -1453,14 +1454,101 @@ async function populateBrandsForCompare() {
             brandDropdown.appendChild(option);
         });
         
-        console.log(`✅ Successfully populated ${brands.length} brands in compare dropdown`);
+        console.log(`✅ Successfully populated ${brands.length} clean brands`);
+        
+        // Log for debugging - check for duplicates
+        const brandCounts = {};
+        brands.forEach(brand => {
+            brandCounts[brand] = (brandCounts[brand] || 0) + 1;
+        });
+        
+        const duplicates = Object.keys(brandCounts).filter(brand => brandCounts[brand] > 1);
+        if (duplicates.length > 0) {
+            console.warn('⚠️ Still found duplicates:', duplicates);
+        } else {
+            console.log('✅ No duplicates found in brand list');
+        }
         
     } catch (error) {
-        console.error('❌ Error fetching brands for compare:', error);
-        // Show error state in dropdown
+        console.error('❌ Error fetching clean brands:', error);
         brandDropdown.innerHTML = '<option value="" disabled>Error loading brands</option>';
     }
 }
+
+async function loadBrandsForFilter() {
+    /**
+     * Load brands for the main filter page
+     */
+    const brandDropdown = document.getElementById('brand-filter');
+    
+    if (!brandDropdown) {
+        console.log('Brand filter dropdown not found');
+        return;
+    }
+
+    try {
+        console.log('🔍 Loading clean brands for filter...');
+        
+        const response = await fetch(`${baseUrl}/get_brands_clean`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const brands = await response.json();
+        
+        // Clear and populate
+        brandDropdown.innerHTML = '<option value="">All Brands</option>';
+        
+        brands.forEach(brand => {
+            const option = document.createElement('option');
+            option.value = brand;
+            option.textContent = brand;
+            brandDropdown.appendChild(option);
+        });
+        
+        console.log(`✅ Filter brands populated: ${brands.length} brands`);
+        
+    } catch (error) {
+        console.error('❌ Error loading brands for filter:', error);
+    }
+}
+
+// Add a manual cleanup trigger function
+window.triggerBrandCleanup = async function() {
+    console.log('🧹 Triggering manual brand cleanup...');
+    
+    try {
+        const response = await fetch(`${baseUrl}/cleanup_brands`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const result = await response.json();
+        console.log('✅ Cleanup completed:', result);
+        
+        // Refresh the dropdowns
+        if (typeof populateBrandsForCompare === 'function') {
+            await populateBrandsForCompare();
+        }
+        
+        return result;
+        
+    } catch (error) {
+        console.error('❌ Cleanup failed:', error);
+        return { error: error.message };
+    }
+};
+
+console.log('🔧 Brand cleanup functions loaded. Available commands:');
+console.log('• triggerBrandCleanup() - Clean duplicates from backend');
+console.log('• populateBrandsForCompare() - Refresh brand dropdown');
 
 /////////////////////////
 // Compare Charts Logo //
@@ -1590,89 +1678,119 @@ const brandProcessingConfig = {
 // Enhanced processSvgForChart function
 function processSvgForChart(svgText, brandName) {
     try {
-        console.log(`🔧 Enhanced processing for ${brandName}...`);
+        console.log(`🔧 Processing ${brandName} logo...`);
         
         const themeColor = '#b49b66';
-        const brandKey = brandName.toLowerCase().replace(/[\s-]/g, '');
-        const config = brandProcessingConfig[brandKey] || {};
         
-        // Handle redirects (like mercedes-benz -> mercedes)
-        if (config.type === 'redirect') {
-            console.log(`🔄 Redirecting ${brandName} to ${config.redirectTo}`);
-            return processSvgForChart(svgText, config.redirectTo);
+        // Handle duplicates
+        if (brandName.toLowerCase().includes('mercedes-benz')) {
+            brandName = 'Mercedes';
         }
         
-        // Create temporary container
-        const tempDiv = document.createElement('div');
-        tempDiv.innerHTML = svgText;
-        const svgElement = tempDiv.querySelector('svg');
+        // Create a clean SVG container
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svgText, 'image/svg+xml');
+        const svgElement = doc.querySelector('svg');
         
         if (!svgElement) {
             throw new Error('No SVG element found');
         }
         
-        // Set consistent dimensions
+        // Set standard dimensions
         svgElement.setAttribute('width', '100');
         svgElement.setAttribute('height', '100');
+        svgElement.setAttribute('viewBox', '0 0 100 100');
         
-        // STEP 1: Remove all existing problematic elements
-        console.log(`🧹 Cleaning SVG for ${brandName}...`);
+        // NUCLEAR APPROACH: Remove ALL existing styling completely
+        console.log(`💣 Applying nuclear styling removal for ${brandName}...`);
         
-        // Remove gradients, patterns, and complex definitions
-        const defs = svgElement.querySelectorAll('defs');
-        defs.forEach(def => {
-            if (config.removeGradients) {
-                const gradients = def.querySelectorAll('linearGradient, radialGradient, pattern, filter');
-                gradients.forEach(grad => grad.remove());
+        // Remove all style elements, defs, gradients
+        const badElements = svgElement.querySelectorAll('style, defs, linearGradient, radialGradient, pattern, filter, mask, clipPath');
+        badElements.forEach(el => el.remove());
+        
+        // Get all elements and strip ALL styling
+        const allElements = svgElement.querySelectorAll('*');
+        allElements.forEach(element => {
+            // Remove ALL style-related attributes
+            const attributesToRemove = [
+                'style', 'class', 'fill', 'stroke', 'color', 
+                'opacity', 'fill-opacity', 'stroke-opacity',
+                'fill-rule', 'stroke-width', 'stroke-linecap',
+                'stroke-linejoin', 'stroke-dasharray'
+            ];
+            
+            attributesToRemove.forEach(attr => {
+                element.removeAttribute(attr);
+            });
+            
+            // Clear any inline styles
+            if (element.style) {
+                element.style.cssText = '';
             }
         });
         
-        // Remove style elements that might override our changes
-        const styleElements = svgElement.querySelectorAll('style');
-        styleElements.forEach(style => style.remove());
+        // Force our theme color on ALL drawable elements
+        const drawableElements = svgElement.querySelectorAll('path, circle, rect, polygon, ellipse, line, polyline, text, tspan, g');
+        drawableElements.forEach(element => {
+            element.setAttribute('fill', themeColor);
+            element.setAttribute('stroke', 'none');
+            element.setAttribute('color', themeColor);
+            
+            // Force styles via DOM
+            if (element.style) {
+                element.style.fill = themeColor;
+                element.style.stroke = 'none';
+                element.style.color = themeColor;
+            }
+        });
         
-        // STEP 2: Brand-specific processing
-        if (config.specialProcessing) {
-            console.log(`🎨 Applying special processing: ${config.specialProcessing}`);
-            svgElement = applySpecialProcessing(svgElement, config.specialProcessing, themeColor);
-        }
-        
-        // STEP 3: Force monochrome if required
-        if (config.forceMonochrome) {
-            console.log(`🎨 Forcing monochrome for ${brandName}...`);
-            forceMonochrome(svgElement, themeColor, config);
-        }
-        
-        // STEP 4: Add global override styles
+        // Add ultimate override CSS
         const styleElement = document.createElementNS('http://www.w3.org/2000/svg', 'style');
         styleElement.textContent = `
             * {
                 fill: ${themeColor} !important;
                 stroke: none !important;
                 color: ${themeColor} !important;
+                fill-opacity: 1 !important;
+                stroke-opacity: 0 !important;
             }
-            text {
-                fill: ${themeColor} !important;
-                color: ${themeColor} !important;
-            }
-            path, circle, rect, polygon, ellipse, line, polyline {
+            path, circle, rect, polygon, ellipse, line, polyline, text, tspan, g {
                 fill: ${themeColor} !important;
                 stroke: none !important;
+                color: ${themeColor} !important;
             }
         `;
         svgElement.insertBefore(styleElement, svgElement.firstChild);
         
-        // STEP 5: Final attributes
+        // Set SVG root attributes
         svgElement.setAttribute('fill', themeColor);
+        svgElement.setAttribute('stroke', 'none');
         svgElement.setAttribute('color', themeColor);
         
-        console.log(`✅ Enhanced processing completed for ${brandName}`);
-        return svgElement.outerHTML;
+        console.log(`✅ Nuclear processing completed for ${brandName}`);
+        
+        // Convert back to string
+        const serializer = new XMLSerializer();
+        return serializer.serializeToString(svgElement);
         
     } catch (error) {
-        console.warn(`❌ Enhanced processing failed for ${brandName}:`, error);
-        return applyFallbackProcessing(svgText, brandName);
+        console.error(`❌ Processing failed for ${brandName}:`, error);
+        return createFallbackSVG(brandName);
     }
+}
+
+function createFallbackSVG(brandName) {
+    console.log(`🎨 Creating fallback SVG for ${brandName}`);
+    
+    const themeColor = '#b49b66';
+    const initials = brandName.substring(0, 2).toUpperCase();
+    
+    return `
+        <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" fill="${themeColor}" stroke="none"/>
+            <text x="50" y="58" text-anchor="middle" font-family="Arial, sans-serif" 
+                  font-size="24" font-weight="bold" fill="white">${initials}</text>
+        </svg>`;
 }
 
 function applySpecialProcessing(svgElement, processingType, themeColor) {
@@ -1847,67 +1965,204 @@ function debugSpecificBrand(brandName) {
 }
 
 // Update the global loadBrandLogo function to use enhanced processing
-async function loadBrandLogoEnhanced(brandName) {
+async function loadBrandLogo(brandName) {
     if (!brandName) return null;
     
-    const logoKey = brandName.toLowerCase().replace(/[\s-]/g, '');
+    // Clean brand name and handle duplicates
+    let cleanBrandName = brandName.trim();
+    let logoKey = cleanBrandName.toLowerCase().replace(/[\s-]/g, '');
     
-    // Return cached logo if already loaded
+    // Handle Mercedes-Benz duplicate
+    if (logoKey === 'mercedesbenz' || cleanBrandName.toLowerCase().includes('mercedes-benz')) {
+        logoKey = 'mercedes';
+        cleanBrandName = 'Mercedes';
+        console.log('🔄 Redirecting Mercedes-Benz to Mercedes');
+    }
+    
+    // Return cached logo if available
     if (brandLogos[logoKey]) {
+        console.log(`📋 Using cached logo for ${cleanBrandName}`);
         return brandLogos[logoKey];
     }
     
     try {
-        console.log(`🔄 Loading enhanced SVG logo for brand: ${brandName}`);
+        console.log(`🔄 Loading logo for ${cleanBrandName}...`);
         
-        // Handle special cases
-        let svgPath = `/static/brand_logo/${logoKey}_logo.svg`;
-        
-        // Handle Mercedes-Benz duplicate
-        if (logoKey === 'mercedes-benz' || logoKey === 'mercedesbenz') {
-            svgPath = `/static/brand_logo/mercedes_logo.svg`;
-            logoKey = 'mercedes';
-        }
-        
-        // Check for missing Subaru logo
-        if (logoKey === 'subaru') {
-            // You'll need to add subaru_logo.svg to your brand_logo folder
-            console.warn(`⚠️ Subaru logo missing. Please add subaru_logo.svg to your brand_logo folder.`);
-        }
-        
+        const svgPath = `/static/brand_logo/${logoKey}_logo.svg`;
         const response = await fetch(svgPath);
         
         if (!response.ok) {
-            console.warn(`⚠️ SVG not found for brand: ${brandName} at ${svgPath}`);
-            brandLogos[logoKey] = null;
-            return null;
+            console.warn(`⚠️ SVG file not found: ${svgPath}`);
+            
+            // Create fallback for missing logos (especially Subaru)
+            if (logoKey === 'subaru') {
+                console.log('🌟 Creating Subaru star constellation fallback');
+                const subaruSVG = `
+                    <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                        <circle cx="50" cy="50" r="45" fill="#b49b66" stroke="none"/>
+                        <g fill="white" stroke="none">
+                            <polygon points="30,30 32,37 39,37 33,42 35,49 30,45 25,49 27,42 21,37 28,37"/>
+                            <polygon points="70,30 72,37 79,37 73,42 75,49 70,45 65,49 67,42 61,37 68,37"/>
+                            <polygon points="50,40 52,47 59,47 53,52 55,59 50,55 45,59 47,52 41,47 48,47"/>
+                            <polygon points="25,60 27,67 34,67 28,72 30,79 25,75 20,79 22,72 16,67 23,67"/>
+                            <polygon points="75,60 77,67 84,67 78,72 80,79 75,75 70,79 72,72 66,67 73,67"/>
+                        </g>
+                    </svg>`;
+                const img = await svgToImage(subaruSVG);
+                brandLogos[logoKey] = img;
+                return img;
+            }
+            
+            // Create generic fallback
+            const fallbackSVG = createFallbackSVG(cleanBrandName);
+            const img = await svgToImage(fallbackSVG);
+            brandLogos[logoKey] = img;
+            return img;
         }
         
         const svgText = await response.text();
         
-        // Validate SVG content
         if (!svgText || !svgText.includes('<svg')) {
-            console.warn(`❌ Invalid SVG content for brand: ${brandName}`);
-            brandLogos[logoKey] = null;
-            return null;
+            console.warn(`❌ Invalid SVG content for ${cleanBrandName}`);
+            const fallbackSVG = createFallbackSVG(cleanBrandName);
+            const img = await svgToImage(fallbackSVG);
+            brandLogos[logoKey] = img;
+            return img;
         }
         
-        // Use enhanced processing
-        const processedSvg = processSvgForChart(svgText, brandName);
-        
-        // Convert SVG to image for canvas rendering
-        const img = await svgToImage(processedSvg);
+        // Process the SVG
+        const processedSVG = processSvgForChart(svgText, cleanBrandName);
+        const img = await svgToImage(processedSVG);
         
         brandLogos[logoKey] = img;
-        console.log(`✅ Successfully loaded enhanced logo for: ${brandName}`);
+        console.log(`✅ Successfully loaded logo for ${cleanBrandName}`);
         return img;
         
     } catch (error) {
-        console.warn(`❌ Error loading enhanced SVG logo for brand ${brandName}:`, error);
-        brandLogos[logoKey] = null;
-        return null;
+        console.error(`❌ Error loading logo for ${cleanBrandName}:`, error);
+        
+        // Always provide a fallback
+        const fallbackSVG = createFallbackSVG(cleanBrandName);
+        const img = await svgToImage(fallbackSVG);
+        brandLogos[logoKey] = img;
+        return img;
     }
 }
+
+window.testLogoFixes = function() {
+    console.log('🧪 Testing logo fixes...');
+    
+    const problematicBrands = [
+        'BMW', 'Ford', 'Kia', 'Hyundai', 'MG', 
+        'Mercedes', 'Porsche', 'Subaru', 'Tesla', 'Volkswagen'
+    ];
+    
+    problematicBrands.forEach((brand, index) => {
+        setTimeout(async () => {
+            console.log(`\n--- Testing ${brand} ---`);
+            try {
+                const logo = await loadBrandLogo(brand);
+                if (logo) {
+                    console.log(`${brand}: ✅ SUCCESS - Logo loaded`);
+                    console.log(`${brand}: Logo dimensions: ${logo.width}x${logo.height}`);
+                } else {
+                    console.log(`${brand}: ❌ FAILED - No logo returned`);
+                }
+            } catch (error) {
+                console.log(`${brand}: ❌ ERROR - ${error.message}`);
+            }
+        }, index * 200);
+    });
+};
+
+// 5. Force chart updates with new logos
+window.forceLogoUpdate = function() {
+    console.log('🔄 Forcing logo cache clear and chart update...');
+    
+    // Clear logo cache
+    if (typeof brandLogos !== 'undefined') {
+        Object.keys(brandLogos).forEach(key => {
+            delete brandLogos[key];
+        });
+        console.log('🗑️ Logo cache cleared');
+    }
+    
+    // Force chart update if we have comparison data
+    if (typeof comparedCars !== 'undefined' && comparedCars.length > 0) {
+        console.log('📊 Updating charts with fresh logos...');
+        setTimeout(updateAllCharts, 500);
+    }
+};
+
+// 6. Manual logo test for specific brand
+window.testSpecificLogo = async function(brandName) {
+    console.log(`🔍 Testing specific logo: ${brandName}`);
+    
+    try {
+        // Clear cache for this brand first
+        const logoKey = brandName.toLowerCase().replace(/[\s-]/g, '');
+        if (brandLogos[logoKey]) {
+            delete brandLogos[logoKey];
+            console.log(`🗑️ Cleared cache for ${brandName}`);
+        }
+        
+        const logo = await loadBrandLogo(brandName);
+        
+        if (logo) {
+            console.log(`✅ ${brandName} logo loaded successfully`);
+            console.log(`📐 Dimensions: ${logo.width}x${logo.height}`);
+            
+            // Create a test element to visually verify
+            const testDiv = document.createElement('div');
+            testDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                z-index: 10000;
+                background: white;
+                padding: 20px;
+                border: 2px solid #b49b66;
+                border-radius: 10px;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            `;
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = 100;
+            canvas.height = 100;
+            canvas.style.border = '1px solid #ccc';
+            
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(logo, 0, 0, 100, 100);
+            
+            testDiv.innerHTML = `
+                <h4 style="margin: 0 0 10px 0; color: #b49b66;">Logo Test: ${brandName}</h4>
+                <div style="margin-bottom: 10px;"></div>
+                <button onclick="this.parentElement.remove()" style="
+                    background: #b49b66; 
+                    color: white; 
+                    border: none; 
+                    padding: 5px 10px; 
+                    border-radius: 5px; 
+                    cursor: pointer;
+                ">Close</button>
+            `;
+            
+            testDiv.querySelector('div').appendChild(canvas);
+            document.body.appendChild(testDiv);
+            
+        } else {
+            console.log(`❌ ${brandName} logo failed to load`);
+        }
+        
+    } catch (error) {
+        console.error(`❌ Error testing ${brandName}:`, error);
+    }
+};
+
+console.log('🔧 Logo fix functions loaded. Available commands:');
+console.log('• testLogoFixes() - Test all problematic logos');
+console.log('• forceLogoUpdate() - Clear cache and update charts');
+console.log('• testSpecificLogo("BrandName") - Test specific brand logo');
 
 // Batch test function for all problematic brands
 function testProblematicBrands() {
