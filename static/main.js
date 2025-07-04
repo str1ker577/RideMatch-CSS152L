@@ -1491,6 +1491,13 @@ async function loadBrandLogo(brandName) {
         
         const svgText = await response.text();
         
+        // Validate SVG content
+        if (!svgText || !svgText.includes('<svg')) {
+            console.warn(`Invalid SVG content for brand: ${brandName}`);
+            brandLogos[logoKey] = null;
+            return null;
+        }
+        
         // Create a new SVG element with consistent styling
         const processedSvg = processSvgForChart(svgText, brandName);
         
@@ -1528,41 +1535,56 @@ function processSvgForChart(svgText, brandName) {
         // Apply consistent color styling - your theme color
         const themeColor = '#b49b66'; // Your site's gold/brown color
         
-        // Style all path elements
-        const paths = svgElement.querySelectorAll('path, circle, rect, polygon, ellipse, g');
-        paths.forEach(element => {
-            // Remove any existing fill colors and apply theme color
-            element.setAttribute('fill', themeColor);
-            element.setAttribute('stroke', themeColor);
-            element.removeAttribute('style'); // Remove inline styles that might override
+        // More robust color processing for different SVG structures
+        const allElements = svgElement.querySelectorAll('*');
+        allElements.forEach(element => {
+            // Remove any existing styles that might interfere
+            element.removeAttribute('style');
             
-            // Handle nested elements
-            const nestedElements = element.querySelectorAll('path, circle, rect, polygon, ellipse');
-            nestedElements.forEach(nested => {
-                nested.setAttribute('fill', themeColor);
-                nested.setAttribute('stroke', themeColor);
-                nested.removeAttribute('style');
-            });
+            // Apply theme color to fill and stroke attributes
+            if (element.hasAttribute('fill') && element.getAttribute('fill') !== 'none') {
+                element.setAttribute('fill', themeColor);
+            }
+            if (element.hasAttribute('stroke') && element.getAttribute('stroke') !== 'none') {
+                element.setAttribute('stroke', themeColor);
+            }
+            
+            // Handle elements that might not have explicit fill/stroke
+            if (element.tagName && ['path', 'circle', 'rect', 'polygon', 'ellipse', 'line'].includes(element.tagName.toLowerCase())) {
+                element.setAttribute('fill', themeColor);
+                element.setAttribute('stroke', 'none');
+            }
         });
         
-        // Handle specific brand adjustments if needed
+        // Special handling for specific brands that might have complex structures
         switch(brandName.toLowerCase()) {
+            case 'bmw':
+                // BMW logo often has complex nested structures
+                svgElement.style.fill = themeColor;
+                svgElement.style.color = themeColor;
+                break;
+            case 'tesla':
+                // Tesla logo might have specific styling needs
+                svgElement.style.fill = themeColor;
+                svgElement.style.color = themeColor;
+                break;
             case 'geely':
-                // Geely might have specific styling needs
                 svgElement.style.transform = 'scale(0.9)';
                 break;
             case 'baojun':
-                // Baojun specific adjustments - might need different scaling
                 svgElement.style.transform = 'scale(0.95)';
-                break;
-            case 'lucid':
-                // Lucid specific adjustments - modern brand, keep standard
                 break;
         }
         
-        // Add some styling to ensure visibility
+        // Add comprehensive styling to ensure visibility
         svgElement.style.background = 'transparent';
-        svgElement.style.filter = 'drop-shadow(0 1px 3px rgba(0,0,0,0.2))';
+        svgElement.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
+        
+        // Force color through CSS as well
+        svgElement.style.cssText += `
+            fill: ${themeColor} !important;
+            color: ${themeColor} !important;
+        `;
         
         return svgElement.outerHTML;
         
@@ -1587,18 +1609,47 @@ function svgToImage(svgString) {
             reject(error);
         };
         
-        // Create data URL from SVG
-        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-        const svgUrl = URL.createObjectURL(svgBlob);
-        
-        img.src = svgUrl;
-        
-        // Clean up the blob URL after image loads
-        img.onload = () => {
-            URL.revokeObjectURL(svgUrl);
-            resolve(img);
-        };
+        try {
+            // Create data URL from SVG with proper encoding
+            const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            
+            img.src = svgUrl;
+            
+            // Clean up the blob URL after image loads
+            img.onload = () => {
+                URL.revokeObjectURL(svgUrl);
+                resolve(img);
+            };
+            
+            // Set a timeout for loading
+            setTimeout(() => {
+                if (!img.complete) {
+                    URL.revokeObjectURL(svgUrl);
+                    reject(new Error('SVG loading timeout'));
+                }
+            }, 5000);
+            
+        } catch (error) {
+            reject(error);
+        }
     });
+}
+
+// Add helper function for rounded rectangles (if not available)
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+        if (width < 2 * radius) radius = width / 2;
+        if (height < 2 * radius) radius = height / 2;
+        this.beginPath();
+        this.moveTo(x + radius, y);
+        this.arcTo(x + width, y, x + width, y + height, radius);
+        this.arcTo(x + width, y + height, x, y + height, radius);
+        this.arcTo(x, y + height, x, y, radius);
+        this.arcTo(x, y, x + width, y, radius);
+        this.closePath();
+        return this;
+    };
 }
 
 // Function to preload all brand logos for compared cars
@@ -1691,52 +1742,71 @@ const brandLogoPlugin = {
             const brandName = car.specs.Brand;
             const logo = brandLogos[brandName.toLowerCase()];
             
-            if (!logo) {
-                // Optionally show a placeholder or brand name
-                drawBrandNameFallback(ctx, chart, index, brandName);
-                return;
-            }
-            
             // Get bar position
             const meta = chart.getDatasetMeta(0);
             const bar = meta.data[index];
             
             if (!bar) return;
             
-            // Calculate logo position and size
+            // Calculate bar dimensions
             const barWidth = bar.width;
             const barHeight = Math.abs(bar.y - bar.base);
             
-            // Logo size - make it responsive to bar size
-            const maxLogoSize = Math.min(barWidth * 0.7, 55); // Max 55px for better visibility
-            const minLogoSize = 30; // Min 30px
-            const logoSize = Math.max(minLogoSize, maxLogoSize);
+            // IMPROVED: More flexible logo sizing
+            let logoSize;
+            
+            // Base logo size on both width and height, with better scaling
+            const widthBasedSize = barWidth * 0.6; // Reduced from 0.7 to prevent cropping
+            const heightBasedSize = barHeight * 0.4; // Allow logo to use 40% of height
+            
+            // Choose the smaller dimension to ensure logo fits
+            logoSize = Math.min(widthBasedSize, heightBasedSize);
+            
+            // Set reasonable bounds
+            const maxLogoSize = 50;
+            const minLogoSize = 20; // Reduced minimum size for better display in small bars
+            logoSize = Math.max(minLogoSize, Math.min(logoSize, maxLogoSize));
             
             // Position logo in the center of the bar
             const logoX = bar.x - logoSize / 2;
             const logoY = bar.y + (bar.base - bar.y) / 2 - logoSize / 2;
             
-            // Only draw if the bar is tall enough to accommodate the logo
-            if (barHeight > logoSize + 15) { // Add 15px padding
+            // IMPROVED: More lenient threshold for showing logos
+            const minBarHeightForLogo = logoSize + 8; // Reduced padding requirement
+            
+            if (barHeight > minBarHeightForLogo && logo) {
                 try {
-                    // Add a subtle background circle for better visibility
+                    // IMPROVED: Enhanced white circle background
                     ctx.beginPath();
-                    ctx.arc(bar.x, bar.y + (bar.base - bar.y) / 2, logoSize / 2 + 5, 0, 2 * Math.PI);
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                    const circleRadius = logoSize / 2 + 4;
+                    ctx.arc(bar.x, bar.y + (bar.base - bar.y) / 2, circleRadius, 0, 2 * Math.PI);
+                    
+                    // White background with subtle gradient
+                    const gradient = ctx.createRadialGradient(
+                        bar.x, bar.y + (bar.base - bar.y) / 2, 0,
+                        bar.x, bar.y + (bar.base - bar.y) / 2, circleRadius
+                    );
+                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+                    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.92)');
+                    
+                    ctx.fillStyle = gradient;
                     ctx.fill();
-                    ctx.strokeStyle = 'rgba(180, 155, 102, 0.4)';
+                    
+                    // Border
+                    ctx.strokeStyle = 'rgba(180, 155, 102, 0.5)';
                     ctx.lineWidth = 2;
                     ctx.stroke();
                     
                     // Draw the logo
                     ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+                    
                 } catch (error) {
                     console.warn('Error drawing logo for', brandName, ':', error);
-                    drawBrandNameFallback(ctx, chart, index, brandName);
+                    drawBrandNameFallback(ctx, chart, index, brandName, logoSize);
                 }
-            } else {
-                // If bar is too small, show brand name instead
-                drawBrandNameFallback(ctx, chart, index, brandName);
+            } else if (barHeight > 25) { // Even smaller bars can show brand name
+                // Show brand name for smaller bars or when logo fails
+                drawBrandNameFallback(ctx, chart, index, brandName, Math.min(logoSize, 30));
             }
         });
         
@@ -1745,37 +1815,66 @@ const brandLogoPlugin = {
 };
 
 // Fallback function to draw brand name when logo is not available or bar is too small
-function drawBrandNameFallback(ctx, chart, index, brandName) {
+function drawBrandNameFallback(ctx, chart, index, brandName, size) {
     const meta = chart.getDatasetMeta(0);
     const bar = meta.data[index];
     
     if (!bar) return;
     
     const barHeight = Math.abs(bar.y - bar.base);
+    const barWidth = bar.width;
     
     // Only draw text if bar is tall enough
-    if (barHeight > 35) {
+    if (barHeight > 20) {
         ctx.save();
-        ctx.fillStyle = '#b49b66';
-        ctx.font = 'bold 14px Arial';
+        
+        // Determine font size based on available space
+        const fontSize = Math.min(Math.max(size * 0.3, 10), 14);
+        
+        ctx.font = `bold ${fontSize}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // Add background for better readability
-        const textWidth = ctx.measureText(brandName.substring(0, 8)).width;
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fillRect(bar.x - textWidth/2 - 5, bar.y + (bar.base - bar.y) / 2 - 10, textWidth + 10, 20);
+        // Prepare brand name text
+        const displayText = brandName.length > 6 ? brandName.substring(0, 6) : brandName;
+        const textWidth = ctx.measureText(displayText).width;
         
+        // Create background circle/rectangle for text
+        const centerX = bar.x;
+        const centerY = bar.y + (bar.base - bar.y) / 2;
+        
+        // Background
+        ctx.beginPath();
+        if (barWidth < textWidth + 10) {
+            // If bar is narrow, use circular background
+            const radius = Math.min(barWidth * 0.4, fontSize + 8);
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        } else {
+            // If bar is wide enough, use rounded rectangle
+            const rectWidth = textWidth + 8;
+            const rectHeight = fontSize + 6;
+            ctx.roundRect(centerX - rectWidth/2, centerY - rectHeight/2, rectWidth, rectHeight, 4);
+        }
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(180, 155, 102, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Draw text
         ctx.fillStyle = '#b49b66';
         
-        // Rotate text if bar is narrow
-        if (bar.width < 70) {
-            ctx.translate(bar.x, bar.y + (bar.base - bar.y) / 2);
+        if (barWidth < textWidth + 10 && barHeight > textWidth + 10) {
+            // Rotate text for narrow bars if there's enough height
+            ctx.translate(centerX, centerY);
             ctx.rotate(-Math.PI / 2);
-            ctx.fillText(brandName.substring(0, 8), 0, 0); // Limit to 8 chars
+            ctx.fillText(displayText, 0, 0);
         } else {
-            ctx.fillText(brandName, bar.x, bar.y + (bar.base - bar.y) / 2);
+            // Normal horizontal text
+            ctx.fillText(displayText, centerX, centerY);
         }
+        
         ctx.restore();
     }
 }
