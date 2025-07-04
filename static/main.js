@@ -1465,7 +1465,7 @@ async function populateBrandsForCompare() {
 // Global object to store loaded logo images
 let brandLogos = {};
 
-// Function to load brand logo images
+// Function to load brand logo SVGs
 async function loadBrandLogo(brandName) {
     if (!brandName) return null;
     
@@ -1477,90 +1477,200 @@ async function loadBrandLogo(brandName) {
     }
     
     try {
-        // Create image object
-        const img = new Image();
-        img.crossOrigin = 'anonymous'; // Handle CORS if needed
+        console.log(`Loading SVG logo for brand: ${brandName}`);
         
-        // Create promise to handle image loading
-        const imagePromise = new Promise((resolve, reject) => {
-            img.onload = () => {
-                // Create canvas to process the image (remove background, apply consistent color)
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                
-                // Set canvas size
-                canvas.width = img.width;
-                canvas.height = img.height;
-                
-                // Draw the original image
-                ctx.drawImage(img, 0, 0);
-                
-                // Get image data
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                const data = imageData.data;
-                
-                // Process pixels to remove white/transparent background and apply consistent color
-                for (let i = 0; i < data.length; i += 4) {
-                    const r = data[i];
-                    const g = data[i + 1];
-                    const b = data[i + 2];
-                    const alpha = data[i + 3];
-                    
-                    // Check if pixel is white or nearly white (background)
-                    const isWhite = r > 240 && g > 240 && b > 240;
-                    const isTransparent = alpha < 50;
-                    
-                    if (isWhite || isTransparent) {
-                        // Make it transparent
-                        data[i + 3] = 0;
-                    } else {
-                        // Apply consistent color (dark gold/brown to match your theme)
-                        // You can adjust these RGB values to match your preferred color
-                        data[i] = 180;     // Red component
-                        data[i + 1] = 155; // Green component  
-                        data[i + 2] = 102; // Blue component
-                        // Keep original alpha for better logo definition
-                    }
-                }
-                
-                // Put the processed image data back
-                ctx.putImageData(imageData, 0, 0);
-                
-                // Create a new image from the processed canvas
-                const processedImg = new Image();
-                processedImg.onload = () => resolve(processedImg);
-                processedImg.src = canvas.toDataURL();
-            };
-            
-            img.onerror = () => {
-                console.warn(`Failed to load logo for brand: ${brandName}`);
-                resolve(null); // Return null if image fails to load
-            };
-        });
+        // Fetch the SVG file
+        const svgPath = `/static/brand_logo/${logoKey}_logo.svg`;
+        const response = await fetch(svgPath);
         
-        // Set the image source
-        img.src = `/static/brand_logo/${logoKey}_logo.png`;
+        if (!response.ok) {
+            console.warn(`SVG not found for brand: ${brandName} at ${svgPath}`);
+            brandLogos[logoKey] = null;
+            return null;
+        }
         
-        const processedImage = await imagePromise;
-        brandLogos[logoKey] = processedImage;
-        return processedImage;
+        const svgText = await response.text();
+        
+        // Create a new SVG element with consistent styling
+        const processedSvg = processSvgForChart(svgText, brandName);
+        
+        // Convert SVG to image for canvas rendering
+        const img = await svgToImage(processedSvg);
+        
+        brandLogos[logoKey] = img;
+        console.log(`✅ Successfully loaded logo for: ${brandName}`);
+        return img;
         
     } catch (error) {
-        console.warn(`Error loading logo for brand ${brandName}:`, error);
+        console.warn(`Error loading SVG logo for brand ${brandName}:`, error);
         brandLogos[logoKey] = null;
         return null;
     }
 }
 
+// Function to process SVG and apply consistent styling
+function processSvgForChart(svgText, brandName) {
+    try {
+        // Create a temporary div to parse the SVG
+        const tempDiv = document.createElement('div');
+        tempDiv.innerHTML = svgText;
+        const svgElement = tempDiv.querySelector('svg');
+        
+        if (!svgElement) {
+            throw new Error('No SVG element found');
+        }
+        
+        // Set consistent dimensions
+        svgElement.setAttribute('width', '100');
+        svgElement.setAttribute('height', '100');
+        svgElement.setAttribute('viewBox', svgElement.getAttribute('viewBox') || '0 0 100 100');
+        
+        // Apply consistent color styling - your theme color
+        const themeColor = '#b49b66'; // Your site's gold/brown color
+        
+        // Style all path elements
+        const paths = svgElement.querySelectorAll('path, circle, rect, polygon, ellipse, g');
+        paths.forEach(element => {
+            // Remove any existing fill colors and apply theme color
+            element.setAttribute('fill', themeColor);
+            element.setAttribute('stroke', themeColor);
+            element.removeAttribute('style'); // Remove inline styles that might override
+            
+            // Handle nested elements
+            const nestedElements = element.querySelectorAll('path, circle, rect, polygon, ellipse');
+            nestedElements.forEach(nested => {
+                nested.setAttribute('fill', themeColor);
+                nested.setAttribute('stroke', themeColor);
+                nested.removeAttribute('style');
+            });
+        });
+        
+        // Handle specific brand adjustments if needed
+        switch(brandName.toLowerCase()) {
+            case 'geely':
+                // Geely might have specific styling needs
+                svgElement.style.transform = 'scale(0.9)';
+                break;
+            case 'baojun':
+                // Baojun specific adjustments - might need different scaling
+                svgElement.style.transform = 'scale(0.95)';
+                break;
+            case 'lucid':
+                // Lucid specific adjustments - modern brand, keep standard
+                break;
+        }
+        
+        // Add some styling to ensure visibility
+        svgElement.style.background = 'transparent';
+        svgElement.style.filter = 'drop-shadow(0 1px 3px rgba(0,0,0,0.2))';
+        
+        return svgElement.outerHTML;
+        
+    } catch (error) {
+        console.warn(`Error processing SVG for ${brandName}:`, error);
+        return svgText; // Return original if processing fails
+    }
+}
+
+// Function to convert SVG to Image for canvas rendering
+function svgToImage(svgString) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        
+        img.onload = () => {
+            console.log('SVG converted to image successfully');
+            resolve(img);
+        };
+        
+        img.onerror = (error) => {
+            console.error('Error converting SVG to image:', error);
+            reject(error);
+        };
+        
+        // Create data URL from SVG
+        const svgBlob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+        
+        img.src = svgUrl;
+        
+        // Clean up the blob URL after image loads
+        img.onload = () => {
+            URL.revokeObjectURL(svgUrl);
+            resolve(img);
+        };
+    });
+}
+
 // Function to preload all brand logos for compared cars
 async function preloadBrandLogos() {
     const brands = [...new Set(comparedCars.map(car => car.specs.Brand))];
-    console.log('Preloading logos for brands:', brands);
+    console.log('🔄 Preloading SVG logos for brands:', brands);
     
-    const loadPromises = brands.map(brand => loadBrandLogo(brand));
-    await Promise.all(loadPromises);
+    // Show loading indicator
+    showLogoLoadingStatus(`Loading logos for ${brands.length} brands...`);
     
-    console.log('Brand logos loaded:', Object.keys(brandLogos));
+    const loadPromises = brands.map(async (brand) => {
+        try {
+            await loadBrandLogo(brand);
+            return { brand, success: true };
+        } catch (error) {
+            console.warn(`Failed to load logo for ${brand}:`, error);
+            return { brand, success: false };
+        }
+    });
+    
+    const results = await Promise.all(loadPromises);
+    
+    const successCount = results.filter(r => r.success).length;
+    const failedBrands = results.filter(r => !r.success).map(r => r.brand);
+    
+    console.log(`✅ Loaded ${successCount}/${brands.length} brand logos`);
+    if (failedBrands.length > 0) {
+        console.warn('❌ Failed to load logos for:', failedBrands);
+    }
+    
+    showLogoLoadingStatus(`Loaded ${successCount}/${brands.length} logos`, 2000);
+    
+    console.log('📊 Available brand logos:', Object.keys(brandLogos).filter(key => brandLogos[key] !== null));
+}
+
+// Function to show logo loading status
+function showLogoLoadingStatus(message, autoHideDelay = null) {
+    let statusElement = document.getElementById('logo-loading-status');
+    
+    if (!statusElement) {
+        statusElement = document.createElement('div');
+        statusElement.id = 'logo-loading-status';
+        statusElement.className = 'logo-loading-status';
+        statusElement.style.cssText = `
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: linear-gradient(135deg, #b49b66, #d4af37);
+            color: white;
+            padding: 0.75rem 1.25rem;
+            border-radius: 25px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            z-index: 10000;
+            transition: all 0.3s ease;
+            opacity: 0;
+            transform: translateY(20px);
+            box-shadow: 0 8px 25px rgba(180, 155, 102, 0.4);
+        `;
+        document.body.appendChild(statusElement);
+    }
+    
+    statusElement.textContent = message;
+    statusElement.style.opacity = '1';
+    statusElement.style.transform = 'translateY(0)';
+    
+    if (autoHideDelay) {
+        setTimeout(() => {
+            statusElement.style.opacity = '0';
+            statusElement.style.transform = 'translateY(20px)';
+        }, autoHideDelay);
+    }
 }
 
 // Custom Chart.js plugin for drawing brand logos
@@ -1581,7 +1691,11 @@ const brandLogoPlugin = {
             const brandName = car.specs.Brand;
             const logo = brandLogos[brandName.toLowerCase()];
             
-            if (!logo) return;
+            if (!logo) {
+                // Optionally show a placeholder or brand name
+                drawBrandNameFallback(ctx, chart, index, brandName);
+                return;
+            }
             
             // Get bar position
             const meta = chart.getDatasetMeta(0);
@@ -1593,26 +1707,78 @@ const brandLogoPlugin = {
             const barWidth = bar.width;
             const barHeight = Math.abs(bar.y - bar.base);
             
-            // Logo size (adjust as needed)
-            const logoSize = Math.min(barWidth * 0.6, 40);
+            // Logo size - make it responsive to bar size
+            const maxLogoSize = Math.min(barWidth * 0.7, 55); // Max 55px for better visibility
+            const minLogoSize = 30; // Min 30px
+            const logoSize = Math.max(minLogoSize, maxLogoSize);
             
             // Position logo in the center of the bar
             const logoX = bar.x - logoSize / 2;
             const logoY = bar.y + (bar.base - bar.y) / 2 - logoSize / 2;
             
             // Only draw if the bar is tall enough to accommodate the logo
-            if (barHeight > logoSize) {
+            if (barHeight > logoSize + 15) { // Add 15px padding
                 try {
+                    // Add a subtle background circle for better visibility
+                    ctx.beginPath();
+                    ctx.arc(bar.x, bar.y + (bar.base - bar.y) / 2, logoSize / 2 + 5, 0, 2 * Math.PI);
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                    ctx.fill();
+                    ctx.strokeStyle = 'rgba(180, 155, 102, 0.4)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    // Draw the logo
                     ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
                 } catch (error) {
-                    console.warn('Error drawing logo:', error);
+                    console.warn('Error drawing logo for', brandName, ':', error);
+                    drawBrandNameFallback(ctx, chart, index, brandName);
                 }
+            } else {
+                // If bar is too small, show brand name instead
+                drawBrandNameFallback(ctx, chart, index, brandName);
             }
         });
         
         ctx.restore();
     }
 };
+
+// Fallback function to draw brand name when logo is not available or bar is too small
+function drawBrandNameFallback(ctx, chart, index, brandName) {
+    const meta = chart.getDatasetMeta(0);
+    const bar = meta.data[index];
+    
+    if (!bar) return;
+    
+    const barHeight = Math.abs(bar.y - bar.base);
+    
+    // Only draw text if bar is tall enough
+    if (barHeight > 35) {
+        ctx.save();
+        ctx.fillStyle = '#b49b66';
+        ctx.font = 'bold 14px Arial';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Add background for better readability
+        const textWidth = ctx.measureText(brandName.substring(0, 8)).width;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fillRect(bar.x - textWidth/2 - 5, bar.y + (bar.base - bar.y) / 2 - 10, textWidth + 10, 20);
+        
+        ctx.fillStyle = '#b49b66';
+        
+        // Rotate text if bar is narrow
+        if (bar.width < 70) {
+            ctx.translate(bar.x, bar.y + (bar.base - bar.y) / 2);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText(brandName.substring(0, 8), 0, 0); // Limit to 8 chars
+        } else {
+            ctx.fillText(brandName, bar.x, bar.y + (bar.base - bar.y) / 2);
+        }
+        ctx.restore();
+    }
+}
 
 function initializeComparePage() {
     // Check if we're on the compare page
@@ -2204,11 +2370,21 @@ function updateHorsepowerChart() {
             plugins: {
                 legend: { display: false },
                 tooltip: {
+                    backgroundColor: 'rgba(45, 45, 45, 0.95)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: '#b49b66',
+                    borderWidth: 2,
+                    cornerRadius: 8,
+                    displayColors: false,
                     callbacks: {
-                        label: function(context) {
-                            const carIndex = context.dataIndex;
+                        title: function(context) {
+                            const carIndex = context[0].dataIndex;
                             const car = comparedCars[carIndex];
-                            return `${car.specs.Brand} ${car.variant}: ${context.parsed.y} HP`;
+                            return `${car.specs.Brand} ${car.variant} (${car.year})`;
+                        },
+                        label: function(context) {
+                            return `Horsepower: ${context.parsed.y} HP`;
                         }
                     }
                 }
@@ -2220,13 +2396,22 @@ function updateHorsepowerChart() {
                         display: true,
                         text: 'Horsepower (HP)',
                         color: '#b49b66',
-                        font: { weight: 'bold' }
+                        font: { weight: 'bold', size: 14 }
                     },
-                    grid: { color: 'rgba(180, 155, 102, 0.1)' }
+                    grid: { color: 'rgba(180, 155, 102, 0.1)' },
+                    ticks: {
+                        color: '#666',
+                        font: { size: 12 }
+                    }
                 },
                 x: {
                     grid: { display: false },
-                    ticks: { maxRotation: 45, minRotation: 0 }
+                    ticks: { 
+                        maxRotation: 45, 
+                        minRotation: 0,
+                        color: '#666',
+                        font: { size: 11 }
+                    }
                 }
             }
         },
@@ -2234,6 +2419,7 @@ function updateHorsepowerChart() {
     });
 }
 
+// REPLACE your existing updatePriceChart function with this:
 function updatePriceChart() {
     const canvas = document.getElementById('priceChart');
     if (!canvas) return;
@@ -2269,11 +2455,21 @@ function updatePriceChart() {
             plugins: {
                 legend: { display: false },
                 tooltip: {
+                    backgroundColor: 'rgba(45, 45, 45, 0.95)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: '#b49b66',
+                    borderWidth: 2,
+                    cornerRadius: 8,
+                    displayColors: false,
                     callbacks: {
-                        label: function(context) {
-                            const carIndex = context.dataIndex;
+                        title: function(context) {
+                            const carIndex = context[0].dataIndex;
                             const car = comparedCars[carIndex];
-                            return `${car.specs.Brand} ${car.variant}: ${new Intl.NumberFormat('en-PH', { 
+                            return `${car.specs.Brand} ${car.variant} (${car.year})`;
+                        },
+                        label: function(context) {
+                            return `Price: ${new Intl.NumberFormat('en-PH', { 
                                 style: 'currency', 
                                 currency: 'PHP' 
                             }).format(context.parsed.y)}`;
@@ -2288,10 +2484,12 @@ function updatePriceChart() {
                         display: true,
                         text: 'Price (PHP)',
                         color: '#b49b66',
-                        font: { weight: 'bold' }
+                        font: { weight: 'bold', size: 14 }
                     },
                     grid: { color: 'rgba(180, 155, 102, 0.1)' },
                     ticks: {
+                        color: '#666',
+                        font: { size: 12 },
                         callback: function(value) {
                             return '₱' + (value / 1000000).toFixed(1) + 'M';
                         }
@@ -2299,7 +2497,12 @@ function updatePriceChart() {
                 },
                 x: {
                     grid: { display: false },
-                    ticks: { maxRotation: 45, minRotation: 0 }
+                    ticks: { 
+                        maxRotation: 45, 
+                        minRotation: 0,
+                        color: '#666',
+                        font: { size: 11 }
+                    }
                 }
             }
         },
@@ -2307,76 +2510,7 @@ function updatePriceChart() {
     });
 }
 
-function updatePriceChart() {
-    const canvas = document.getElementById('priceChart');
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    
-    if (chartInstances.price) {
-        chartInstances.price.destroy();
-    }
-
-    const labels = comparedCars.map(car => `${car.variant}\n(${car.year})`);
-    const data = comparedCars.map(car => parseFloat(car.specs.Price) || 0);
-    const colors = chartBackgroundColors.slice(0, comparedCars.length);
-    const borderColors = chartColors.slice(0, comparedCars.length);
-
-    chartInstances.price = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Price (PHP)',
-                data: data,
-                backgroundColor: colors,
-                borderColor: borderColors,
-                borderWidth: 2,
-                borderRadius: 8,
-                borderSkipped: false,
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return new Intl.NumberFormat('en-PH', { 
-                                style: 'currency', 
-                                currency: 'PHP' 
-                            }).format(context.parsed.y);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Price (PHP)',
-                        color: '#b49b66',
-                        font: { weight: 'bold' }
-                    },
-                    grid: { color: 'rgba(180, 155, 102, 0.1)' },
-                    ticks: {
-                        callback: function(value) {
-                            return '₱' + (value / 1000000).toFixed(1) + 'M';
-                        }
-                    }
-                },
-                x: {
-                    grid: { display: false },
-                    ticks: { maxRotation: 45, minRotation: 0 }
-                }
-            }
-        }
-    });
-}
-
+// REPLACE your existing updateGroundClearanceChart function with this:
 function updateGroundClearanceChart() {
     const canvas = document.getElementById('groundClearanceChart');
     if (!canvas) return;
@@ -2412,11 +2546,21 @@ function updateGroundClearanceChart() {
             plugins: {
                 legend: { display: false },
                 tooltip: {
+                    backgroundColor: 'rgba(45, 45, 45, 0.95)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: '#b49b66',
+                    borderWidth: 2,
+                    cornerRadius: 8,
+                    displayColors: false,
                     callbacks: {
-                        label: function(context) {
-                            const carIndex = context.dataIndex;
+                        title: function(context) {
+                            const carIndex = context[0].dataIndex;
                             const car = comparedCars[carIndex];
-                            return `${car.specs.Brand} ${car.variant}: ${context.parsed.y} cm`;
+                            return `${car.specs.Brand} ${car.variant} (${car.year})`;
+                        },
+                        label: function(context) {
+                            return `Ground Clearance: ${context.parsed.y} cm`;
                         }
                     }
                 }
@@ -2428,13 +2572,22 @@ function updateGroundClearanceChart() {
                         display: true,
                         text: 'Ground Clearance (cm)',
                         color: '#b49b66',
-                        font: { weight: 'bold' }
+                        font: { weight: 'bold', size: 14 }
                     },
-                    grid: { color: 'rgba(180, 155, 102, 0.1)' }
+                    grid: { color: 'rgba(180, 155, 102, 0.1)' },
+                    ticks: {
+                        color: '#666',
+                        font: { size: 12 }
+                    }
                 },
                 x: {
                     grid: { display: false },
-                    ticks: { maxRotation: 45, minRotation: 0 }
+                    ticks: { 
+                        maxRotation: 45, 
+                        minRotation: 0,
+                        color: '#666',
+                        font: { size: 11 }
+                    }
                 }
             }
         },
@@ -2442,6 +2595,7 @@ function updateGroundClearanceChart() {
     });
 }
 
+// REPLACE your existing updateSeatingCapacityChart function with this:
 function updateSeatingCapacityChart() {
     const canvas = document.getElementById('seatingCapacityChart');
     if (!canvas) return;
@@ -2477,11 +2631,21 @@ function updateSeatingCapacityChart() {
             plugins: {
                 legend: { display: false },
                 tooltip: {
+                    backgroundColor: 'rgba(45, 45, 45, 0.95)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: '#b49b66',
+                    borderWidth: 2,
+                    cornerRadius: 8,
+                    displayColors: false,
                     callbacks: {
-                        label: function(context) {
-                            const carIndex = context.dataIndex;
+                        title: function(context) {
+                            const carIndex = context[0].dataIndex;
                             const car = comparedCars[carIndex];
-                            return `${car.specs.Brand} ${car.variant}: ${context.parsed.y} seats`;
+                            return `${car.specs.Brand} ${car.variant} (${car.year})`;
+                        },
+                        label: function(context) {
+                            return `Seating: ${context.parsed.y} seats`;
                         }
                     }
                 }
@@ -2493,14 +2657,23 @@ function updateSeatingCapacityChart() {
                         display: true,
                         text: 'Seating Capacity',
                         color: '#b49b66',
-                        font: { weight: 'bold' }
+                        font: { weight: 'bold', size: 14 }
                     },
                     grid: { color: 'rgba(180, 155, 102, 0.1)' },
-                    ticks: { stepSize: 1 }
+                    ticks: { 
+                        stepSize: 1,
+                        color: '#666',
+                        font: { size: 12 }
+                    }
                 },
                 x: {
                     grid: { display: false },
-                    ticks: { maxRotation: 45, minRotation: 0 }
+                    ticks: { 
+                        maxRotation: 45, 
+                        minRotation: 0,
+                        color: '#666',
+                        font: { size: 11 }
+                    }
                 }
             }
         },
@@ -2508,6 +2681,7 @@ function updateSeatingCapacityChart() {
     });
 }
 
+// REPLACE your existing updateCargoSpaceChart function with this:
 function updateCargoSpaceChart() {
     const canvas = document.getElementById('cargoSpaceChart');
     if (!canvas) return;
@@ -2543,11 +2717,21 @@ function updateCargoSpaceChart() {
             plugins: {
                 legend: { display: false },
                 tooltip: {
+                    backgroundColor: 'rgba(45, 45, 45, 0.95)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: '#b49b66',
+                    borderWidth: 2,
+                    cornerRadius: 8,
+                    displayColors: false,
                     callbacks: {
-                        label: function(context) {
-                            const carIndex = context.dataIndex;
+                        title: function(context) {
+                            const carIndex = context[0].dataIndex;
                             const car = comparedCars[carIndex];
-                            return `${car.specs.Brand} ${car.variant}: ${context.parsed.y} L`;
+                            return `${car.specs.Brand} ${car.variant} (${car.year})`;
+                        },
+                        label: function(context) {
+                            return `Cargo Space: ${context.parsed.y} L`;
                         }
                     }
                 }
@@ -2559,13 +2743,22 @@ function updateCargoSpaceChart() {
                         display: true,
                         text: 'Cargo Space (Liters)',
                         color: '#b49b66',
-                        font: { weight: 'bold' }
+                        font: { weight: 'bold', size: 14 }
                     },
-                    grid: { color: 'rgba(180, 155, 102, 0.1)' }
+                    grid: { color: 'rgba(180, 155, 102, 0.1)' },
+                    ticks: {
+                        color: '#666',
+                        font: { size: 12 }
+                    }
                 },
                 x: {
                     grid: { display: false },
-                    ticks: { maxRotation: 45, minRotation: 0 }
+                    ticks: { 
+                        maxRotation: 45, 
+                        minRotation: 0,
+                        color: '#666',
+                        font: { size: 11 }
+                    }
                 }
             }
         },
@@ -2573,9 +2766,9 @@ function updateCargoSpaceChart() {
     });
 }
 
-// UPDATED: Main chart update function with logo preloading
+// REPLACE your existing updateAllCharts function with this:
 async function updateAllCharts() {
-    console.log('Updating all charts for', comparedCars.length, 'cars');
+    console.log('🔄 Updating all charts for', comparedCars.length, 'cars');
     
     if (comparedCars.length === 0) {
         const chartsSection = document.getElementById('compare-charts-section');
@@ -2608,13 +2801,15 @@ async function updateAllCharts() {
     
     // Wait for DOM to be ready, then create all charts
     setTimeout(() => {
+        console.log('🎨 Creating charts with brand logos...');
         updateHorsepowerChart();
         updatePriceChart();
         updateGroundClearanceChart();
         updateCargoSpaceChart();
         updateSeatingCapacityChart();
-        updateRadarChart(); // Radar chart updated last
-    }, 200);
+        updateRadarChart(); // Keep your existing radar chart function
+        console.log('✅ All charts updated with logos');
+    }, 300);
 }
 
 // Event listeners for dropdowns
