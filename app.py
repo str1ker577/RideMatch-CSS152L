@@ -1699,6 +1699,35 @@ def favicon():
     from flask import Response
     return Response(status=204)  # No content response
 
+###################
+# Car Brand Logos #
+###################
+@app.route('/static/brand_logo/<path:filename>')
+def serve_brand_logo(filename):
+    """Serve brand logo files"""
+    try:
+        # Path to your brand_logo folder
+        brand_logo_path = os.path.join(app.root_path, 'brand_logo')
+        
+        # Check if the brand_logo directory exists
+        if not os.path.exists(brand_logo_path):
+            app.logger.warning(f"Brand logo directory not found: {brand_logo_path}")
+            return "Brand logo directory not found", 404
+        
+        # Check if the specific file exists
+        file_path = os.path.join(brand_logo_path, filename)
+        if not os.path.exists(file_path):
+            app.logger.warning(f"Brand logo file not found: {file_path}")
+            # Return a default logo or 404
+            return "Logo not found", 404
+        
+        app.logger.info(f"Serving brand logo: {filename}")
+        return send_from_directory(brand_logo_path, filename)
+        
+    except Exception as e:
+        app.logger.error(f"Error serving brand logo {filename}: {e}")
+        return "Error serving logo", 500
+
 ############################
 # Enhanced debug endpoints #
 ############################

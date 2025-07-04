@@ -1462,6 +1462,158 @@ async function populateBrandsForCompare() {
     }
 }
 
+// Global object to store loaded logo images
+let brandLogos = {};
+
+// Function to load brand logo images
+async function loadBrandLogo(brandName) {
+    if (!brandName) return null;
+    
+    const logoKey = brandName.toLowerCase();
+    
+    // Return cached logo if already loaded
+    if (brandLogos[logoKey]) {
+        return brandLogos[logoKey];
+    }
+    
+    try {
+        // Create image object
+        const img = new Image();
+        img.crossOrigin = 'anonymous'; // Handle CORS if needed
+        
+        // Create promise to handle image loading
+        const imagePromise = new Promise((resolve, reject) => {
+            img.onload = () => {
+                // Create canvas to process the image (remove background, apply consistent color)
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                // Set canvas size
+                canvas.width = img.width;
+                canvas.height = img.height;
+                
+                // Draw the original image
+                ctx.drawImage(img, 0, 0);
+                
+                // Get image data
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                const data = imageData.data;
+                
+                // Process pixels to remove white/transparent background and apply consistent color
+                for (let i = 0; i < data.length; i += 4) {
+                    const r = data[i];
+                    const g = data[i + 1];
+                    const b = data[i + 2];
+                    const alpha = data[i + 3];
+                    
+                    // Check if pixel is white or nearly white (background)
+                    const isWhite = r > 240 && g > 240 && b > 240;
+                    const isTransparent = alpha < 50;
+                    
+                    if (isWhite || isTransparent) {
+                        // Make it transparent
+                        data[i + 3] = 0;
+                    } else {
+                        // Apply consistent color (dark gold/brown to match your theme)
+                        // You can adjust these RGB values to match your preferred color
+                        data[i] = 180;     // Red component
+                        data[i + 1] = 155; // Green component  
+                        data[i + 2] = 102; // Blue component
+                        // Keep original alpha for better logo definition
+                    }
+                }
+                
+                // Put the processed image data back
+                ctx.putImageData(imageData, 0, 0);
+                
+                // Create a new image from the processed canvas
+                const processedImg = new Image();
+                processedImg.onload = () => resolve(processedImg);
+                processedImg.src = canvas.toDataURL();
+            };
+            
+            img.onerror = () => {
+                console.warn(`Failed to load logo for brand: ${brandName}`);
+                resolve(null); // Return null if image fails to load
+            };
+        });
+        
+        // Set the image source
+        img.src = `/static/brand_logo/${logoKey}_logo.png`;
+        
+        const processedImage = await imagePromise;
+        brandLogos[logoKey] = processedImage;
+        return processedImage;
+        
+    } catch (error) {
+        console.warn(`Error loading logo for brand ${brandName}:`, error);
+        brandLogos[logoKey] = null;
+        return null;
+    }
+}
+
+// Function to preload all brand logos for compared cars
+async function preloadBrandLogos() {
+    const brands = [...new Set(comparedCars.map(car => car.specs.Brand))];
+    console.log('Preloading logos for brands:', brands);
+    
+    const loadPromises = brands.map(brand => loadBrandLogo(brand));
+    await Promise.all(loadPromises);
+    
+    console.log('Brand logos loaded:', Object.keys(brandLogos));
+}
+
+// Custom Chart.js plugin for drawing brand logos
+const brandLogoPlugin = {
+    id: 'brandLogo',
+    afterDatasetsDraw: function(chart, args, options) {
+        const { ctx, data, chartArea, scales } = chart;
+        
+        if (!data.datasets || !data.datasets[0] || !comparedCars) return;
+        
+        ctx.save();
+        
+        // Loop through each bar
+        data.datasets[0].data.forEach((value, index) => {
+            if (index >= comparedCars.length) return;
+            
+            const car = comparedCars[index];
+            const brandName = car.specs.Brand;
+            const logo = brandLogos[brandName.toLowerCase()];
+            
+            if (!logo) return;
+            
+            // Get bar position
+            const meta = chart.getDatasetMeta(0);
+            const bar = meta.data[index];
+            
+            if (!bar) return;
+            
+            // Calculate logo position and size
+            const barWidth = bar.width;
+            const barHeight = Math.abs(bar.y - bar.base);
+            
+            // Logo size (adjust as needed)
+            const logoSize = Math.min(barWidth * 0.6, 40);
+            
+            // Position logo in the center of the bar
+            const logoX = bar.x - logoSize / 2;
+            const logoY = bar.y + (bar.base - bar.y) / 2 - logoSize / 2;
+            
+            // Only draw if the bar is tall enough to accommodate the logo
+            if (barHeight > logoSize) {
+                try {
+                    ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+                } catch (error) {
+                    console.warn('Error drawing logo:', error);
+                }
+            }
+        });
+        
+        ctx.restore();
+    }
+};
+
 function initializeComparePage() {
     // Check if we're on the compare page
     const brandDropdown = document.getElementById('brand');
@@ -1660,47 +1812,6 @@ function createProgressBar(value, type) {
     progressContainer.appendChild(progressFill);
     
     return progressContainer;
-}
-
-// UPDATED: Main chart update function with separate radar section
-function updateAllCharts() {
-    console.log('Updating all charts for', comparedCars.length, 'cars');
-    
-    if (comparedCars.length === 0) {
-        const chartsSection = document.getElementById('compare-charts-section');
-        const radarSection = document.getElementById('radar-chart-section');
-        const cardsWrapper = document.getElementById('comparison-cards-wrapper');
-        
-        if (chartsSection) chartsSection.style.display = 'none';
-        if (radarSection) radarSection.style.display = 'none';
-        if (cardsWrapper) cardsWrapper.style.display = 'none';
-        
-        // Destroy all existing charts
-        Object.values(chartInstances).forEach(chart => {
-            if (chart) chart.destroy();
-        });
-        chartInstances = {};
-        return;
-    }
-
-    // Show all sections
-    const chartsSection = document.getElementById('compare-charts-section');
-    const radarSection = document.getElementById('radar-chart-section');
-    const cardsWrapper = document.getElementById('comparison-cards-wrapper');
-    
-    if (chartsSection) chartsSection.style.display = 'block';
-    if (radarSection) radarSection.style.display = 'block';
-    if (cardsWrapper) cardsWrapper.style.display = 'block';
-    
-    // Wait for DOM to be ready, then create all charts
-    setTimeout(() => {
-        updateHorsepowerChart();
-        updatePriceChart();
-        updateGroundClearanceChart();
-        updateCargoSpaceChart();
-        updateSeatingCapacityChart();
-        updateRadarChart(); // Radar chart updated last
-    }, 200);
 }
 
 // UPDATED: Dynamic Radar Chart Implementation with Dynamic Scaling
@@ -2095,7 +2206,9 @@ function updateHorsepowerChart() {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return `${context.parsed.y} HP`;
+                            const carIndex = context.dataIndex;
+                            const car = comparedCars[carIndex];
+                            return `${car.specs.Brand} ${car.variant}: ${context.parsed.y} HP`;
                         }
                     }
                 }
@@ -2116,7 +2229,81 @@ function updateHorsepowerChart() {
                     ticks: { maxRotation: 45, minRotation: 0 }
                 }
             }
-        }
+        },
+        plugins: [brandLogoPlugin]
+    });
+}
+
+function updatePriceChart() {
+    const canvas = document.getElementById('priceChart');
+    if (!canvas) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    if (chartInstances.price) {
+        chartInstances.price.destroy();
+    }
+
+    const labels = comparedCars.map(car => `${car.variant}\n(${car.year})`);
+    const data = comparedCars.map(car => parseFloat(car.specs.Price) || 0);
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
+
+    chartInstances.price = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Price (PHP)',
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
+                borderWidth: 2,
+                borderRadius: 8,
+                borderSkipped: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const carIndex = context.dataIndex;
+                            const car = comparedCars[carIndex];
+                            return `${car.specs.Brand} ${car.variant}: ${new Intl.NumberFormat('en-PH', { 
+                                style: 'currency', 
+                                currency: 'PHP' 
+                            }).format(context.parsed.y)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Price (PHP)',
+                        color: '#b49b66',
+                        font: { weight: 'bold' }
+                    },
+                    grid: { color: 'rgba(180, 155, 102, 0.1)' },
+                    ticks: {
+                        callback: function(value) {
+                            return '₱' + (value / 1000000).toFixed(1) + 'M';
+                        }
+                    }
+                },
+                x: {
+                    grid: { display: false },
+                    ticks: { maxRotation: 45, minRotation: 0 }
+                }
+            }
+        },
+        plugins: [brandLogoPlugin]
     });
 }
 
@@ -2227,7 +2414,9 @@ function updateGroundClearanceChart() {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return `${context.parsed.y} cm`;
+                            const carIndex = context.dataIndex;
+                            const car = comparedCars[carIndex];
+                            return `${car.specs.Brand} ${car.variant}: ${context.parsed.y} cm`;
                         }
                     }
                 }
@@ -2248,7 +2437,8 @@ function updateGroundClearanceChart() {
                     ticks: { maxRotation: 45, minRotation: 0 }
                 }
             }
-        }
+        },
+        plugins: [brandLogoPlugin]
     });
 }
 
@@ -2289,7 +2479,9 @@ function updateSeatingCapacityChart() {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return `${context.parsed.y} seats`;
+                            const carIndex = context.dataIndex;
+                            const car = comparedCars[carIndex];
+                            return `${car.specs.Brand} ${car.variant}: ${context.parsed.y} seats`;
                         }
                     }
                 }
@@ -2311,7 +2503,8 @@ function updateSeatingCapacityChart() {
                     ticks: { maxRotation: 45, minRotation: 0 }
                 }
             }
-        }
+        },
+        plugins: [brandLogoPlugin]
     });
 }
 
@@ -2352,7 +2545,9 @@ function updateCargoSpaceChart() {
                 tooltip: {
                     callbacks: {
                         label: function(context) {
-                            return `${context.parsed.y} L`;
+                            const carIndex = context.dataIndex;
+                            const car = comparedCars[carIndex];
+                            return `${car.specs.Brand} ${car.variant}: ${context.parsed.y} L`;
                         }
                     }
                 }
@@ -2373,8 +2568,53 @@ function updateCargoSpaceChart() {
                     ticks: { maxRotation: 45, minRotation: 0 }
                 }
             }
-        }
+        },
+        plugins: [brandLogoPlugin]
     });
+}
+
+// UPDATED: Main chart update function with logo preloading
+async function updateAllCharts() {
+    console.log('Updating all charts for', comparedCars.length, 'cars');
+    
+    if (comparedCars.length === 0) {
+        const chartsSection = document.getElementById('compare-charts-section');
+        const radarSection = document.getElementById('radar-chart-section');
+        const cardsWrapper = document.getElementById('comparison-cards-wrapper');
+        
+        if (chartsSection) chartsSection.style.display = 'none';
+        if (radarSection) radarSection.style.display = 'none';
+        if (cardsWrapper) cardsWrapper.style.display = 'none';
+        
+        // Destroy all existing charts
+        Object.values(chartInstances).forEach(chart => {
+            if (chart) chart.destroy();
+        });
+        chartInstances = {};
+        return;
+    }
+
+    // Show all sections
+    const chartsSection = document.getElementById('compare-charts-section');
+    const radarSection = document.getElementById('radar-chart-section');
+    const cardsWrapper = document.getElementById('comparison-cards-wrapper');
+    
+    if (chartsSection) chartsSection.style.display = 'block';
+    if (radarSection) radarSection.style.display = 'block';
+    if (cardsWrapper) cardsWrapper.style.display = 'block';
+    
+    // Preload brand logos first
+    await preloadBrandLogos();
+    
+    // Wait for DOM to be ready, then create all charts
+    setTimeout(() => {
+        updateHorsepowerChart();
+        updatePriceChart();
+        updateGroundClearanceChart();
+        updateCargoSpaceChart();
+        updateSeatingCapacityChart();
+        updateRadarChart(); // Radar chart updated last
+    }, 200);
 }
 
 // Event listeners for dropdowns

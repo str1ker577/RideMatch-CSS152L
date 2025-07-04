@@ -2293,7 +2293,9 @@ textarea:focus, input[type="text"]:focus {
     transform: none;
 }
 
-/* Testimonial Cards */
+/*************************/
+/* Testimonial Page      */
+/*************************/
 .testimonial-card {
     background: white;
     border-radius: 20px;
@@ -2843,10 +2845,10 @@ textarea:focus, input[type="text"]:focus {
     font-size: 0.9rem; /* ADDED: smaller font */
 }
 
-/* ============================= */
-/* CALCULATOR RESULTS TABLE      */
+/* ===================================== */
+/* CALCULATOR RESULTS TABLE               */
 /* IMPROVED: Similar to main filter page */
-/* ============================= */
+/* ===================================== */
 
 .calculator-results-container {
     width: 90%;
