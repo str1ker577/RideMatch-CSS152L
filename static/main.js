@@ -1518,6 +1518,8 @@ async function loadBrandLogo(brandName) {
 // Function to process SVG and apply consistent styling
 function processSvgForChart(svgText, brandName) {
     try {
+        console.log(`Processing SVG for ${brandName}...`);
+        
         // Create a temporary div to parse the SVG
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = svgText;
@@ -1532,67 +1534,254 @@ function processSvgForChart(svgText, brandName) {
         svgElement.setAttribute('height', '100');
         svgElement.setAttribute('viewBox', svgElement.getAttribute('viewBox') || '0 0 100 100');
         
-        // Apply consistent color styling - your theme color
-        const themeColor = '#b49b66'; // Your site's gold/brown color
+        // Your theme color
+        const themeColor = '#b49b66';
         
-        // More robust color processing for different SVG structures
+        // AGGRESSIVE approach: Remove ALL existing styling first
         const allElements = svgElement.querySelectorAll('*');
         allElements.forEach(element => {
-            // Remove any existing styles that might interfere
+            // Remove all style attributes
             element.removeAttribute('style');
+            element.removeAttribute('class');
             
-            // Apply theme color to fill and stroke attributes
-            if (element.hasAttribute('fill') && element.getAttribute('fill') !== 'none') {
+            // Remove problematic attributes that might override colors
+            element.removeAttribute('opacity');
+            
+            // Remove any CSS classes that might interfere
+            if (element.className && element.className.baseVal) {
+                element.className.baseVal = '';
+            }
+        });
+        
+        // STEP 1: Try direct attribute approach
+        allElements.forEach(element => {
+            const tagName = element.tagName ? element.tagName.toLowerCase() : '';
+            
+            if (['path', 'circle', 'rect', 'polygon', 'ellipse', 'line', 'polyline'].includes(tagName)) {
+                // Force our color
                 element.setAttribute('fill', themeColor);
-            }
-            if (element.hasAttribute('stroke') && element.getAttribute('stroke') !== 'none') {
                 element.setAttribute('stroke', themeColor);
+                element.removeAttribute('fill-opacity');
+                element.removeAttribute('stroke-opacity');
             }
             
-            // Handle elements that might not have explicit fill/stroke
-            if (element.tagName && ['path', 'circle', 'rect', 'polygon', 'ellipse', 'line'].includes(element.tagName.toLowerCase())) {
+            // Handle groups and other containers
+            if (['g', 'defs', 'clipPath', 'mask'].includes(tagName)) {
                 element.setAttribute('fill', themeColor);
                 element.setAttribute('stroke', 'none');
             }
         });
         
-        // Special handling for specific brands that might have complex structures
+        // STEP 2: Add CSS override styles directly to SVG
+        let styleElement = svgElement.querySelector('style');
+        if (!styleElement) {
+            styleElement = document.createElementNS('http://www.w3.org/2000/svg', 'style');
+            svgElement.insertBefore(styleElement, svgElement.firstChild);
+        }
+        
+        // Aggressive CSS that overrides everything
+        styleElement.textContent = `
+            * {
+                fill: ${themeColor} !important;
+                stroke: none !important;
+                color: ${themeColor} !important;
+            }
+            path, circle, rect, polygon, ellipse, line, polyline {
+                fill: ${themeColor} !important;
+                stroke: none !important;
+            }
+            g {
+                fill: ${themeColor} !important;
+                stroke: none !important;
+            }
+        `;
+        
+        // STEP 3: Brand-specific handling for problematic logos
         switch(brandName.toLowerCase()) {
             case 'bmw':
-                // BMW logo often has complex nested structures
-                svgElement.style.fill = themeColor;
-                svgElement.style.color = themeColor;
+                console.log('Applying BMW-specific processing...');
+                // BMW logos often have multiple layers - force color on everything
+                allElements.forEach(el => {
+                    if (el.tagName) {
+                        el.style.fill = themeColor;
+                        el.style.color = themeColor;
+                        el.style.stroke = 'none';
+                    }
+                });
                 break;
-            case 'tesla':
-                // Tesla logo might have specific styling needs
-                svgElement.style.fill = themeColor;
-                svgElement.style.color = themeColor;
+                
+            case 'ford':
+                console.log('Applying Ford-specific processing...');
+                // Ford might have text elements or complex paths
+                allElements.forEach(el => {
+                    if (el.tagName) {
+                        el.setAttribute('fill', themeColor);
+                        el.style.fill = themeColor;
+                        el.style.color = themeColor;
+                    }
+                });
                 break;
-            case 'geely':
-                svgElement.style.transform = 'scale(0.9)';
+                
+            case 'porsche':
+                console.log('Applying Porsche-specific processing...');
+                // Porsche might have detailed crest elements
+                allElements.forEach(el => {
+                    if (el.tagName) {
+                        el.setAttribute('fill', themeColor);
+                        el.style.fill = themeColor;
+                    }
+                });
                 break;
-            case 'baojun':
-                svgElement.style.transform = 'scale(0.95)';
+                
+            case 'mercedes':
+            case 'mercedes-benz':
+                console.log('Applying Mercedes-specific processing...');
+                // Mercedes star might have specific structure
+                allElements.forEach(el => {
+                    if (el.tagName) {
+                        el.setAttribute('fill', themeColor);
+                        el.style.fill = themeColor;
+                    }
+                });
                 break;
         }
         
-        // Add comprehensive styling to ensure visibility
-        svgElement.style.background = 'transparent';
-        svgElement.style.filter = 'drop-shadow(0 2px 4px rgba(0,0,0,0.3))';
-        
-        // Force color through CSS as well
-        svgElement.style.cssText += `
+        // STEP 4: Final SVG-level styling
+        svgElement.style.cssText = `
             fill: ${themeColor} !important;
             color: ${themeColor} !important;
+            background: transparent !important;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
         `;
         
+        // STEP 5: Set SVG attributes as backup
+        svgElement.setAttribute('fill', themeColor);
+        svgElement.setAttribute('color', themeColor);
+        
+        console.log(`✅ SVG processing completed for ${brandName}`);
         return svgElement.outerHTML;
         
     } catch (error) {
-        console.warn(`Error processing SVG for ${brandName}:`, error);
-        return svgText; // Return original if processing fails
+        console.warn(`❌ Error processing SVG for ${brandName}:`, error);
+        
+        // FALLBACK: If processing fails, try a simple color replacement
+        try {
+            let fallbackSvg = svgText;
+            
+            // Simple find-and-replace for common color patterns
+            const commonColors = ['#000', '#000000', 'black', '#fff', '#ffffff', 'white', '#blue', '#red', '#gray', '#grey'];
+            commonColors.forEach(color => {
+                const regex = new RegExp(`fill="${color}"`, 'gi');
+                fallbackSvg = fallbackSvg.replace(regex, `fill="#b49b66"`);
+            });
+            
+            // Replace fill="currentColor" which is common in modern SVGs
+            fallbackSvg = fallbackSvg.replace(/fill="currentColor"/gi, 'fill="#b49b66"');
+            fallbackSvg = fallbackSvg.replace(/stroke="currentColor"/gi, 'stroke="#b49b66"');
+            
+            console.log(`🔄 Applied fallback processing for ${brandName}`);
+            return fallbackSvg;
+            
+        } catch (fallbackError) {
+            console.warn(`❌ Fallback processing also failed for ${brandName}:`, fallbackError);
+            return svgText; // Return original if everything fails
+        }
     }
 }
+
+async function debugBrandLogo(brandName) {
+    console.log(`🔍 Debug processing for ${brandName}...`);
+    
+    try {
+        const svgPath = `/static/brand_logo/${brandName.toLowerCase()}_logo.svg`;
+        const response = await fetch(svgPath);
+        
+        if (!response.ok) {
+            console.log(`❌ SVG not found for ${brandName}`);
+            return;
+        }
+        
+        const originalSvg = await response.text();
+        console.log('📄 Original SVG length:', originalSvg.length);
+        console.log('📄 Original SVG preview:', originalSvg.substring(0, 200) + '...');
+        
+        const processedSvg = processSvgForChart(originalSvg, brandName);
+        console.log('🔧 Processed SVG length:', processedSvg.length);
+        console.log('🔧 Processed SVG preview:', processedSvg.substring(0, 200) + '...');
+        
+        // Create a visual comparison
+        const testContainer = document.createElement('div');
+        testContainer.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            background: white;
+            padding: 2rem;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            z-index: 10000;
+            max-width: 600px;
+            border: 3px solid #b49b66;
+        `;
+        
+        testContainer.innerHTML = `
+            <h3 style="margin-top: 0; color: #b49b66; text-align: center;">Debug: ${brandName} Logo Processing</h3>
+            <div style="display: flex; gap: 2rem; align-items: center;">
+                <div style="text-align: center;">
+                    <h4>Original</h4>
+                    <div style="width: 100px; height: 100px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center;">
+                        ${originalSvg}
+                    </div>
+                </div>
+                <div style="text-align: center;">
+                    <h4>Processed</h4>
+                    <div style="width: 100px; height: 100px; border: 1px solid #ddd; display: flex; align-items: center; justify-content: center;">
+                        ${processedSvg}
+                    </div>
+                </div>
+            </div>
+            <div style="text-align: center; margin-top: 1rem;">
+                <button onclick="this.parentElement.parentElement.remove()" style="
+                    padding: 0.5rem 1rem;
+                    background: #b49b66;
+                    color: white;
+                    border: none;
+                    border-radius: 6px;
+                    cursor: pointer;
+                ">Close</button>
+            </div>
+        `;
+        
+        document.body.appendChild(testContainer);
+        
+        return { original: originalSvg, processed: processedSvg };
+        
+    } catch (error) {
+        console.error(`❌ Debug failed for ${brandName}:`, error);
+    }
+}
+
+// Make debug function available globally
+window.debugBrandLogo = debugBrandLogo;
+
+// Quick test for problematic brands
+async function testProblematicLogos() {
+    const problematicBrands = ['bmw', 'ford', 'porsche', 'mercedes'];
+    
+    console.log('🧪 Testing problematic logos...');
+    
+    for (const brand of problematicBrands) {
+        console.log(`\n--- Testing ${brand.toUpperCase()} ---`);
+        try {
+            const logo = await loadBrandLogo(brand);
+            console.log(`${logo ? '✅' : '❌'} ${brand}: ${logo ? 'Success' : 'Failed'}`);
+        } catch (error) {
+            console.log(`❌ ${brand}: Error - ${error.message}`);
+        }
+    }
+}
+
+window.testProblematicLogos = testProblematicLogos;
 
 // Function to convert SVG to Image for canvas rendering
 function svgToImage(svgString) {
