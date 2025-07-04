@@ -1462,6 +1462,10 @@ async function populateBrandsForCompare() {
     }
 }
 
+/////////////////////////
+// Compare Charts Logo //
+/////////////////////////
+
 // Global object to store loaded logo images
 let brandLogos = {};
 
@@ -1515,12 +1519,90 @@ async function loadBrandLogo(brandName) {
     }
 }
 
-// Function to process SVG and apply consistent styling
+// Brand-specific processing configurations
+const brandProcessingConfig = {
+    'bmw': {
+        type: 'complex_circular',
+        removeGradients: true,
+        forceMonochrome: true,
+        textHandling: 'convert_to_paths'
+    },
+    'ford': {
+        type: 'oval_with_text',
+        removeGradients: true,
+        forceMonochrome: true,
+        textHandling: 'force_color'
+    },
+    'kia': {
+        type: 'oval_modern',
+        removeGradients: true,
+        forceMonochrome: true,
+        specialProcessing: 'modern_oval'
+    },
+    'hyundai': {
+        type: 'oval_classic',
+        removeGradients: true,
+        forceMonochrome: true,
+        specialProcessing: 'italicized_oval'
+    },
+    'mg': {
+        type: 'badge_style',
+        removeGradients: true,
+        forceMonochrome: true,
+        textHandling: 'force_color'
+    },
+    'mercedes': {
+        type: 'star_circle',
+        removeGradients: true,
+        forceMonochrome: true,
+        specialProcessing: 'three_pointed_star'
+    },
+    'mercedes-benz': {
+        type: 'redirect',
+        redirectTo: 'mercedes' // Handle duplicate
+    },
+    'porsche': {
+        type: 'complex_crest',
+        removeGradients: true,
+        forceMonochrome: true,
+        specialProcessing: 'heraldic_crest'
+    },
+    'subaru': {
+        type: 'constellation',
+        removeGradients: true,
+        forceMonochrome: true,
+        specialProcessing: 'star_constellation'
+    },
+    'tesla': {
+        type: 'modern_t',
+        removeGradients: true,
+        forceMonochrome: true,
+        specialProcessing: 'stylized_t'
+    },
+    'volkswagen': {
+        type: 'vw_circle',
+        removeGradients: true,
+        forceMonochrome: true,
+        specialProcessing: 'vw_letters'
+    }
+};
+
+// Enhanced processSvgForChart function
 function processSvgForChart(svgText, brandName) {
     try {
-        console.log(`Processing SVG for ${brandName}...`);
+        console.log(`🔧 Enhanced processing for ${brandName}...`);
         
-        // Create a temporary div to parse the SVG
+        const themeColor = '#b49b66';
+        const brandKey = brandName.toLowerCase().replace(/[\s-]/g, '');
+        const config = brandProcessingConfig[brandKey] || {};
+        
+        // Handle redirects (like mercedes-benz -> mercedes)
+        if (config.type === 'redirect') {
+            console.log(`🔄 Redirecting ${brandName} to ${config.redirectTo}`);
+            return processSvgForChart(svgText, config.redirectTo);
+        }
+        
+        // Create temporary container
         const tempDiv = document.createElement('div');
         tempDiv.innerHTML = svgText;
         const svgElement = tempDiv.querySelector('svg');
@@ -1532,162 +1614,321 @@ function processSvgForChart(svgText, brandName) {
         // Set consistent dimensions
         svgElement.setAttribute('width', '100');
         svgElement.setAttribute('height', '100');
-        svgElement.setAttribute('viewBox', svgElement.getAttribute('viewBox') || '0 0 100 100');
         
-        // Your theme color
-        const themeColor = '#b49b66';
+        // STEP 1: Remove all existing problematic elements
+        console.log(`🧹 Cleaning SVG for ${brandName}...`);
         
-        // AGGRESSIVE approach: Remove ALL existing styling first
-        const allElements = svgElement.querySelectorAll('*');
-        allElements.forEach(element => {
-            // Remove all style attributes
-            element.removeAttribute('style');
-            element.removeAttribute('class');
-            
-            // Remove problematic attributes that might override colors
-            element.removeAttribute('opacity');
-            
-            // Remove any CSS classes that might interfere
-            if (element.className && element.className.baseVal) {
-                element.className.baseVal = '';
+        // Remove gradients, patterns, and complex definitions
+        const defs = svgElement.querySelectorAll('defs');
+        defs.forEach(def => {
+            if (config.removeGradients) {
+                const gradients = def.querySelectorAll('linearGradient, radialGradient, pattern, filter');
+                gradients.forEach(grad => grad.remove());
             }
         });
         
-        // STEP 1: Try direct attribute approach
-        allElements.forEach(element => {
-            const tagName = element.tagName ? element.tagName.toLowerCase() : '';
-            
-            if (['path', 'circle', 'rect', 'polygon', 'ellipse', 'line', 'polyline'].includes(tagName)) {
-                // Force our color
-                element.setAttribute('fill', themeColor);
-                element.setAttribute('stroke', themeColor);
-                element.removeAttribute('fill-opacity');
-                element.removeAttribute('stroke-opacity');
-            }
-            
-            // Handle groups and other containers
-            if (['g', 'defs', 'clipPath', 'mask'].includes(tagName)) {
-                element.setAttribute('fill', themeColor);
-                element.setAttribute('stroke', 'none');
-            }
-        });
+        // Remove style elements that might override our changes
+        const styleElements = svgElement.querySelectorAll('style');
+        styleElements.forEach(style => style.remove());
         
-        // STEP 2: Add CSS override styles directly to SVG
-        let styleElement = svgElement.querySelector('style');
-        if (!styleElement) {
-            styleElement = document.createElementNS('http://www.w3.org/2000/svg', 'style');
-            svgElement.insertBefore(styleElement, svgElement.firstChild);
+        // STEP 2: Brand-specific processing
+        if (config.specialProcessing) {
+            console.log(`🎨 Applying special processing: ${config.specialProcessing}`);
+            svgElement = applySpecialProcessing(svgElement, config.specialProcessing, themeColor);
         }
         
-        // Aggressive CSS that overrides everything
+        // STEP 3: Force monochrome if required
+        if (config.forceMonochrome) {
+            console.log(`🎨 Forcing monochrome for ${brandName}...`);
+            forceMonochrome(svgElement, themeColor, config);
+        }
+        
+        // STEP 4: Add global override styles
+        const styleElement = document.createElementNS('http://www.w3.org/2000/svg', 'style');
         styleElement.textContent = `
             * {
                 fill: ${themeColor} !important;
                 stroke: none !important;
                 color: ${themeColor} !important;
             }
+            text {
+                fill: ${themeColor} !important;
+                color: ${themeColor} !important;
+            }
             path, circle, rect, polygon, ellipse, line, polyline {
                 fill: ${themeColor} !important;
                 stroke: none !important;
             }
-            g {
-                fill: ${themeColor} !important;
-                stroke: none !important;
-            }
         `;
+        svgElement.insertBefore(styleElement, svgElement.firstChild);
         
-        // STEP 3: Brand-specific handling for problematic logos
-        switch(brandName.toLowerCase()) {
-            case 'bmw':
-                console.log('Applying BMW-specific processing...');
-                // BMW logos often have multiple layers - force color on everything
-                allElements.forEach(el => {
-                    if (el.tagName) {
-                        el.style.fill = themeColor;
-                        el.style.color = themeColor;
-                        el.style.stroke = 'none';
-                    }
-                });
-                break;
-                
-            case 'ford':
-                console.log('Applying Ford-specific processing...');
-                // Ford might have text elements or complex paths
-                allElements.forEach(el => {
-                    if (el.tagName) {
-                        el.setAttribute('fill', themeColor);
-                        el.style.fill = themeColor;
-                        el.style.color = themeColor;
-                    }
-                });
-                break;
-                
-            case 'porsche':
-                console.log('Applying Porsche-specific processing...');
-                // Porsche might have detailed crest elements
-                allElements.forEach(el => {
-                    if (el.tagName) {
-                        el.setAttribute('fill', themeColor);
-                        el.style.fill = themeColor;
-                    }
-                });
-                break;
-                
-            case 'mercedes':
-            case 'mercedes-benz':
-                console.log('Applying Mercedes-specific processing...');
-                // Mercedes star might have specific structure
-                allElements.forEach(el => {
-                    if (el.tagName) {
-                        el.setAttribute('fill', themeColor);
-                        el.style.fill = themeColor;
-                    }
-                });
-                break;
-        }
-        
-        // STEP 4: Final SVG-level styling
-        svgElement.style.cssText = `
-            fill: ${themeColor} !important;
-            color: ${themeColor} !important;
-            background: transparent !important;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-        `;
-        
-        // STEP 5: Set SVG attributes as backup
+        // STEP 5: Final attributes
         svgElement.setAttribute('fill', themeColor);
         svgElement.setAttribute('color', themeColor);
         
-        console.log(`✅ SVG processing completed for ${brandName}`);
+        console.log(`✅ Enhanced processing completed for ${brandName}`);
         return svgElement.outerHTML;
         
     } catch (error) {
-        console.warn(`❌ Error processing SVG for ${brandName}:`, error);
-        
-        // FALLBACK: If processing fails, try a simple color replacement
-        try {
-            let fallbackSvg = svgText;
-            
-            // Simple find-and-replace for common color patterns
-            const commonColors = ['#000', '#000000', 'black', '#fff', '#ffffff', 'white', '#blue', '#red', '#gray', '#grey'];
-            commonColors.forEach(color => {
-                const regex = new RegExp(`fill="${color}"`, 'gi');
-                fallbackSvg = fallbackSvg.replace(regex, `fill="#b49b66"`);
-            });
-            
-            // Replace fill="currentColor" which is common in modern SVGs
-            fallbackSvg = fallbackSvg.replace(/fill="currentColor"/gi, 'fill="#b49b66"');
-            fallbackSvg = fallbackSvg.replace(/stroke="currentColor"/gi, 'stroke="#b49b66"');
-            
-            console.log(`🔄 Applied fallback processing for ${brandName}`);
-            return fallbackSvg;
-            
-        } catch (fallbackError) {
-            console.warn(`❌ Fallback processing also failed for ${brandName}:`, fallbackError);
-            return svgText; // Return original if everything fails
-        }
+        console.warn(`❌ Enhanced processing failed for ${brandName}:`, error);
+        return applyFallbackProcessing(svgText, brandName);
     }
 }
+
+function applySpecialProcessing(svgElement, processingType, themeColor) {
+    switch (processingType) {
+        case 'modern_oval':
+            return processModernOval(svgElement, themeColor);
+        case 'italicized_oval':
+            return processItalicizedOval(svgElement, themeColor);
+        case 'three_pointed_star':
+            return processThreePointedStar(svgElement, themeColor);
+        case 'heraldic_crest':
+            return processHeraldicCrest(svgElement, themeColor);
+        case 'star_constellation':
+            return processStarConstellation(svgElement, themeColor);
+        case 'stylized_t':
+            return processStylizedT(svgElement, themeColor);
+        case 'vw_letters':
+            return processVWLetters(svgElement, themeColor);
+        default:
+            return svgElement;
+    }
+}
+// Specific processing functions
+function processModernOval(svgElement, themeColor) {
+    // Kia's modern oval design
+    const paths = svgElement.querySelectorAll('path');
+    paths.forEach(path => {
+        path.setAttribute('fill', themeColor);
+        path.setAttribute('stroke', 'none');
+        path.removeAttribute('fill-opacity');
+    });
+    return svgElement;
+}
+
+function processItalicizedOval(svgElement, themeColor) {
+    // Hyundai's italicized oval
+    const allElements = svgElement.querySelectorAll('*');
+    allElements.forEach(element => {
+        if (element.tagName) {
+            element.setAttribute('fill', themeColor);
+            element.setAttribute('stroke', 'none');
+            element.style.fill = themeColor;
+        }
+    });
+    return svgElement;
+}
+
+function processThreePointedStar(svgElement, themeColor) {
+    // Mercedes three-pointed star
+    const circles = svgElement.querySelectorAll('circle');
+    const paths = svgElement.querySelectorAll('path');
+    
+    [...circles, ...paths].forEach(element => {
+        element.setAttribute('fill', themeColor);
+        element.setAttribute('stroke', 'none');
+        element.style.fill = themeColor;
+    });
+    return svgElement;
+}
+
+function processHeraldicCrest(svgElement, themeColor) {
+    // Porsche heraldic crest - simplify complex elements
+    const allShapes = svgElement.querySelectorAll('path, circle, rect, polygon, ellipse');
+    allShapes.forEach(shape => {
+        shape.setAttribute('fill', themeColor);
+        shape.setAttribute('stroke', 'none');
+        shape.removeAttribute('opacity');
+        shape.removeAttribute('fill-opacity');
+    });
+    
+    // Handle text elements in Porsche logo
+    const textElements = svgElement.querySelectorAll('text, tspan');
+    textElements.forEach(text => {
+        text.setAttribute('fill', themeColor);
+        text.style.fill = themeColor;
+    });
+    
+    return svgElement;
+}
+
+function processStarConstellation(svgElement, themeColor) {
+    // Subaru star constellation
+    const stars = svgElement.querySelectorAll('path, polygon, circle');
+    stars.forEach(star => {
+        star.setAttribute('fill', themeColor);
+        star.setAttribute('stroke', 'none');
+    });
+    return svgElement;
+}
+
+function processStylizedT(svgElement, themeColor) {
+    // Tesla stylized T
+    const paths = svgElement.querySelectorAll('path');
+    paths.forEach(path => {
+        path.setAttribute('fill', themeColor);
+        path.setAttribute('stroke', 'none');
+        path.style.fill = themeColor;
+    });
+    return svgElement;
+}
+
+function processVWLetters(svgElement, themeColor) {
+    // Volkswagen VW letters in circle
+    const allElements = svgElement.querySelectorAll('*');
+    allElements.forEach(element => {
+        if (['path', 'circle', 'rect', 'text', 'g'].includes(element.tagName?.toLowerCase())) {
+            element.setAttribute('fill', themeColor);
+            element.setAttribute('stroke', 'none');
+            element.style.fill = themeColor;
+        }
+    });
+    return svgElement;
+}
+
+// Force monochrome function
+function forceMonochrome(svgElement, themeColor, config) {
+    const allElements = svgElement.querySelectorAll('*');
+    
+    allElements.forEach(element => {
+        // Remove all color-related attributes
+        const colorAttributes = [
+            'fill', 'stroke', 'stop-color', 'flood-color', 
+            'lighting-color', 'fill-opacity', 'stroke-opacity'
+        ];
+        
+        colorAttributes.forEach(attr => {
+            if (element.hasAttribute(attr)) {
+                element.setAttribute(attr, attr === 'fill' ? themeColor : 'none');
+            }
+        });
+        
+        // Force styles
+        element.style.fill = themeColor;
+        element.style.stroke = 'none';
+        element.style.color = themeColor;
+        
+        // Handle text elements specially
+        if (config.textHandling === 'force_color' && 
+            ['text', 'tspan'].includes(element.tagName?.toLowerCase())) {
+            element.setAttribute('fill', themeColor);
+            element.style.fill = themeColor;
+            element.style.color = themeColor;
+        }
+    });
+}
+
+// Brand logo debugging function
+function debugSpecificBrand(brandName) {
+    console.log(`🔍 Debugging brand: ${brandName}`);
+    
+    const brandKey = brandName.toLowerCase().replace(/[\s-]/g, '');
+    const config = brandProcessingConfig[brandKey];
+    
+    if (!config) {
+        console.log(`❌ No configuration found for ${brandName}`);
+        console.log('Available brands:', Object.keys(brandProcessingConfig));
+        return;
+    }
+    
+    console.log(`📋 Configuration for ${brandName}:`, config);
+    
+    // Test the logo loading
+    loadBrandLogo(brandName).then(logo => {
+        if (logo) {
+            console.log(`✅ Successfully loaded and processed logo for ${brandName}`);
+        } else {
+            console.log(`❌ Failed to load logo for ${brandName}`);
+        }
+    }).catch(error => {
+        console.log(`❌ Error loading logo for ${brandName}:`, error);
+    });
+}
+
+// Update the global loadBrandLogo function to use enhanced processing
+async function loadBrandLogoEnhanced(brandName) {
+    if (!brandName) return null;
+    
+    const logoKey = brandName.toLowerCase().replace(/[\s-]/g, '');
+    
+    // Return cached logo if already loaded
+    if (brandLogos[logoKey]) {
+        return brandLogos[logoKey];
+    }
+    
+    try {
+        console.log(`🔄 Loading enhanced SVG logo for brand: ${brandName}`);
+        
+        // Handle special cases
+        let svgPath = `/static/brand_logo/${logoKey}_logo.svg`;
+        
+        // Handle Mercedes-Benz duplicate
+        if (logoKey === 'mercedes-benz' || logoKey === 'mercedesbenz') {
+            svgPath = `/static/brand_logo/mercedes_logo.svg`;
+            logoKey = 'mercedes';
+        }
+        
+        // Check for missing Subaru logo
+        if (logoKey === 'subaru') {
+            // You'll need to add subaru_logo.svg to your brand_logo folder
+            console.warn(`⚠️ Subaru logo missing. Please add subaru_logo.svg to your brand_logo folder.`);
+        }
+        
+        const response = await fetch(svgPath);
+        
+        if (!response.ok) {
+            console.warn(`⚠️ SVG not found for brand: ${brandName} at ${svgPath}`);
+            brandLogos[logoKey] = null;
+            return null;
+        }
+        
+        const svgText = await response.text();
+        
+        // Validate SVG content
+        if (!svgText || !svgText.includes('<svg')) {
+            console.warn(`❌ Invalid SVG content for brand: ${brandName}`);
+            brandLogos[logoKey] = null;
+            return null;
+        }
+        
+        // Use enhanced processing
+        const processedSvg = processSvgForChart(svgText, brandName);
+        
+        // Convert SVG to image for canvas rendering
+        const img = await svgToImage(processedSvg);
+        
+        brandLogos[logoKey] = img;
+        console.log(`✅ Successfully loaded enhanced logo for: ${brandName}`);
+        return img;
+        
+    } catch (error) {
+        console.warn(`❌ Error loading enhanced SVG logo for brand ${brandName}:`, error);
+        brandLogos[logoKey] = null;
+        return null;
+    }
+}
+
+// Batch test function for all problematic brands
+function testProblematicBrands() {
+    const problematicBrands = [
+        'BMW', 'Ford', 'Kia', 'Hyundai', 'MG', 
+        'Mercedes', 'Mercedes-Benz', 'Porsche', 
+        'Subaru', 'Tesla', 'Volkswagen'
+    ];
+    
+    console.log('🧪 Testing all problematic brands...');
+    
+    problematicBrands.forEach(brand => {
+        debugSpecificBrand(brand);
+    });
+}
+
+// Export functions for global use
+window.processSvgForChart = processSvgForChart;
+window.loadBrandLogoEnhanced = loadBrandLogoEnhanced;
+window.debugSpecificBrand = debugSpecificBrand;
+window.testProblematicBrands = testProblematicBrands;
 
 async function debugBrandLogo(brandName) {
     console.log(`🔍 Debug processing for ${brandName}...`);
