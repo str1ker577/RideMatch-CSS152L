@@ -1290,18 +1290,17 @@ footer {
   }
 }
 
-/* Bar Charts Section - WIDER LAYOUT FOR MORE SCREEN USAGE */
+/* Bar Charts Section - RESTORED ORIGINAL GOOD SPACING */
 .compare-wrapper {
-  padding: 0 1rem; /* Reduced padding for more chart space */
-  max-width: 1600px; /* Increased max-width to use ~70% of screen */
+  padding: 0 2rem; /* RESTORED: Original padding for good centering */
+  max-width: 1200px; /* RESTORED: Original max-width for good centering */
   margin: 0 auto; /* IMPORTANT: Centers the wrapper */
-  width: 95%; /* Use 95% of available screen width */
 }
 
 .compare-charts-section {
   width: 100%;
   margin: 3rem auto;
-  padding: 2rem 1rem; /* Reduced horizontal padding for wider charts */
+  padding: 3rem; /* RESTORED: Original padding for good spacing */
   background: rgba(255, 255, 255, 0.95);
   border: 2px solid var(--second-color);
   border-radius: 20px;
@@ -1323,15 +1322,15 @@ footer {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   grid-template-rows: 450px 450px 450px; /* Slightly increased for better logo visibility */
-  gap: 1.5rem; /* Reduced gap to give more space to individual charts */
+  gap: 2.5rem; /* RESTORED: Original gap for good spacing */
   height: auto;
   justify-content: center; /* IMPORTANT: Centers the grid items */
 }
 
 .compare-charts-grid .compare-chart-container:nth-child(5) {
   grid-column: 1 / -1;
-  max-width: 900px; /* Increased width for the centered 5th chart */
-  margin: 0 auto; /* KEEPS THE 5TH CHART CENTERED as you like */
+  max-width: 800px; /* RESTORED: Original width for good centering */
+  margin: 0 auto;
   width: 100%;
   height: 450px;
 }
@@ -1382,11 +1381,11 @@ footer {
   width: 100% !important;
 }
 
-/* RADAR CHART SECTION - WIDER LAYOUT TO MATCH */
+/* RADAR CHART SECTION - FIXED STRETCHING WITH BETTER CENTERING */
 .radar-chart-section {
   width: 100%;
   margin: 3rem auto;
-  padding: 2rem 1rem; /* Reduced horizontal padding for wider layout */
+  padding: 3rem; /* RESTORED: Original padding */
   background: rgba(255, 255, 255, 0.95);
   border: 2px solid var(--second-color);
   border-radius: 20px;
@@ -1399,12 +1398,12 @@ footer {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 1rem 0; /* Reduced padding for more space */
+  padding: 2rem 0; /* RESTORED: Original padding */
 }
 
 .radar-chart-container {
-  width: 85%; /* Slightly wider to match the new layout */
-  max-width: 900px; /* Increased max-width to match 5th chart */
+  width: 80%; /* RESTORED: Original width for good proportions */
+  max-width: 800px; /* RESTORED: Original max-width */
   aspect-ratio: 1.2; /* FIXED: Proper aspect ratio to prevent stretching */
   min-height: 600px; /* Minimum height */
   max-height: 800px; /* Maximum height */
@@ -1454,11 +1453,11 @@ footer {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Existing Compare Cards Styles - WIDER LAYOUT TO MATCH */
+/* Existing Compare Cards Styles - RESTORED ORIGINAL SPACING */
 .comp_table_frame {
-  width: 98%; /* Increased width to use more screen space */
+  width: 95%; /* RESTORED: Original width */
   margin: 2rem auto; /* RESTORED: Original margin */
-  padding: 1.5rem; /* Slightly reduced padding for more space */
+  padding: 2rem; /* RESTORED: Original padding */
   border: 2px solid var(--second-color);
   border-radius: 15px;
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
@@ -1642,34 +1641,7 @@ footer {
   }
 }
 
-/* RESPONSIVE DESIGN - OPTIMIZED FOR WIDER LAYOUT */
-
-/* Ultra-wide screens - Take advantage of extra space */
-@media (min-width: 1600px) {
-  .compare-wrapper {
-    max-width: 1800px; /* Even wider on very large screens */
-  }
-  
-  .compare-charts-grid .compare-chart-container:nth-child(5) {
-    max-width: 1000px; /* Larger 5th chart on ultra-wide */
-  }
-  
-  .radar-chart-container {
-    max-width: 1000px; /* Larger radar chart too */
-  }
-}
-
-/* Large screens - Optimize spacing */
-@media (min-width: 1200px) and (max-width: 1599px) {
-  .compare-wrapper {
-    width: 90%; /* Use 90% of screen on large displays */
-  }
-  
-  .compare-charts-grid {
-    gap: 2rem; /* More space between charts on larger screens */
-  }
-}
-
+/* RESPONSIVE DESIGN - RESTORED ORIGINAL BREAKPOINTS */
 @media (max-width: 1200px) {
   .compare-charts-grid {
     grid-template-columns: 1fr;

@@ -1162,7 +1162,7 @@ async function loadDefaultCars() {
 }
 
 ///////////////////////
-// Comparison Page - STREAMLINED VERSION //
+// Comparison  Page //
 /////////////////////
 
 // Global variables for compare page
@@ -1252,7 +1252,7 @@ async function populateVariants() {
     }
 }
 
-// UPDATED: Simplified populateYears function
+// UPDATED: Simplified and more reliable populateYears function
 async function populateYears() {
     const brand = document.getElementById('brand').value;
     const model = document.getElementById('model').value;
@@ -1265,28 +1265,89 @@ async function populateYears() {
     }
 
     try {
+        console.log(`🔍 Fetching years for: ${brand} ${model} ${variant}`);
+        
         const response = await fetch(`${baseUrl}/get_variant_years?brand=${brand}&model=${model}&variant=${variant}`);
         const years = await response.json();
         
+        console.log('📦 Raw API response:', years);
+        
         if (!Array.isArray(years)) {
+            console.error('❌ API did not return an array');
             yearDropdown.innerHTML = '<option value="">Select Year</option>';
             return;
         }
 
-        yearDropdown.innerHTML = '<option value="">Select Year</option>';
+        // STEP 1: Completely clear the dropdown
+        yearDropdown.innerHTML = '';
         
-        const uniqueYears = [...new Set(years.map(year => parseInt(year)).filter(year => year >= 1900 && year <= 2030))];
-        uniqueYears.sort((a, b) => b - a);
+        // STEP 2: Add default option
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.textContent = 'Select Year';
+        yearDropdown.appendChild(defaultOption);
         
-        uniqueYears.forEach(year => {
-            const option = document.createElement('option');
-            option.value = year;
-            option.textContent = year;
-            yearDropdown.appendChild(option);
+        // STEP 3: Process years with aggressive deduplication
+        const processedYears = new Set(); // Use Set from the beginning
+        
+        years.forEach(year => {
+            const cleanYear = String(year).trim();
+            const numYear = parseInt(cleanYear, 10);
+            
+            // Validate year
+            if (!isNaN(numYear) && numYear >= 1900 && numYear <= 2030) {
+                processedYears.add(numYear); // Set automatically handles duplicates
+            }
         });
         
+        console.log('✨ Processed unique years:', Array.from(processedYears));
+        
+        // STEP 4: Convert to array and sort
+        const uniqueYears = Array.from(processedYears).sort((a, b) => b - a);
+        
+        console.log('📅 Final sorted years:', uniqueYears);
+        
+        // STEP 5: Add years to dropdown ONE BY ONE with duplicate check
+        const addedYears = new Set();
+        
+        uniqueYears.forEach(year => {
+            const yearString = String(year);
+            
+            // Double-check for duplicates before adding
+            if (!addedYears.has(yearString)) {
+                const option = document.createElement('option');
+                option.value = yearString;
+                option.textContent = yearString;
+                yearDropdown.appendChild(option);
+                addedYears.add(yearString);
+                console.log(`✅ Added year: ${yearString}`);
+            } else {
+                console.log(`⚠️ Skipped duplicate year: ${yearString}`);
+            }
+        });
+        
+        // STEP 6: Final verification
+        const finalOptions = Array.from(yearDropdown.options)
+            .slice(1) // Skip default option
+            .map(opt => opt.value);
+        
+        console.log('🔍 Final dropdown options:', finalOptions);
+        
+        // STEP 7: Remove any remaining duplicates from DOM
+        const seenValues = new Set(['']); // Include empty value
+        Array.from(yearDropdown.options).forEach(option => {
+            if (seenValues.has(option.value)) {
+                console.log(`🗑️ Removing duplicate DOM option: ${option.value}`);
+                option.remove();
+            } else {
+                seenValues.add(option.value);
+            }
+        });
+        
+        console.log(`✅ Successfully populated ${uniqueYears.length} unique years`);
+        
     } catch (error) {
-        console.error('Error fetching years:', error);
+        console.error('❌ Error fetching years:', error);
         yearDropdown.innerHTML = '<option value="">Select Year</option>';
         alert('Error fetching years. Please try again.');
     }
@@ -1308,6 +1369,9 @@ async function compareCars() {
     }
 
     try {
+        console.log('Fetching specs for variant:', selectedVariant, 'year:', selectedYear);
+        
+        // Include year in the API call
         const response = await fetch(`${baseUrl}/get_specs?variant=${selectedVariant}&year=${selectedYear}`);
         
         if (!response.ok) {
@@ -1315,12 +1379,14 @@ async function compareCars() {
         }
         
         const specs = await response.json();
+        console.log('Received specs:', specs);
 
         if (!specs || Object.keys(specs).length === 0) {
             alert('No specifications found for this variant and year.');
             return;
         }
 
+        // Create unique identifier including year
         const carId = `${selectedVariant}-${selectedYear}`;
         
         if (document.getElementById(`car-${carId}`)) {
@@ -1328,6 +1394,7 @@ async function compareCars() {
             return;
         }
 
+        // Limit to 5 cars for better visualization
         if (comparedCars.length >= 5) {
             alert('Maximum 5 cars can be compared at once. Please remove a car first.');
             return;
@@ -1341,7 +1408,12 @@ async function compareCars() {
             specs: specs
         });
         
-        updateAllCharts();
+        // Update all charts including radar
+        setTimeout(() => {
+            updateAllCharts();
+        }, 100);
+        
+        // Show success message and reset form
         showSuccessMessage();
         resetCompareForm();
 
@@ -1355,9 +1427,14 @@ async function compareCars() {
 async function populateBrandsForCompare() {
     const brandDropdown = document.getElementById('brand');
     
-    if (!brandDropdown) return;
+    if (!brandDropdown) {
+        console.log('Brand dropdown not found - not on compare page');
+        return;
+    }
 
     try {
+        console.log('🔍 Fetching all available brands for compare...');
+        
         const response = await fetch(`${baseUrl}/get_brands`);
         
         if (!response.ok) {
@@ -1365,11 +1442,14 @@ async function populateBrandsForCompare() {
         }
         
         const brands = await response.json();
+        console.log('📅 Received brands:', brands);
         
         if (!Array.isArray(brands)) {
+            console.error('❌ Expected array of brands but got:', brands);
             return;
         }
         
+        // Clear loading message and populate with brands
         brandDropdown.innerHTML = '<option value="" selected disabled>Select Brand</option>';
         
         brands.forEach(brand => {
@@ -1379,99 +1459,597 @@ async function populateBrandsForCompare() {
             brandDropdown.appendChild(option);
         });
         
+        console.log(`✅ Successfully populated ${brands.length} brands in compare dropdown`);
+        
     } catch (error) {
-        console.error('Error fetching brands for compare:', error);
+        console.error('❌ Error fetching brands for compare:', error);
+        // Show error state in dropdown
         brandDropdown.innerHTML = '<option value="" disabled>Error loading brands</option>';
     }
 }
 
 /////////////////////////
-// SIMPLIFIED Logo System //
+// Compare Charts Logo //
 /////////////////////////
 
+// Global object to store loaded logo images
 let brandLogos = {};
 
-// Simple text logo creation
-function createSimpleTextLogo(text) {
+// ENHANCED: Enhanced brand processing configurations for problematic logos
+const enhancedBrandProcessingConfig = {
+    'bmw': {
+        type: 'complex_circular',
+        removeAllGradients: true,
+        forceMonochrome: true,
+        textHandling: 'convert_to_paths',
+        specialProcessing: 'bmw_circle',
+        fallbackText: 'BMW'
+    },
+    'ford': {
+        type: 'oval_with_text',
+        removeAllGradients: true,
+        forceMonochrome: true,
+        textHandling: 'force_simple',
+        specialProcessing: 'ford_oval',
+        fallbackText: 'FORD'
+    },
+    'kia': {
+        type: 'modern_oval',
+        removeAllGradients: true,
+        forceMonochrome: true,
+        textHandling: 'force_simple',
+        specialProcessing: 'kia_oval',
+        fallbackText: 'KIA'
+    },
+    'hyundai': {
+        type: 'italic_oval',
+        removeAllGradients: true,
+        forceMonochrome: true,
+        textHandling: 'force_simple',
+        specialProcessing: 'hyundai_oval',
+        fallbackText: 'HYUNDAI'
+    },
+    'mg': {
+        type: 'octagon_badge',
+        removeAllGradients: true,
+        forceMonochrome: true,
+        textHandling: 'force_simple',
+        specialProcessing: 'mg_badge',
+        fallbackText: 'MG'
+    },
+    'mercedes': {
+        type: 'three_pointed_star',
+        removeAllGradients: true,
+        forceMonochrome: true,
+        textHandling: 'remove_text',
+        specialProcessing: 'mercedes_star',
+        fallbackText: 'MB'
+    },
+    'mercedes-benz': {
+        type: 'redirect',
+        redirectTo: 'mercedes' // Handle duplicate
+    },
+    'porsche': {
+        type: 'complex_crest',
+        removeAllGradients: true,
+        forceMonochrome: true,
+        textHandling: 'simplify_crest',
+        specialProcessing: 'porsche_crest',
+        fallbackText: 'P'
+    },
+    'subaru': {
+        type: 'missing_svg',
+        fallbackText: 'SUBARU',
+        useTextFallback: true
+    },
+    'tesla': {
+        type: 'stylized_t',
+        removeAllGradients: true,
+        forceMonochrome: true,
+        textHandling: 'remove_text',
+        specialProcessing: 'tesla_t',
+        fallbackText: 'T'
+    },
+    'volkswagen': {
+        type: 'vw_circle',
+        removeAllGradients: true,
+        forceMonochrome: true,
+        textHandling: 'keep_vw_only',
+        specialProcessing: 'vw_circle',
+        fallbackText: 'VW'
+    }
+};
+
+// ENHANCED: Better text fallback logo creation with proper text fitting
+function createTextFallbackLogo(text) {
     const canvas = document.createElement('canvas');
     canvas.width = 100;
     canvas.height = 100;
     const ctx = canvas.getContext('2d');
     
+    // Background circle using your site's theme color
     ctx.fillStyle = '#b49b66';
     ctx.beginPath();
     ctx.arc(50, 50, 45, 0, 2 * Math.PI);
     ctx.fill();
     
+    // Enhanced text fitting logic for long brand names
     ctx.fillStyle = 'white';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.font = 'bold 16px Arial';
     
-    const displayText = text.length > 6 ? text.substring(0, 4) : text;
-    ctx.fillText(displayText, 50, 50);
+    let fontSize = 20;
+    let lines = [];
     
+    // Handle long brand names by splitting them
+    if (text.length > 8) {
+        // For very long names like "MERCEDES", "HYUNDAI", "PORSCHE"
+        if (text.length > 10) {
+            // Split into two lines
+            const mid = Math.ceil(text.length / 2);
+            lines = [text.substring(0, mid), text.substring(mid)];
+            fontSize = 10;
+        } else {
+            // Single line but smaller font
+            lines = [text];
+            fontSize = 12;
+        }
+    } else if (text.length > 5) {
+        lines = [text];
+        fontSize = 14;
+    } else if (text.length > 3) {
+        lines = [text];
+        fontSize = 16;
+    } else {
+        lines = [text];
+        fontSize = 20;
+    }
+    
+    ctx.font = `bold ${fontSize}px Arial`;
+    
+    // Draw text lines
+    if (lines.length === 1) {
+        ctx.fillText(lines[0], 50, 50);
+    } else {
+        // Two lines
+        ctx.fillText(lines[0], 50, 42);
+        ctx.fillText(lines[1], 50, 58);
+    }
+    
+    // Convert to image
     const img = new Image();
     img.src = canvas.toDataURL();
-    return img;
+    
+    return new Promise((resolve) => {
+        img.onload = () => resolve(img);
+    });
 }
 
-// Simple brand logo plugin
-const simpleBrandLogoPlugin = {
-    id: 'simpleBrandLogo',
+// Function to preload all brand logos for compared cars
+async function preloadBrandLogos() {
+    const brands = [...new Set(comparedCars.map(car => car.specs.Brand))];
+    console.log('🔄 Preloading SVG logos for brands:', brands);
+    
+    const loadPromises = brands.map(async (brand) => {
+        try {
+            await loadBrandLogo(brand);
+            return { brand, success: true };
+        } catch (error) {
+            console.warn(`Failed to load logo for ${brand}:`, error);
+            return { brand, success: false };
+        }
+    });
+    
+    const results = await Promise.all(loadPromises);
+    
+    const successCount = results.filter(r => r.success).length;
+    const failedBrands = results.filter(r => !r.success).map(r => r.brand);
+    
+    console.log(`✅ Loaded ${successCount}/${brands.length} brand logos`);
+    if (failedBrands.length > 0) {
+        console.warn('❌ Failed to load logos for:', failedBrands);
+    }
+}
+
+// ENHANCED: Fixed loadBrandLogo function to prevent Tesla/Hyundai bug
+async function loadBrandLogo(brandName) {
+    if (!brandName) return null;
+    
+    // IMPORTANT FIX: Clean the brand name properly to avoid conflicts
+    const logoKey = String(brandName).toLowerCase().replace(/[\s-]/g, '').trim();
+    
+    console.log(`🔍 Loading logo for brand: "${brandName}" (key: "${logoKey}")`);
+    
+    // Return cached logo if already loaded
+    if (brandLogos[logoKey]) {
+        console.log(`✅ Using cached logo for: ${brandName}`);
+        return brandLogos[logoKey];
+    }
+    
+    const config = enhancedBrandProcessingConfig[logoKey] || {};
+    
+    // Handle redirects (like mercedes-benz -> mercedes)
+    if (config.type === 'redirect') {
+        console.log(`🔄 Redirecting ${brandName} to ${config.redirectTo}`);
+        return await loadBrandLogo(config.redirectTo);
+    }
+    
+    // Handle missing SVGs with text fallback
+    if (config.type === 'missing_svg' || config.useTextFallback) {
+        console.log(`📝 Creating text fallback for ${brandName}`);
+        const textLogo = await createTextFallbackLogo(config.fallbackText || brandName.toUpperCase());
+        brandLogos[logoKey] = textLogo;
+        return textLogo;
+    }
+    
+    try {
+        const svgPath = `/static/brand_logo/${logoKey}_logo.svg`;
+        const response = await fetch(svgPath);
+        
+        if (!response.ok) {
+            console.warn(`⚠️ SVG not found for ${brandName}, using text fallback`);
+            const textLogo = await createTextFallbackLogo(config.fallbackText || brandName.toUpperCase());
+            brandLogos[logoKey] = textLogo;
+            return textLogo;
+        }
+        
+        const svgText = await response.text();
+        
+        if (!svgText || !svgText.includes('<svg')) {
+            throw new Error('Invalid SVG content');
+        }
+        
+        // Process with enhanced method
+        const processedSvg = enhancedProcessSvgForChart(svgText, brandName, config);
+        
+        // Convert to image
+        const img = await svgToImageWithRetry(processedSvg, config.fallbackText || brandName.toUpperCase());
+        
+        brandLogos[logoKey] = img;
+        console.log(`✅ Successfully loaded enhanced logo for: ${brandName}`);
+        return img;
+        
+    } catch (error) {
+        console.warn(`❌ Error loading SVG for ${brandName}:`, error);
+        
+        // Create text fallback as last resort
+        const textLogo = await createTextFallbackLogo(config.fallbackText || brandName.toUpperCase());
+        brandLogos[logoKey] = textLogo;
+        return textLogo;
+    }
+}
+
+// Enhanced SVG processing function
+function enhancedProcessSvgForChart(svgText, brandName, config) {
+    try {
+        console.log(`🔧 Enhanced processing for ${brandName}...`);
+        
+        const themeColor = '#b49b66';
+        
+        // Create DOM parser for better SVG handling
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(svgText, 'image/svg+xml');
+        const svgElement = doc.querySelector('svg');
+        
+        if (!svgElement) {
+            throw new Error('No SVG element found');
+        }
+        
+        // Set consistent dimensions
+        svgElement.setAttribute('width', '100');
+        svgElement.setAttribute('height', '100');
+        svgElement.setAttribute('viewBox', '0 0 100 100');
+        
+        // STEP 1: Aggressive cleanup for complex logos
+        console.log(`🧹 Aggressive cleanup for ${brandName}...`);
+        
+        // Remove all problematic elements
+        const problematicElements = svgElement.querySelectorAll(
+            'defs, style, script, metadata, title, desc, linearGradient, radialGradient, pattern, filter, mask, clipPath'
+        );
+        problematicElements.forEach(el => el.remove());
+        
+        // STEP 2: Apply brand-specific processing
+        if (config.specialProcessing) {
+            console.log(`🎨 Applying special processing: ${config.specialProcessing}`);
+            applyEnhancedSpecialProcessing(svgElement, config.specialProcessing, themeColor, config);
+        }
+        
+        // STEP 3: Force complete monochrome conversion
+        console.log(`🎨 Forcing monochrome for ${brandName}...`);
+        forceCompleteMonochrome(svgElement, themeColor, config);
+        
+        // STEP 4: Add aggressive override styles
+        const styleElement = doc.createElementNS('http://www.w3.org/2000/svg', 'style');
+        styleElement.textContent = `
+            * {
+                fill: ${themeColor} !important;
+                stroke: ${themeColor} !important;
+                stroke-width: 1 !important;
+                color: ${themeColor} !important;
+                opacity: 1 !important;
+            }
+            text, tspan {
+                fill: ${themeColor} !important;
+                stroke: none !important;
+                font-family: Arial, sans-serif !important;
+                font-weight: bold !important;
+            }
+            path, circle, rect, polygon, ellipse, line, polyline {
+                fill: ${themeColor} !important;
+                stroke: ${themeColor} !important;
+                stroke-width: 1 !important;
+            }
+            g {
+                fill: ${themeColor} !important;
+                stroke: none !important;
+            }
+        `;
+        
+        // Insert style at the beginning
+        if (svgElement.firstChild) {
+            svgElement.insertBefore(styleElement, svgElement.firstChild);
+        } else {
+            svgElement.appendChild(styleElement);
+        }
+        
+        console.log(`✅ Enhanced processing completed for ${brandName}`);
+        return svgElement.outerHTML;
+        
+    } catch (error) {
+        console.warn(`❌ Enhanced processing failed for ${brandName}:`, error);
+        return createFallbackSvg(config.fallbackText || brandName);
+    }
+}
+
+// Enhanced special processing functions
+function applyEnhancedSpecialProcessing(svgElement, processingType, themeColor, config) {
+    const allElements = svgElement.querySelectorAll('*');
+    
+    switch (processingType) {
+        case 'bmw_circle':
+        case 'mercedes_star':
+        case 'tesla_t':
+        case 'vw_circle':
+            // For circular/simple logos - keep main shapes, remove text
+            allElements.forEach(element => {
+                if (element.tagName === 'text' || element.tagName === 'tspan') {
+                    element.remove();
+                } else {
+                    element.setAttribute('fill', themeColor);
+                    element.setAttribute('stroke', themeColor);
+                }
+            });
+            break;
+            
+        case 'ford_oval':
+        case 'kia_oval':
+        case 'hyundai_oval':
+            // For oval logos - simplify and keep main shape
+            allElements.forEach(element => {
+                if (element.tagName === 'text' || element.tagName === 'tspan') {
+                    // Keep text but simplify
+                    element.setAttribute('fill', themeColor);
+                    element.setAttribute('font-family', 'Arial, sans-serif');
+                    element.setAttribute('font-weight', 'bold');
+                    element.removeAttribute('font-style');
+                } else {
+                    element.setAttribute('fill', themeColor);
+                    element.setAttribute('stroke', themeColor);
+                }
+            });
+            break;
+            
+        case 'porsche_crest':
+            // For complex crests - extreme simplification
+            const complexElements = svgElement.querySelectorAll('text, tspan');
+            complexElements.forEach(el => el.remove());
+            
+            allElements.forEach(element => {
+                element.setAttribute('fill', themeColor);
+                element.setAttribute('stroke', 'none');
+                element.removeAttribute('opacity');
+                element.removeAttribute('fill-opacity');
+            });
+            break;
+            
+        case 'mg_badge':
+            // For badges - keep simple shapes only
+            allElements.forEach(element => {
+                element.setAttribute('fill', themeColor);
+                element.setAttribute('stroke', themeColor);
+                element.removeAttribute('stroke-width');
+            });
+            break;
+    }
+}
+
+// Force complete monochrome conversion
+function forceCompleteMonochrome(svgElement, themeColor, config) {
+    const allElements = svgElement.querySelectorAll('*');
+    
+    allElements.forEach(element => {
+        // Remove all color-related attributes
+        const colorAttributes = [
+            'fill', 'stroke', 'stop-color', 'flood-color', 
+            'lighting-color', 'fill-opacity', 'stroke-opacity',
+            'opacity', 'color'
+        ];
+        
+        colorAttributes.forEach(attr => {
+            element.removeAttribute(attr);
+        });
+        
+        // Set new attributes
+        if (['path', 'circle', 'rect', 'polygon', 'ellipse', 'g'].includes(element.tagName)) {
+            element.setAttribute('fill', themeColor);
+            element.setAttribute('stroke', 'none');
+        }
+        
+        if (['text', 'tspan'].includes(element.tagName)) {
+            element.setAttribute('fill', themeColor);
+            element.setAttribute('stroke', 'none');
+            element.setAttribute('font-family', 'Arial, sans-serif');
+            element.setAttribute('font-weight', 'bold');
+        }
+        
+        // Force style attributes
+        element.style.fill = themeColor;
+        element.style.stroke = 'none';
+        element.style.color = themeColor;
+        element.style.opacity = '1';
+    });
+}
+
+// Create fallback SVG for processing failures
+function createFallbackSvg(text) {
+    return `
+        <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" fill="#b49b66" stroke="none"/>
+            <text x="50" y="55" text-anchor="middle" fill="white" 
+                  font-family="Arial, sans-serif" font-weight="bold" font-size="16">
+                ${text}
+            </text>
+        </svg>
+    `;
+}
+
+// Enhanced SVG to Image conversion with retry logic
+async function svgToImageWithRetry(svgString, fallbackText, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        try {
+            console.log(`🔄 Converting SVG to image (attempt ${attempt}/${maxRetries})`);
+            
+            const img = new Image();
+            
+            return new Promise((resolve, reject) => {
+                img.onload = () => {
+                    console.log(`✅ SVG converted successfully on attempt ${attempt}`);
+                    resolve(img);
+                };
+                
+                img.onerror = (error) => {
+                    console.warn(`❌ SVG conversion failed on attempt ${attempt}:`, error);
+                    reject(error);
+                };
+                
+                // Create blob URL with proper MIME type
+                const svgBlob = new Blob([svgString], { 
+                    type: 'image/svg+xml;charset=utf-8' 
+                });
+                const svgUrl = URL.createObjectURL(svgBlob);
+                
+                img.src = svgUrl;
+                
+                // Cleanup and timeout
+                setTimeout(() => {
+                    URL.revokeObjectURL(svgUrl);
+                    if (!img.complete) {
+                        reject(new Error(`SVG loading timeout on attempt ${attempt}`));
+                    }
+                }, 3000);
+            });
+            
+        } catch (error) {
+            console.warn(`⚠️ Attempt ${attempt} failed:`, error);
+            
+            if (attempt === maxRetries) {
+                console.log(`🔄 All attempts failed, creating text fallback for: ${fallbackText}`);
+                return await createTextFallbackLogo(fallbackText || 'LOGO');
+            }
+            
+            // Wait before retry
+            await new Promise(resolve => setTimeout(resolve, 500));
+        }
+    }
+}
+
+// ENHANCED: Improved brand logo plugin with proper brand identification
+const brandLogoPlugin = {
+    id: 'brandLogo',
     afterDatasetsDraw: function(chart, args, options) {
-        const { ctx, data } = chart;
+        const { ctx, data, chartArea, scales } = chart;
         
         if (!data.datasets || !data.datasets[0] || !comparedCars) return;
         
         ctx.save();
         
+        // Loop through each bar
         data.datasets[0].data.forEach((value, index) => {
             if (index >= comparedCars.length) return;
             
             const car = comparedCars[index];
-            const brandName = car.specs.Brand;
+            const brandName = car.specs.Brand; // FIXED: Use car.specs.Brand directly
+            
+            console.log(`🎨 Drawing logo for car ${index}: Brand="${brandName}", Variant="${car.variant}"`);
+            
+            // Get the correct logo using the brand name
+            const logoKey = String(brandName).toLowerCase().replace(/[\s-]/g, '').trim();
+            const logo = brandLogos[logoKey];
+            
+            // Get bar position
             const meta = chart.getDatasetMeta(0);
             const bar = meta.data[index];
             
             if (!bar) return;
             
-            const barHeight = Math.abs(bar.y - bar.base);
+            // Calculate bar dimensions
             const barWidth = bar.width;
+            const barHeight = Math.abs(bar.y - bar.base);
             
-            // Logo sizing
-            const logoSize = Math.min(Math.max(barWidth * 0.4, 30), 60);
+            // Improved logo sizing
+            let logoSize;
             
-            if (barHeight > logoSize + 10) {
-                // Get or create logo
-                let logo = brandLogos[brandName];
-                if (!logo) {
-                    logo = createSimpleTextLogo(brandName);
-                    brandLogos[brandName] = logo;
+            const widthBasedSize = barWidth * 0.5;
+            const heightBasedSize = barHeight * 0.35;
+            
+            logoSize = Math.min(widthBasedSize, heightBasedSize);
+            
+            const maxLogoSize = 45;
+            const minLogoSize = 18;
+            logoSize = Math.max(minLogoSize, Math.min(logoSize, maxLogoSize));
+            
+            // Position logo in the center of the bar
+            const logoX = bar.x - logoSize / 2;
+            const logoY = bar.y + (bar.base - bar.y) / 2 - logoSize / 2;
+            
+            const minBarHeightForLogo = logoSize + 8;
+            
+            if (barHeight > minBarHeightForLogo && logo) {
+                try {
+                    // Enhanced white circle background
+                    ctx.beginPath();
+                    const circleRadius = logoSize / 2 + 4;
+                    ctx.arc(bar.x, bar.y + (bar.base - bar.y) / 2, circleRadius, 0, 2 * Math.PI);
+                    
+                    // White background with subtle gradient
+                    const gradient = ctx.createRadialGradient(
+                        bar.x, bar.y + (bar.base - bar.y) / 2, 0,
+                        bar.x, bar.y + (bar.base - bar.y) / 2, circleRadius
+                    );
+                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+                    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.92)');
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.fill();
+                    
+                    // Border using your site's theme color
+                    ctx.strokeStyle = 'rgba(180, 155, 102, 0.5)';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    
+                    // Draw the logo
+                    ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+                    
+                    console.log(`✅ Successfully drew logo for ${brandName}`);
+                    
+                } catch (error) {
+                    console.warn('❌ Error drawing logo for', brandName, ':', error);
+                    drawBrandNameFallback(ctx, chart, index, brandName, logoSize);
                 }
-                
-                // Draw background circle
-                ctx.beginPath();
-                const circleRadius = logoSize / 2 + 5;
-                ctx.arc(bar.x, bar.y + (bar.base - bar.y) / 2, circleRadius, 0, 2 * Math.PI);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-                ctx.fill();
-                ctx.strokeStyle = 'rgba(180, 155, 102, 0.6)';
-                ctx.lineWidth = 2;
-                ctx.stroke();
-                
-                // Draw logo
-                const logoX = bar.x - logoSize / 2;
-                const logoY = bar.y + (bar.base - bar.y) / 2 - logoSize / 2;
-                ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
             } else if (barHeight > 25) {
-                // Draw brand name
-                ctx.font = 'bold 12px Arial';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillStyle = '#b49b66';
-                const displayText = brandName.length > 6 ? brandName.substring(0, 6) : brandName;
-                ctx.fillText(displayText, bar.x, bar.y + (bar.base - bar.y) / 2);
+                // Show brand name for smaller bars
+                drawBrandNameFallback(ctx, chart, index, brandName, Math.min(logoSize, 30));
             }
         });
         
@@ -1479,190 +2057,89 @@ const simpleBrandLogoPlugin = {
     }
 };
 
-function initializeComparePage() {
-    const brandDropdown = document.getElementById('brand');
-    const isComparePage = brandDropdown && document.getElementById('compare-charts-section');
+// Fallback function to draw brand name when logo is not available or bar is too small
+function drawBrandNameFallback(ctx, chart, index, brandName, size) {
+    const meta = chart.getDatasetMeta(0);
+    const bar = meta.data[index];
     
-    if (isComparePage) {
-        populateBrandsForCompare();
-    }
-}
-
-function showSuccessMessage() {
-    const successMessage = document.getElementById('compare-success-message');
-    if (successMessage) {
-        successMessage.style.display = 'flex';
-        setTimeout(() => {
-            successMessage.style.display = 'none';
-        }, 3000);
-    }
-}
-
-function resetCompareForm() {
-    const brandSelect = document.getElementById('brand');
-    const modelSelect = document.getElementById('model');
-    const variantSelect = document.getElementById('variant');
-    const yearSelect = document.getElementById('year');
+    if (!bar) return;
     
-    if (brandSelect) brandSelect.selectedIndex = 0;
-    if (modelSelect) modelSelect.innerHTML = '<option value="">Select Model</option>';
-    if (variantSelect) variantSelect.innerHTML = '<option value="">Select Variant</option>';
-    if (yearSelect) yearSelect.innerHTML = '<option value="">Select Year</option>';
-}
-
-function removeCarFromComparison(carId) {
-    const cardElement = document.querySelector(`#car-${carId}`);
-    if (cardElement) {
-        cardElement.remove();
-    }
+    const barHeight = Math.abs(bar.y - bar.base);
+    const barWidth = bar.width;
     
-    comparedCars = comparedCars.filter(car => car.id !== carId);
-    updateAllCharts();
-    
-    if (comparedCars.length === 0) {
-        const cardsWrapper = document.getElementById('comparison-cards-wrapper');
-        const chartsSection = document.getElementById('compare-charts-section');
-        const radarSection = document.getElementById('radar-chart-section');
+    // Only draw text if bar is tall enough
+    if (barHeight > 20) {
+        ctx.save();
         
-        if (cardsWrapper) cardsWrapper.style.display = 'none';
-        if (chartsSection) chartsSection.style.display = 'none';
-        if (radarSection) radarSection.style.display = 'none';
+        // Determine font size based on available space
+        const fontSize = Math.min(Math.max(size * 0.3, 10), 14);
+        
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        
+        // Prepare brand name text
+        const displayText = brandName.length > 6 ? brandName.substring(0, 6) : brandName;
+        const textWidth = ctx.measureText(displayText).width;
+        
+        // Create background circle/rectangle for text
+        const centerX = bar.x;
+        const centerY = bar.y + (bar.base - bar.y) / 2;
+        
+        // Background
+        ctx.beginPath();
+        if (barWidth < textWidth + 10) {
+            // If bar is narrow, use circular background
+            const radius = Math.min(barWidth * 0.4, fontSize + 8);
+            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        } else {
+            // If bar is wide enough, use rounded rectangle
+            const rectWidth = textWidth + 8;
+            const rectHeight = fontSize + 6;
+            ctx.roundRect(centerX - rectWidth/2, centerY - rectHeight/2, rectWidth, rectHeight, 4);
+        }
+        
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(180, 155, 102, 0.4)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Draw text
+        ctx.fillStyle = '#b49b66';
+        
+        if (barWidth < textWidth + 10 && barHeight > textWidth + 10) {
+            // Rotate text for narrow bars if there's enough height
+            ctx.translate(centerX, centerY);
+            ctx.rotate(-Math.PI / 2);
+            ctx.fillText(displayText, 0, 0);
+        } else {
+            // Normal horizontal text
+            ctx.fillText(displayText, centerX, centerY);
+        }
+        
+        ctx.restore();
     }
 }
 
-// Add car to comparison
-function addCarToComparison(carId, variant, year, specs) {
-    const container = document.getElementById('comparison-container');
-    const carColumn = document.createElement('div');
-    carColumn.id = `car-${carId}`;
-    carColumn.classList.add('car-column');
-
-    const isLiked = userFavorites.has(variant);
-    const heartClass = isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
-    const heartColor = isLiked ? '#e74c3c' : '#b49b66';
-
-    const carTitle = document.createElement('div');
-    carTitle.classList.add('car-title');
-    carTitle.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-            <span style="flex: 1; text-align: center;">${variant} (${year})</span>
-            <div class="heart-container" style="margin-left: 10px;">
-                <i class="${heartClass}" 
-                   style="color: ${heartColor}; cursor: pointer; font-size: 1.2rem;" 
-                   onclick="addToFave(event, '${variant}')"></i>
-            </div>
-        </div>
-    `;
-    carColumn.appendChild(carTitle);
-
-    // Car image
-    if (specs['Image']) {
-        const imgContainer = document.createElement('div');
-        imgContainer.classList.add('car-image-container');
-        const img = document.createElement('img');
-        img.src = specs['Image'];
-        img.alt = `Image of ${variant} ${year}`;
-        img.classList.add('car-image');
-        imgContainer.appendChild(img);
-        carColumn.appendChild(imgContainer);
-    }
-
-    // Spec sections
-    const specSections = {
-        "General Specifications": ["Brand", "Model", "Year"],
-        "Performance Specifications": ["Horsepower", "Engine", "Transmission", "DriveTrain", "FuelType"],
-        "Utility Specifications": ["SeatingCapacity", "GroundClearance", "Cargospace"]
+// Add helper function for rounded rectangles (if not available)
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, width, height, radius) {
+        if (width < 2 * radius) radius = width / 2;
+        if (height < 2 * radius) radius = height / 2;
+        this.beginPath();
+        this.moveTo(x + radius, y);
+        this.arcTo(x + width, y, x + width, y + height, radius);
+        this.arcTo(x + width, y + height, x, y + height, radius);
+        this.arcTo(x, y + height, x, y, radius);
+        this.arcTo(x, y, x + width, y, radius);
+        this.closePath();
+        return this;
     };
-
-    for (const [category, keys] of Object.entries(specSections)) {
-        const sectionDiv = document.createElement('div');
-        sectionDiv.classList.add('spec-section');
-        
-        const categoryTitle = document.createElement('div');
-        categoryTitle.classList.add('spec-category');
-        categoryTitle.textContent = category;
-        sectionDiv.appendChild(categoryTitle);
-
-        keys.forEach(key => {
-            if (specs[key] !== undefined && specs[key] !== "" && specs[key] !== 0) {
-                const specDiv = document.createElement('div');
-                specDiv.classList.add('spec-value');
-                
-                let formattedValue = specs[key];
-                if (key === "Horsepower") formattedValue += " hp";
-                if (key === "GroundClearance") formattedValue += " cm";
-                if (key === "Cargospace") formattedValue += " L";
-                
-                specDiv.innerHTML = `<span class="spec-label">${key.replace(/([A-Z])/g, ' $1').trim()}:</span> ${formattedValue}`;
-                
-                if (key === "Horsepower" || key === "SeatingCapacity" || key === "GroundClearance") {
-                    const progressBar = createProgressBar(formattedValue, key);
-                    specDiv.appendChild(progressBar);
-                }
-                
-                sectionDiv.appendChild(specDiv);
-            }
-        });
-
-        carColumn.appendChild(sectionDiv);
-    }
-
-    // Price section
-    if (specs["Price"]) {
-        const priceDiv = document.createElement('div');
-        priceDiv.classList.add('price-comparison');
-        const formattedPrice = new Intl.NumberFormat('en-PH', { 
-            style: 'currency', 
-            currency: 'PHP' 
-        }).format(specs["Price"]);
-        priceDiv.innerHTML = `<div class="price-value">${formattedPrice}</div>`;
-        carColumn.appendChild(priceDiv);
-    }
-
-    // Remove button
-    const removeBtn = document.createElement('button');
-    removeBtn.classList.add('remove-btn');
-    removeBtn.textContent = "Remove Car";
-    removeBtn.onclick = () => removeCarFromComparison(carId);
-
-    carColumn.appendChild(removeBtn);
-    container.appendChild(carColumn);
-    
-    const cardsWrapper = document.getElementById('comparison-cards-wrapper');
-    if (cardsWrapper) cardsWrapper.style.display = 'block';
 }
 
-function createProgressBar(value, type) {
-    const progressContainer = document.createElement('div');
-    progressContainer.classList.add('performance-bar');
-    
-    const progressFill = document.createElement('div');
-    progressFill.classList.add('performance-fill');
-    
-    let percentage = 0;
-    const numValue = parseInt(value);
-    
-    switch(type) {
-        case "Horsepower":
-            const maxHP = comparedCars.length > 0 ? Math.max(...comparedCars.map(car => parseInt(car.specs.Horsepower) || 0), numValue) : Math.max(numValue, 200);
-            percentage = (numValue / maxHP) * 100;
-            break;
-        case "SeatingCapacity":
-            percentage = (numValue / 8) * 100;
-            break;
-        case "GroundClearance":
-            const maxClearance = comparedCars.length > 0 ? Math.max(...comparedCars.map(car => parseInt(car.specs.GroundClearance) || 0), numValue) : Math.max(numValue, 25);
-            percentage = (numValue / maxClearance) * 100;
-            break;
-    }
-    
-    progressFill.style.width = `${Math.min(percentage, 100)}%`;
-    progressContainer.appendChild(progressFill);
-    
-    return progressContainer;
-}
+// ENHANCED: Updated chart functions with Brand + Model labels and new colors
 
-// Chart creation functions
 function updateHorsepowerChart() {
     const canvas = document.getElementById('horsepowerChart');
     if (!canvas) return;
@@ -1673,6 +2150,7 @@ function updateHorsepowerChart() {
         chartInstances.horsepower.destroy();
     }
 
+    // Enhanced labels with Brand + Model + Year
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -1746,12 +2224,12 @@ function updateHorsepowerChart() {
                         maxRotation: 45, 
                         minRotation: 0,
                         color: '#666',
-                        font: { size: 11 }
+                        font: { size: 10 }
                     }
                 }
             }
         },
-        plugins: [simpleBrandLogoPlugin]
+        plugins: [brandLogoPlugin]
     });
 }
 
@@ -1765,6 +2243,7 @@ function updatePriceChart() {
         chartInstances.price.destroy();
     }
 
+    // Enhanced labels with Brand + Model + Year
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -1844,12 +2323,12 @@ function updatePriceChart() {
                         maxRotation: 45, 
                         minRotation: 0,
                         color: '#666',
-                        font: { size: 11 }
+                        font: { size: 10 }
                     }
                 }
             }
         },
-        plugins: [simpleBrandLogoPlugin]
+        plugins: [brandLogoPlugin]
     });
 }
 
@@ -1863,6 +2342,7 @@ function updateGroundClearanceChart() {
         chartInstances.groundClearance.destroy();
     }
 
+    // Enhanced labels with Brand + Model + Year
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -1936,12 +2416,12 @@ function updateGroundClearanceChart() {
                         maxRotation: 45, 
                         minRotation: 0,
                         color: '#666',
-                        font: { size: 11 }
+                        font: { size: 10 }
                     }
                 }
             }
         },
-        plugins: [simpleBrandLogoPlugin]
+        plugins: [brandLogoPlugin]
     });
 }
 
@@ -1955,6 +2435,7 @@ function updateSeatingCapacityChart() {
         chartInstances.seatingCapacity.destroy();
     }
 
+    // Enhanced labels with Brand + Model + Year
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2029,12 +2510,12 @@ function updateSeatingCapacityChart() {
                         maxRotation: 45, 
                         minRotation: 0,
                         color: '#666',
-                        font: { size: 11 }
+                        font: { size: 10 }
                     }
                 }
             }
         },
-        plugins: [simpleBrandLogoPlugin]
+        plugins: [brandLogoPlugin]
     });
 }
 
@@ -2048,6 +2529,7 @@ function updateCargoSpaceChart() {
         chartInstances.cargoSpace.destroy();
     }
 
+    // Enhanced labels with Brand + Model + Year
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2121,232 +2603,14 @@ function updateCargoSpaceChart() {
                         maxRotation: 45, 
                         minRotation: 0,
                         color: '#666',
-                        font: { size: 11 }
+                        font: { size: 10 }
                     }
                 }
             }
         },
-        plugins: [simpleBrandLogoPlugin]
+        plugins: [brandLogoPlugin]
     });
 }
-
-// Radar chart
-function updateRadarChart() {
-    const canvas = document.getElementById('radarChart');
-    if (!canvas) return;
-    
-    const ctx = canvas.getContext('2d');
-    
-    if (chartInstances.radar) {
-        chartInstances.radar.destroy();
-    }
-
-    const container = canvas.parentElement;
-    const containerRect = container.getBoundingClientRect();
-    const maxSize = Math.min(containerRect.width * 0.8, 500);
-    canvas.style.width = maxSize + 'px';
-    canvas.style.height = maxSize + 'px';
-
-    // Calculate scaling values
-    const actualMaxValues = {
-        horsepower: Math.max(...comparedCars.map(car => parseInt(car.specs.Horsepower) || 0)),
-        price: Math.max(...comparedCars.map(car => parseFloat(car.specs.Price) || 0)),
-        groundClearance: Math.max(...comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0)),
-        cargoSpace: Math.max(...comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0)),
-        seatingCapacity: Math.max(...comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0))
-    };
-
-    const reasonableMaximums = {
-        horsepower: 400,
-        price: 4000000,
-        groundClearance: 35,
-        cargoSpace: 1500,
-        seatingCapacity: 8
-    };
-
-    const scalingMaxValues = {};
-    
-    Object.keys(actualMaxValues).forEach(key => {
-        const actualMax = actualMaxValues[key];
-        const reasonableMax = reasonableMaximums[key];
-        
-        if (actualMax < (reasonableMax * 0.7)) {
-            scalingMaxValues[key] = actualMax * 1.3;
-        } else {
-            scalingMaxValues[key] = reasonableMax;
-        }
-    });
-
-    const datasets = comparedCars.map((car, index) => {
-        const specs = car.specs;
-        
-        const horsepower = Math.min(((parseInt(specs.Horsepower) || 0) / scalingMaxValues.horsepower) * 100, 100);
-        const priceScore = Math.min(((parseFloat(specs.Price) || 0) / scalingMaxValues.price) * 100, 100);
-        const groundClearance = Math.min(((parseFloat(specs.GroundClearance) || 0) / scalingMaxValues.groundClearance) * 100, 100);
-        const cargoSpace = Math.min(((parseFloat(specs.Cargospace) || 0) / scalingMaxValues.cargoSpace) * 100, 100);
-        const seatingCapacity = Math.min(((parseInt(specs.SeatingCapacity) || 0) / scalingMaxValues.seatingCapacity) * 100, 100);
-        
-        return {
-            label: `${car.variant} (${car.year})`,
-            data: [horsepower, priceScore, groundClearance, cargoSpace, seatingCapacity],
-            backgroundColor: chartBackgroundColors[index % chartBackgroundColors.length].replace('0.75', '0.35'),
-            borderColor: chartColors[index % chartColors.length],
-            borderWidth: 4,
-            pointBackgroundColor: chartColors[index % chartColors.length],
-            pointBorderColor: '#fff',
-            pointBorderWidth: 3,
-            pointRadius: 8,
-            hidden: false
-        };
-    });
-
-    chartInstances.radar = new Chart(ctx, {
-        type: 'radar',
-        data: {
-            labels: ['Power', 'Price', 'Clearance', 'Cargo', 'Seating'],
-            datasets: datasets
-        },
-        options: {
-            responsive: false,
-            maintainAspectRatio: true,
-            aspectRatio: 1,
-            plugins: {
-                legend: {
-                    display: true,
-                    position: 'bottom',
-                    labels: {
-                        color: '#b49b66',
-                        font: { weight: 'bold', size: 14 },
-                        padding: 20,
-                        usePointStyle: true,
-                        pointStyle: 'circle'
-                    }
-                },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            const car = comparedCars[context.datasetIndex];
-                            const specs = car.specs;
-                            
-                            switch(context.dataIndex) {
-                                case 0: return `Power: ${specs.Horsepower || 0} HP`;
-                                case 1: return `Price: ₱${parseInt(specs.Price || 0).toLocaleString()}`;
-                                case 2: return `Clearance: ${specs.GroundClearance || 0} cm`;
-                                case 3: return `Cargo: ${specs.Cargospace || 0} L`;
-                                case 4: return `Seating: ${specs.SeatingCapacity || 0} seats`;
-                                default: return '';
-                            }
-                        }
-                    }
-                }
-            },
-            scales: {
-                r: {
-                    beginAtZero: true,
-                    max: 100,
-                    ticks: {
-                        display: true,
-                        stepSize: 25,
-                        color: '#b49b66',
-                        font: { size: 12, weight: 'bold' }
-                    },
-                    grid: {
-                        color: 'rgba(180, 155, 102, 0.3)',
-                        lineWidth: 2
-                    },
-                    angleLines: {
-                        color: 'rgba(180, 155, 102, 0.4)',
-                        lineWidth: 2
-                    },
-                    pointLabels: {
-                        color: '#b49b66',
-                        font: { 
-                            weight: 'bold',
-                            size: 16
-                        }
-                    }
-                }
-            }
-        }
-    });
-}
-
-// Update all charts
-function updateAllCharts() {
-    if (comparedCars.length === 0) {
-        const chartsSection = document.getElementById('compare-charts-section');
-        const radarSection = document.getElementById('radar-chart-section');
-        const cardsWrapper = document.getElementById('comparison-cards-wrapper');
-        
-        if (chartsSection) chartsSection.style.display = 'none';
-        if (radarSection) radarSection.style.display = 'none';
-        if (cardsWrapper) cardsWrapper.style.display = 'none';
-        
-        Object.values(chartInstances).forEach(chart => {
-            if (chart) chart.destroy();
-        });
-        chartInstances = {};
-        return;
-    }
-
-    const chartsSection = document.getElementById('compare-charts-section');
-    const radarSection = document.getElementById('radar-chart-section');
-    const cardsWrapper = document.getElementById('comparison-cards-wrapper');
-    
-    if (chartsSection) chartsSection.style.display = 'block';
-    if (radarSection) radarSection.style.display = 'block';
-    if (cardsWrapper) cardsWrapper.style.display = 'block';
-    
-    setTimeout(() => {
-        updateHorsepowerChart();
-        updatePriceChart();
-        updateGroundClearanceChart();
-        updateCargoSpaceChart();
-        updateSeatingCapacityChart();
-        updateRadarChart();
-    }, 100);
-}
-
-// Event listeners
-document.addEventListener('DOMContentLoaded', function() {
-    const brandDropdown = document.getElementById('brand');
-    const modelDropdown = document.getElementById('model');
-    const variantDropdown = document.getElementById('variant');
-
-    if (brandDropdown) {
-        brandDropdown.addEventListener('change', populateModels);
-    }
-    if (modelDropdown) {
-        modelDropdown.addEventListener('change', populateVariants);
-    }
-    if (variantDropdown) {
-        variantDropdown.addEventListener('change', populateYears);
-    }
-    
-    initializeComparePage();
-});
-
-window.addEventListener('resize', function() {
-    Object.values(chartInstances).forEach(chart => {
-        if (chart && chart.canvas.id !== 'radarChart') {
-            chart.resize();
-        }
-    });
-    
-    if (chartInstances.radar) {
-        setTimeout(() => {
-            updateRadarChart();
-        }, 100);
-    }
-});
-
-window.addEventListener('beforeunload', function() {
-    Object.values(chartInstances).forEach(chart => {
-        if (chart) {
-            chart.destroy();
-        }
-    });
-});
 
 //////////////////////////////////
 // Shows corresponding models  //
