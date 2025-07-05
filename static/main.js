@@ -1739,16 +1739,16 @@ const brandLogoPlugin = {
             const barWidth = bar.width;
             const barHeight = Math.abs(bar.y - bar.base);
             
-            // Logo sizing - larger for better visibility
+            // Logo sizing - INCREASED for better visibility
             let logoSize;
             
-            const widthBasedSize = barWidth * 0.6;
-            const heightBasedSize = barHeight * 0.4;
+            const widthBasedSize = barWidth * 0.7; // Increased from 0.6
+            const heightBasedSize = barHeight * 0.5; // Increased from 0.4
             
             logoSize = Math.min(widthBasedSize, heightBasedSize);
             
-            const maxLogoSize = 60;
-            const minLogoSize = 25;
+            const maxLogoSize = 80; // Increased from 60
+            const minLogoSize = 35; // Increased from 25
             logoSize = Math.max(minLogoSize, Math.min(logoSize, maxLogoSize));
             
             // Position logo in the center of the bar
@@ -1759,9 +1759,9 @@ const brandLogoPlugin = {
             
             if (barHeight > minBarHeightForLogo && logo) {
                 try {
-                    // Enhanced white circle background
+                    // Enhanced white circle background - LARGER for bigger logos
                     ctx.beginPath();
-                    const circleRadius = logoSize / 2 + 6;
+                    const circleRadius = logoSize / 2 + 8; // Increased padding for larger logos
                     ctx.arc(bar.x, bar.y + (bar.base - bar.y) / 2, circleRadius, 0, 2 * Math.PI);
                     
                     // White background
@@ -1806,8 +1806,8 @@ function drawBrandNameFallback(ctx, chart, index, brandName, size) {
     if (barHeight > 25) {
         ctx.save();
         
-        // Determine font size based on available space
-        const fontSize = Math.min(Math.max(size * 0.35, 11), 16);
+        // Determine font size based on available space - LARGER for better visibility
+        const fontSize = Math.min(Math.max(size * 0.4, 13), 18); // Increased base and max sizes
         
         ctx.font = `bold ${fontSize}px Arial`;
         ctx.textAlign = 'center';
@@ -1821,9 +1821,9 @@ function drawBrandNameFallback(ctx, chart, index, brandName, size) {
         const centerX = bar.x;
         const centerY = bar.y + (bar.base - bar.y) / 2;
         
-        // ALWAYS CENTER ALIGNED - NO ROTATION
-        const rectWidth = Math.max(textWidth + 12, 40);
-        const rectHeight = fontSize + 8;
+        // ALWAYS CENTER ALIGNED - NO ROTATION - LARGER BACKGROUNDS
+        const rectWidth = Math.max(textWidth + 16, 50); // Increased padding and minimum width
+        const rectHeight = fontSize + 10; // Increased padding
         
         // Background rectangle
         ctx.beginPath();
