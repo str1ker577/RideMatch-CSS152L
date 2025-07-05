@@ -1162,7 +1162,7 @@ async function loadDefaultCars() {
 }
 
 ///////////////////////
-// Comparison Page  //
+// Comparison Page - FIXED VERSION //
 /////////////////////
 
 // Global variables for compare page
@@ -1410,7 +1410,7 @@ async function compareCars() {
         
         // Update all charts including radar
         setTimeout(() => {
-            updateAllChartsOptimized();
+            updateAllCharts();
         }, 100);
         
         // Show success message and reset form
@@ -1469,108 +1469,23 @@ async function populateBrandsForCompare() {
 }
 
 /////////////////////////
-// Compare Charts Logo - ENHANCED VERSION //
+// Compare Charts Logo - SIMPLIFIED AND WORKING VERSION //
 /////////////////////////
 
 // Global object to store loaded logo images
 let brandLogos = {};
 
-// ENHANCED: Enhanced brand processing configurations for problematic logos
-const enhancedBrandProcessingConfig = {
-    'bmw': {
-        type: 'complex_circular',
-        removeAllGradients: true,
-        forceMonochrome: true,
-        textHandling: 'convert_to_paths',
-        specialProcessing: 'bmw_circle',
-        fallbackText: 'BMW'
-    },
-    'ford': {
-        type: 'oval_with_text',
-        removeAllGradients: true,
-        forceMonochrome: true,
-        textHandling: 'force_simple',
-        specialProcessing: 'ford_oval',
-        fallbackText: 'FORD'
-    },
-    'kia': {
-        type: 'modern_oval',
-        removeAllGradients: true,
-        forceMonochrome: true,
-        textHandling: 'force_simple',
-        specialProcessing: 'kia_oval',
-        fallbackText: 'KIA'
-    },
-    'hyundai': {
-        type: 'italic_oval',
-        removeAllGradients: true,
-        forceMonochrome: true,
-        textHandling: 'force_simple',
-        specialProcessing: 'hyundai_oval',
-        fallbackText: 'HYUNDAI'
-    },
-    'mg': {
-        type: 'octagon_badge',
-        removeAllGradients: true,
-        forceMonochrome: true,
-        textHandling: 'force_simple',
-        specialProcessing: 'mg_badge',
-        fallbackText: 'MG'
-    },
-    'mercedes': {
-        type: 'three_pointed_star',
-        removeAllGradients: true,
-        forceMonochrome: true,
-        textHandling: 'remove_text',
-        specialProcessing: 'mercedes_star',
-        fallbackText: 'MB'
-    },
-    'mercedes-benz': {
-        type: 'redirect',
-        redirectTo: 'mercedes' // Handle duplicate
-    },
-    'porsche': {
-        type: 'complex_crest',
-        removeAllGradients: true,
-        forceMonochrome: true,
-        textHandling: 'simplify_crest',
-        specialProcessing: 'porsche_crest',
-        fallbackText: 'P'
-    },
-    'subaru': {
-        type: 'missing_svg',
-        fallbackText: 'SUBARU',
-        useTextFallback: true
-    },
-    'tesla': {
-        type: 'stylized_t',
-        removeAllGradients: true,
-        forceMonochrome: true,
-        textHandling: 'remove_text',
-        specialProcessing: 'tesla_t',
-        fallbackText: 'T'
-    },
-    'volkswagen': {
-        type: 'vw_circle',
-        removeAllGradients: true,
-        forceMonochrome: true,
-        textHandling: 'keep_vw_only',
-        specialProcessing: 'vw_circle',
-        fallbackText: 'VW'
-    }
-};
-
-// ENHANCED: Better text fallback logo creation with LARGER size for visibility
+// SIMPLIFIED: Better text fallback logo creation that actually works
 function createTextFallbackLogo(text) {
     const canvas = document.createElement('canvas');
-    canvas.width = 140; // Increased size for better visibility
-    canvas.height = 140;
+    canvas.width = 100;
+    canvas.height = 100;
     const ctx = canvas.getContext('2d');
     
     // Background circle using your site's theme color
     ctx.fillStyle = '#b49b66';
     ctx.beginPath();
-    ctx.arc(70, 70, 65, 0, 2 * Math.PI);
+    ctx.arc(50, 50, 45, 0, 2 * Math.PI);
     ctx.fill();
     
     // Enhanced text fitting logic for long brand names
@@ -1578,7 +1493,7 @@ function createTextFallbackLogo(text) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
-    let fontSize = 28;
+    let fontSize = 20;
     let lines = [];
     
     // Handle long brand names by splitting them
@@ -1588,32 +1503,32 @@ function createTextFallbackLogo(text) {
             // Split into two lines
             const mid = Math.ceil(text.length / 2);
             lines = [text.substring(0, mid), text.substring(mid)];
-            fontSize = 14;
+            fontSize = 10;
         } else {
             // Single line but smaller font
             lines = [text];
-            fontSize = 16;
+            fontSize = 12;
         }
     } else if (text.length > 5) {
         lines = [text];
-        fontSize = 18;
+        fontSize = 14;
     } else if (text.length > 3) {
         lines = [text];
-        fontSize = 22;
+        fontSize = 16;
     } else {
         lines = [text];
-        fontSize = 28;
+        fontSize = 20;
     }
     
     ctx.font = `bold ${fontSize}px Arial`;
     
     // Draw text lines
     if (lines.length === 1) {
-        ctx.fillText(lines[0], 70, 70);
+        ctx.fillText(lines[0], 50, 50);
     } else {
         // Two lines
-        ctx.fillText(lines[0], 70, 60);
-        ctx.fillText(lines[1], 70, 80);
+        ctx.fillText(lines[0], 50, 42);
+        ctx.fillText(lines[1], 50, 58);
     }
     
     // Convert to image
@@ -1625,11 +1540,11 @@ function createTextFallbackLogo(text) {
     });
 }
 
-// ENHANCED: Fixed loadBrandLogo function to prevent Tesla/Hyundai bug
+// SIMPLIFIED: Load brand logo function that works reliably
 async function loadBrandLogo(brandName) {
     if (!brandName) return null;
     
-    // IMPORTANT FIX: Clean the brand name properly to avoid conflicts
+    // Clean the brand name properly
     const logoKey = String(brandName).toLowerCase().replace(/[\s-]/g, '').trim();
     
     console.log(`🔍 Loading logo for brand: "${brandName}" (key: "${logoKey}")`);
@@ -1640,29 +1555,14 @@ async function loadBrandLogo(brandName) {
         return brandLogos[logoKey];
     }
     
-    const config = enhancedBrandProcessingConfig[logoKey] || {};
-    
-    // Handle redirects (like mercedes-benz -> mercedes)
-    if (config.type === 'redirect') {
-        console.log(`🔄 Redirecting ${brandName} to ${config.redirectTo}`);
-        return await loadBrandLogo(config.redirectTo);
-    }
-    
-    // Handle missing SVGs with text fallback
-    if (config.type === 'missing_svg' || config.useTextFallback) {
-        console.log(`📝 Creating text fallback for ${brandName}`);
-        const textLogo = await createTextFallbackLogo(config.fallbackText || brandName.toUpperCase());
-        brandLogos[logoKey] = textLogo;
-        return textLogo;
-    }
-    
     try {
+        // Try to load SVG first
         const svgPath = `/static/brand_logo/${logoKey}_logo.svg`;
         const response = await fetch(svgPath);
         
         if (!response.ok) {
             console.warn(`⚠️ SVG not found for ${brandName}, using text fallback`);
-            const textLogo = await createTextFallbackLogo(config.fallbackText || brandName.toUpperCase());
+            const textLogo = await createTextFallbackLogo(brandName.toUpperCase());
             brandLogos[logoKey] = textLogo;
             return textLogo;
         }
@@ -1673,436 +1573,218 @@ async function loadBrandLogo(brandName) {
             throw new Error('Invalid SVG content');
         }
         
-        // Process with enhanced method
-        const processedSvg = enhancedProcessSvgForChart(svgText, brandName, config);
+        // Process SVG with simplified method
+        const processedSvg = simplifyProcessSvgForChart(svgText, brandName);
         
         // Convert to image
-        const img = await svgToImageWithRetry(processedSvg, config.fallbackText || brandName.toUpperCase());
+        const img = await svgToImage(processedSvg, brandName.toUpperCase());
         
         brandLogos[logoKey] = img;
-        console.log(`✅ Successfully loaded enhanced logo for: ${brandName}`);
+        console.log(`✅ Successfully loaded logo for: ${brandName}`);
         return img;
         
     } catch (error) {
         console.warn(`❌ Error loading SVG for ${brandName}:`, error);
         
         // Create text fallback as last resort
-        const textLogo = await createTextFallbackLogo(config.fallbackText || brandName.toUpperCase());
+        const textLogo = await createTextFallbackLogo(brandName.toUpperCase());
         brandLogos[logoKey] = textLogo;
         return textLogo;
     }
 }
 
-// Enhanced SVG processing function
-function enhancedProcessSvgForChart(svgText, brandName, config) {
+// SIMPLIFIED: Basic SVG processing that works
+function simplifyProcessSvgForChart(svgText, brandName) {
     try {
-        console.log(`🔧 Enhanced processing for ${brandName}...`);
+        console.log(`🔧 Processing SVG for ${brandName}...`);
         
         const themeColor = '#b49b66';
         
-        // Create DOM parser for better SVG handling
-        const parser = new DOMParser();
-        const doc = parser.parseFromString(svgText, 'image/svg+xml');
-        const svgElement = doc.querySelector('svg');
+        // Simple find and replace approach
+        let processedSvg = svgText;
         
-        if (!svgElement) {
-            throw new Error('No SVG element found');
-        }
+        // Set consistent dimensions
+        processedSvg = processedSvg.replace(/width="[^"]*"/, 'width="100"');
+        processedSvg = processedSvg.replace(/height="[^"]*"/, 'height="100"');
+        processedSvg = processedSvg.replace(/viewBox="[^"]*"/, 'viewBox="0 0 100 100"');
         
-        // Set consistent dimensions (increased for better visibility)
-        svgElement.setAttribute('width', '140');
-        svgElement.setAttribute('height', '140');
-        svgElement.setAttribute('viewBox', '0 0 140 140');
+        // Simple color replacement
+        processedSvg = processedSvg.replace(/fill="[^"]*"/g, `fill="${themeColor}"`);
+        processedSvg = processedSvg.replace(/stroke="[^"]*"/g, `stroke="${themeColor}"`);
         
-        // STEP 1: Aggressive cleanup for complex logos
-        console.log(`🧹 Aggressive cleanup for ${brandName}...`);
+        // Remove problematic elements
+        processedSvg = processedSvg.replace(/<defs>.*?<\/defs>/gi, '');
+        processedSvg = processedSvg.replace(/<style>.*?<\/style>/gi, '');
+        processedSvg = processedSvg.replace(/<linearGradient.*?<\/linearGradient>/gi, '');
+        processedSvg = processedSvg.replace(/<radialGradient.*?<\/radialGradient>/gi, '');
         
-        // Remove all problematic elements
-        const problematicElements = svgElement.querySelectorAll(
-            'defs, style, script, metadata, title, desc, linearGradient, radialGradient, pattern, filter, mask, clipPath'
-        );
-        problematicElements.forEach(el => el.remove());
-        
-        // STEP 2: Apply brand-specific processing
-        if (config.specialProcessing) {
-            console.log(`🎨 Applying special processing: ${config.specialProcessing}`);
-            applyEnhancedSpecialProcessing(svgElement, config.specialProcessing, themeColor, config);
-        }
-        
-        // STEP 3: Force complete monochrome conversion
-        console.log(`🎨 Forcing monochrome for ${brandName}...`);
-        forceCompleteMonochrome(svgElement, themeColor, config);
-        
-        // STEP 4: Add aggressive override styles
-        const styleElement = doc.createElementNS('http://www.w3.org/2000/svg', 'style');
-        styleElement.textContent = `
-            * {
-                fill: ${themeColor} !important;
-                stroke: ${themeColor} !important;
-                stroke-width: 1 !important;
-                color: ${themeColor} !important;
-                opacity: 1 !important;
-            }
-            text, tspan {
-                fill: ${themeColor} !important;
-                stroke: none !important;
-                font-family: Arial, sans-serif !important;
-                font-weight: bold !important;
-            }
-            path, circle, rect, polygon, ellipse, line, polyline {
-                fill: ${themeColor} !important;
-                stroke: ${themeColor} !important;
-                stroke-width: 1 !important;
-            }
-            g {
-                fill: ${themeColor} !important;
-                stroke: none !important;
-            }
-        `;
-        
-        // Insert style at the beginning
-        if (svgElement.firstChild) {
-            svgElement.insertBefore(styleElement, svgElement.firstChild);
-        } else {
-            svgElement.appendChild(styleElement);
-        }
-        
-        console.log(`✅ Enhanced processing completed for ${brandName}`);
-        return svgElement.outerHTML;
+        console.log(`✅ Simplified processing completed for ${brandName}`);
+        return processedSvg;
         
     } catch (error) {
-        console.warn(`❌ Enhanced processing failed for ${brandName}:`, error);
-        return createFallbackSvg(config.fallbackText || brandName);
+        console.warn(`❌ SVG processing failed for ${brandName}:`, error);
+        return createFallbackSvg(brandName);
     }
-}
-
-// Enhanced special processing functions
-function applyEnhancedSpecialProcessing(svgElement, processingType, themeColor, config) {
-    const allElements = svgElement.querySelectorAll('*');
-    
-    switch (processingType) {
-        case 'bmw_circle':
-        case 'mercedes_star':
-        case 'tesla_t':
-        case 'vw_circle':
-            // For circular/simple logos - keep main shapes, remove text
-            allElements.forEach(element => {
-                if (element.tagName === 'text' || element.tagName === 'tspan') {
-                    element.remove();
-                } else {
-                    element.setAttribute('fill', themeColor);
-                    element.setAttribute('stroke', themeColor);
-                }
-            });
-            break;
-            
-        case 'ford_oval':
-        case 'kia_oval':
-        case 'hyundai_oval':
-            // For oval logos - simplify and keep main shape
-            allElements.forEach(element => {
-                if (element.tagName === 'text' || element.tagName === 'tspan') {
-                    // Keep text but simplify
-                    element.setAttribute('fill', themeColor);
-                    element.setAttribute('font-family', 'Arial, sans-serif');
-                    element.setAttribute('font-weight', 'bold');
-                    element.removeAttribute('font-style');
-                } else {
-                    element.setAttribute('fill', themeColor);
-                    element.setAttribute('stroke', themeColor);
-                }
-            });
-            break;
-            
-        case 'porsche_crest':
-            // For complex crests - extreme simplification
-            const complexElements = svgElement.querySelectorAll('text, tspan');
-            complexElements.forEach(el => el.remove());
-            
-            allElements.forEach(element => {
-                element.setAttribute('fill', themeColor);
-                element.setAttribute('stroke', 'none');
-                element.removeAttribute('opacity');
-                element.removeAttribute('fill-opacity');
-            });
-            break;
-            
-        case 'mg_badge':
-            // For badges - keep simple shapes only
-            allElements.forEach(element => {
-                element.setAttribute('fill', themeColor);
-                element.setAttribute('stroke', themeColor);
-                element.removeAttribute('stroke-width');
-            });
-            break;
-    }
-}
-
-// Force complete monochrome conversion
-function forceCompleteMonochrome(svgElement, themeColor, config) {
-    const allElements = svgElement.querySelectorAll('*');
-    
-    allElements.forEach(element => {
-        // Remove all color-related attributes
-        const colorAttributes = [
-            'fill', 'stroke', 'stop-color', 'flood-color', 
-            'lighting-color', 'fill-opacity', 'stroke-opacity',
-            'opacity', 'color'
-        ];
-        
-        colorAttributes.forEach(attr => {
-            element.removeAttribute(attr);
-        });
-        
-        // Set new attributes
-        if (['path', 'circle', 'rect', 'polygon', 'ellipse', 'g'].includes(element.tagName)) {
-            element.setAttribute('fill', themeColor);
-            element.setAttribute('stroke', 'none');
-        }
-        
-        if (['text', 'tspan'].includes(element.tagName)) {
-            element.setAttribute('fill', themeColor);
-            element.setAttribute('stroke', 'none');
-            element.setAttribute('font-family', 'Arial, sans-serif');
-            element.setAttribute('font-weight', 'bold');
-        }
-        
-        // Force style attributes
-        element.style.fill = themeColor;
-        element.style.stroke = 'none';
-        element.style.color = themeColor;
-        element.style.opacity = '1';
-    });
 }
 
 // Create fallback SVG for processing failures
 function createFallbackSvg(text) {
     return `
-        <svg width="140" height="140" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="70" cy="70" r="65" fill="#b49b66" stroke="none"/>
-            <text x="70" y="75" text-anchor="middle" fill="white" 
-                  font-family="Arial, sans-serif" font-weight="bold" font-size="20">
+        <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="50" cy="50" r="45" fill="#b49b66" stroke="none"/>
+            <text x="50" y="55" text-anchor="middle" fill="white" 
+                  font-family="Arial, sans-serif" font-weight="bold" font-size="16">
                 ${text}
             </text>
         </svg>
     `;
 }
 
-// Enhanced SVG to Image conversion with retry logic
-async function svgToImageWithRetry(svgString, fallbackText, maxRetries = 3) {
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-        try {
-            console.log(`🔄 Converting SVG to image (attempt ${attempt}/${maxRetries})`);
+// SIMPLIFIED: SVG to Image conversion
+async function svgToImage(svgString, fallbackText) {
+    try {
+        console.log(`🔄 Converting SVG to image`);
+        
+        const img = new Image();
+        
+        return new Promise((resolve, reject) => {
+            img.onload = () => {
+                console.log(`✅ SVG converted successfully`);
+                resolve(img);
+            };
             
-            const img = new Image();
+            img.onerror = (error) => {
+                console.warn(`❌ SVG conversion failed:`, error);
+                reject(error);
+            };
             
-            return new Promise((resolve, reject) => {
-                img.onload = () => {
-                    console.log(`✅ SVG converted successfully on attempt ${attempt}`);
-                    resolve(img);
-                };
-                
-                img.onerror = (error) => {
-                    console.warn(`❌ SVG conversion failed on attempt ${attempt}:`, error);
-                    reject(error);
-                };
-                
-                // Create blob URL with proper MIME type
-                const svgBlob = new Blob([svgString], { 
-                    type: 'image/svg+xml;charset=utf-8' 
-                });
-                const svgUrl = URL.createObjectURL(svgBlob);
-                
-                img.src = svgUrl;
-                
-                // Cleanup and timeout
-                setTimeout(() => {
-                    URL.revokeObjectURL(svgUrl);
-                    if (!img.complete) {
-                        reject(new Error(`SVG loading timeout on attempt ${attempt}`));
-                    }
-                }, 3000);
+            // Create blob URL with proper MIME type
+            const svgBlob = new Blob([svgString], { 
+                type: 'image/svg+xml;charset=utf-8' 
             });
+            const svgUrl = URL.createObjectURL(svgBlob);
             
-        } catch (error) {
-            console.warn(`⚠️ Attempt ${attempt} failed:`, error);
+            img.src = svgUrl;
             
-            if (attempt === maxRetries) {
-                console.log(`🔄 All attempts failed, creating text fallback for: ${fallbackText}`);
-                return await createTextFallbackLogo(fallbackText || 'LOGO');
-            }
-            
-            // Wait before retry
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
+            // Cleanup after 3 seconds
+            setTimeout(() => {
+                URL.revokeObjectURL(svgUrl);
+            }, 3000);
+        });
+        
+    } catch (error) {
+        console.warn(`⚠️ SVG conversion failed, creating text fallback`);
+        return await createTextFallbackLogo(fallbackText || 'LOGO');
     }
 }
 
-// Enhanced logo preloading with progress
-async function preloadBrandLogosWithProgress() {
+// Function to preload all brand logos for compared cars
+async function preloadBrandLogos() {
     const brands = [...new Set(comparedCars.map(car => car.specs.Brand))];
-    console.log('🔄 Preloading logos with progress for brands:', brands);
-    
-    let loadedCount = 0;
-    showLogoLoadingStatus(`Loading logos... 0/${brands.length}`);
+    console.log('🔄 Preloading logos for brands:', brands);
     
     const loadPromises = brands.map(async (brand) => {
         try {
             await loadBrandLogo(brand);
-            loadedCount++;
-            showLogoLoadingStatus(`Loading logos... ${loadedCount}/${brands.length}`);
             return { brand, success: true };
         } catch (error) {
             console.warn(`Failed to load logo for ${brand}:`, error);
-            loadedCount++;
-            showLogoLoadingStatus(`Loading logos... ${loadedCount}/${brands.length}`);
             return { brand, success: false };
         }
     });
     
     const results = await Promise.all(loadPromises);
+    
     const successCount = results.filter(r => r.success).length;
+    const failedBrands = results.filter(r => !r.success).map(r => r.brand);
     
-    showLogoLoadingStatus(`✅ Loaded ${successCount}/${brands.length} logos`, 2000);
-    console.log('📊 Available optimized logos:', Object.keys(brandLogos).length);
-}
-
-// Function to show logo loading status
-function showLogoLoadingStatus(message, autoHideDelay = null) {
-    let statusElement = document.getElementById('logo-loading-status');
-    
-    if (!statusElement) {
-        statusElement = document.createElement('div');
-        statusElement.id = 'logo-loading-status';
-        statusElement.className = 'logo-loading-status';
-        statusElement.style.cssText = `
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: linear-gradient(135deg, #b49b66, #d4af37);
-            color: white;
-            padding: 0.75rem 1.25rem;
-            border-radius: 25px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            z-index: 10000;
-            transition: all 0.3s ease;
-            opacity: 0;
-            transform: translateY(20px);
-            box-shadow: 0 8px 25px rgba(180, 155, 102, 0.4);
-        `;
-        document.body.appendChild(statusElement);
+    console.log(`✅ Loaded ${successCount}/${brands.length} brand logos`);
+    if (failedBrands.length > 0) {
+        console.warn('❌ Failed to load logos for:', failedBrands);
     }
     
-    statusElement.textContent = message;
-    statusElement.style.opacity = '1';
-    statusElement.style.transform = 'translateY(0)';
-    
-    if (autoHideDelay) {
-        setTimeout(() => {
-            statusElement.style.opacity = '0';
-            statusElement.style.transform = 'translateY(20px)';
-        }, autoHideDelay);
-    }
+    console.log('📊 Available brand logos:', Object.keys(brandLogos).filter(key => brandLogos[key] !== null));
 }
 
-// ENHANCED: Optimal logo sizing algorithm for better space utilization
-function calculateOptimalLogoSize(barWidth, barHeight, chartWidth) {
-    // Dynamic sizing based on chart dimensions and bar size
-    const chartBasedSize = chartWidth / 12; // Scale with chart width
-    const barBasedSize = Math.min(barWidth * 0.7, barHeight * 0.55); // Increased ratios
-    const optimalSize = Math.min(chartBasedSize, barBasedSize);
-    
-    // More aggressive size ranges for better visibility
-    const maxLogoSize = Math.min(90, chartWidth / 6); // Scale max with chart
-    const minLogoSize = Math.max(32, chartWidth / 20); // Scale min with chart
-    
-    return Math.max(minLogoSize, Math.min(optimalSize, maxLogoSize));
-}
-
-// ENHANCED: Improved brand logo plugin with LARGER logos and better positioning
-const enhancedBrandLogoPlugin = {
-    id: 'enhancedBrandLogo',
+// WORKING: Brand logo plugin with proper logo display
+const brandLogoPlugin = {
+    id: 'brandLogo',
     afterDatasetsDraw: function(chart, args, options) {
-        const { ctx, data, chartArea } = chart;
+        const { ctx, data, chartArea, scales } = chart;
         
         if (!data.datasets || !data.datasets[0] || !comparedCars) return;
         
         ctx.save();
         
-        // Get chart dimensions for optimal sizing
-        const chartWidth = chartArea.width;
-        const chartHeight = chartArea.height;
-        
+        // Loop through each bar
         data.datasets[0].data.forEach((value, index) => {
             if (index >= comparedCars.length) return;
             
             const car = comparedCars[index];
             const brandName = car.specs.Brand;
+            
+            console.log(`🎨 Drawing logo for car ${index}: Brand="${brandName}", Variant="${car.variant}"`);
+            
+            // Get the correct logo using the brand name
             const logoKey = String(brandName).toLowerCase().replace(/[\s-]/g, '').trim();
             const logo = brandLogos[logoKey];
             
+            // Get bar position
             const meta = chart.getDatasetMeta(0);
             const bar = meta.data[index];
             
             if (!bar) return;
             
+            // Calculate bar dimensions
             const barWidth = bar.width;
             const barHeight = Math.abs(bar.y - bar.base);
             
-            // Use enhanced size calculation
-            const logoSize = calculateOptimalLogoSize(barWidth, barHeight, chartWidth);
+            // Logo sizing - larger for better visibility
+            let logoSize;
             
+            const widthBasedSize = barWidth * 0.6;
+            const heightBasedSize = barHeight * 0.4;
+            
+            logoSize = Math.min(widthBasedSize, heightBasedSize);
+            
+            const maxLogoSize = 60;
+            const minLogoSize = 25;
+            logoSize = Math.max(minLogoSize, Math.min(logoSize, maxLogoSize));
+            
+            // Position logo in the center of the bar
             const logoX = bar.x - logoSize / 2;
             const logoY = bar.y + (bar.base - bar.y) / 2 - logoSize / 2;
             
-            const minBarHeightForLogo = logoSize + 15;
+            const minBarHeightForLogo = logoSize + 10;
             
             if (barHeight > minBarHeightForLogo && logo) {
                 try {
-                    // Enhanced background with better proportions
+                    // Enhanced white circle background
                     ctx.beginPath();
-                    const circleRadius = logoSize / 2 + 10; // Increased padding
+                    const circleRadius = logoSize / 2 + 6;
                     ctx.arc(bar.x, bar.y + (bar.base - bar.y) / 2, circleRadius, 0, 2 * Math.PI);
                     
-                    // Improved gradient
-                    const gradient = ctx.createRadialGradient(
-                        bar.x, bar.y + (bar.base - bar.y) / 2, 0,
-                        bar.x, bar.y + (bar.base - bar.y) / 2, circleRadius
-                    );
-                    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
-                    gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.95)');
-                    gradient.addColorStop(1, 'rgba(245, 245, 245, 0.9)');
-                    
-                    ctx.fillStyle = gradient;
+                    // White background
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
                     ctx.fill();
                     
-                    // Enhanced border
-                    ctx.strokeStyle = 'rgba(180, 155, 102, 0.8)';
-                    ctx.lineWidth = 3;
+                    // Border using your site's theme color
+                    ctx.strokeStyle = 'rgba(180, 155, 102, 0.6)';
+                    ctx.lineWidth = 2;
                     ctx.stroke();
                     
-                    // Add subtle shadow
-                    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
-                    ctx.shadowBlur = 6;
-                    ctx.shadowOffsetY = 3;
-                    
-                    // Draw the logo with better quality
-                    ctx.imageSmoothingEnabled = true;
-                    ctx.imageSmoothingQuality = 'high';
+                    // Draw the logo
                     ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
                     
-                    // Reset shadow
-                    ctx.shadowColor = 'transparent';
-                    ctx.shadowBlur = 0;
-                    ctx.shadowOffsetY = 0;
+                    console.log(`✅ Successfully drew logo for ${brandName}`);
                     
                 } catch (error) {
-                    console.warn('Error drawing enhanced logo for', brandName, ':', error);
-                    drawEnhancedBrandNameFallback(ctx, chart, index, brandName, logoSize, chartWidth);
+                    console.warn('❌ Error drawing logo for', brandName, ':', error);
+                    drawBrandNameFallback(ctx, chart, index, brandName, logoSize);
                 }
-            } else if (barHeight > 40) {
-                drawEnhancedBrandNameFallback(ctx, chart, index, brandName, logoSize, chartWidth);
+            } else if (barHeight > 30) {
+                // Show brand name for smaller bars
+                drawBrandNameFallback(ctx, chart, index, brandName, Math.min(logoSize, 35));
             }
         });
         
@@ -2110,8 +1792,8 @@ const enhancedBrandLogoPlugin = {
     }
 };
 
-// FIXED: Enhanced text fallback with ALWAYS center-aligned text (no rotation)
-function drawEnhancedBrandNameFallback(ctx, chart, index, brandName, size, chartWidth) {
+// FIXED: Center-aligned text fallback (no rotation)
+function drawBrandNameFallback(ctx, chart, index, brandName, size) {
     const meta = chart.getDatasetMeta(0);
     const bar = meta.data[index];
     
@@ -2120,64 +1802,42 @@ function drawEnhancedBrandNameFallback(ctx, chart, index, brandName, size, chart
     const barHeight = Math.abs(bar.y - bar.base);
     const barWidth = bar.width;
     
-    if (barHeight > 35) {
+    // Only draw text if bar is tall enough
+    if (barHeight > 25) {
         ctx.save();
         
-        // Dynamic font sizing based on chart width
-        const baseFontSize = Math.max(13, chartWidth / 35);
-        const fontSize = Math.min(Math.max(size * 0.4, baseFontSize), 20);
+        // Determine font size based on available space
+        const fontSize = Math.min(Math.max(size * 0.35, 11), 16);
         
-        ctx.font = `bold ${fontSize}px Arial, sans-serif`;
+        ctx.font = `bold ${fontSize}px Arial`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // Smart text truncation
-        let displayText = brandName;
-        if (brandName.length > 10) {
-            displayText = brandName.substring(0, 8) + '…';
-        } else if (brandName.length > 8) {
-            displayText = brandName.substring(0, 8);
-        }
-        
+        // Prepare brand name text
+        const displayText = brandName.length > 8 ? brandName.substring(0, 8) : brandName;
         const textWidth = ctx.measureText(displayText).width;
+        
+        // Create background for text
         const centerX = bar.x;
         const centerY = bar.y + (bar.base - bar.y) / 2;
         
-        // FIXED: Always use center alignment, no rotation
-        const rectWidth = Math.max(textWidth + 18, 55);
-        const rectHeight = fontSize + 12;
+        // ALWAYS CENTER ALIGNED - NO ROTATION
+        const rectWidth = Math.max(textWidth + 12, 40);
+        const rectHeight = fontSize + 8;
         
-        // Enhanced background with gradient
-        const bgGradient = ctx.createLinearGradient(
-            centerX - rectWidth/2, centerY - rectHeight/2,
-            centerX + rectWidth/2, centerY + rectHeight/2
-        );
-        bgGradient.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
-        bgGradient.addColorStop(1, 'rgba(248, 248, 248, 0.95)');
-        
+        // Background rectangle
         ctx.beginPath();
-        ctx.roundRect(centerX - rectWidth/2, centerY - rectHeight/2, rectWidth, rectHeight, 10);
-        ctx.fillStyle = bgGradient;
-        ctx.fill();
+        ctx.roundRect(centerX - rectWidth/2, centerY - rectHeight/2, rectWidth, rectHeight, 6);
         
-        // Enhanced border
-        ctx.strokeStyle = 'rgba(180, 155, 102, 0.7)';
-        ctx.lineWidth = 2;
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(180, 155, 102, 0.5)';
+        ctx.lineWidth = 1.5;
         ctx.stroke();
         
-        // Add subtle text shadow
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
-        ctx.shadowBlur = 2;
-        ctx.shadowOffsetY = 1;
-        
-        // Draw text (ALWAYS CENTER ALIGNED - NO ROTATION)
-        ctx.fillStyle = '#8b6914';
+        // Draw text (ALWAYS CENTER ALIGNED)
+        ctx.fillStyle = '#b49b66';
         ctx.fillText(displayText, centerX, centerY);
-        
-        // Reset shadow
-        ctx.shadowColor = 'transparent';
-        ctx.shadowBlur = 0;
-        ctx.shadowOffsetY = 0;
         
         ctx.restore();
     }
@@ -2196,29 +1856,6 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
         this.arcTo(x, y, x + width, y, radius);
         this.closePath();
         return this;
-    };
-}
-
-// Efficient data preparation function
-function prepareChartData() {
-    const labels = comparedCars.map(car => {
-        const brand = car.specs.Brand || 'Unknown';
-        const model = car.specs.Model || 'Unknown';
-        const variant = car.variant || 'Unknown';
-        const year = car.year || '';
-        
-        return `${variant}\n${brand} - ${model}\n(${year})`;
-    });
-    
-    return {
-        labels,
-        horsepowerData: comparedCars.map(car => parseInt(car.specs.Horsepower) || 0),
-        priceData: comparedCars.map(car => parseFloat(car.specs.Price) || 0),
-        groundClearanceData: comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0),
-        seatingData: comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0),
-        cargoData: comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0),
-        colors: chartBackgroundColors.slice(0, comparedCars.length),
-        borderColors: chartColors.slice(0, comparedCars.length)
     };
 }
 
@@ -2270,7 +1907,7 @@ function removeCarFromComparison(carId) {
     }
     
     comparedCars = comparedCars.filter(car => car.id !== carId);
-    updateAllChartsOptimized();
+    updateAllCharts();
     
     // Hide comparison sections if no cars left
     if (comparedCars.length === 0) {
@@ -2422,9 +2059,9 @@ function createProgressBar(value, type) {
     return progressContainer;
 }
 
-// ENHANCED: Chart creation functions with optimized performance
+// ENHANCED: Updated chart functions with Brand + Model labels and better spacing
 
-function updateHorsepowerChartOptimized() {
+function updateHorsepowerChart() {
     const canvas = document.getElementById('horsepowerChart');
     if (!canvas) return;
     
@@ -2434,17 +2071,29 @@ function updateHorsepowerChartOptimized() {
         chartInstances.horsepower.destroy();
     }
 
-    const chartData = prepareChartData();
+    // Enhanced labels with Brand + Model + Year
+    const labels = comparedCars.map(car => {
+        const brand = car.specs.Brand || 'Unknown';
+        const model = car.specs.Model || 'Unknown';
+        const variant = car.variant || 'Unknown';
+        const year = car.year || '';
+        
+        return `${variant}\n${brand} - ${model}\n(${year})`;
+    });
+    
+    const data = comparedCars.map(car => parseInt(car.specs.Horsepower) || 0);
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
 
     chartInstances.horsepower = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: chartData.labels,
+            labels: labels,
             datasets: [{
                 label: 'Horsepower (HP)',
-                data: chartData.horsepowerData,
-                backgroundColor: chartData.colors,
-                borderColor: chartData.borderColors,
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false,
@@ -2453,10 +2102,6 @@ function updateHorsepowerChartOptimized() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: {
-                duration: 750,
-                easing: 'easeOutQuart'
-            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -2467,8 +2112,6 @@ function updateHorsepowerChartOptimized() {
                     borderWidth: 2,
                     cornerRadius: 8,
                     displayColors: false,
-                    intersect: false,
-                    mode: 'index',
                     callbacks: {
                         title: function(context) {
                             const carIndex = context[0].dataIndex;
@@ -2507,11 +2150,11 @@ function updateHorsepowerChartOptimized() {
                 }
             }
         },
-        plugins: [enhancedBrandLogoPlugin]
+        plugins: [brandLogoPlugin]
     });
 }
 
-function updatePriceChartOptimized() {
+function updatePriceChart() {
     const canvas = document.getElementById('priceChart');
     if (!canvas) return;
     
@@ -2521,17 +2164,29 @@ function updatePriceChartOptimized() {
         chartInstances.price.destroy();
     }
 
-    const chartData = prepareChartData();
+    // Enhanced labels with Brand + Model + Year
+    const labels = comparedCars.map(car => {
+        const brand = car.specs.Brand || 'Unknown';
+        const model = car.specs.Model || 'Unknown';
+        const variant = car.variant || 'Unknown';
+        const year = car.year || '';
+        
+        return `${variant}\n${brand} - ${model}\n(${year})`;
+    });
+    
+    const data = comparedCars.map(car => parseFloat(car.specs.Price) || 0);
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
 
     chartInstances.price = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: chartData.labels,
+            labels: labels,
             datasets: [{
                 label: 'Price (PHP)',
-                data: chartData.priceData,
-                backgroundColor: chartData.colors,
-                borderColor: chartData.borderColors,
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false,
@@ -2540,10 +2195,6 @@ function updatePriceChartOptimized() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: {
-                duration: 750,
-                easing: 'easeOutQuart'
-            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -2554,8 +2205,6 @@ function updatePriceChartOptimized() {
                     borderWidth: 2,
                     cornerRadius: 8,
                     displayColors: false,
-                    intersect: false,
-                    mode: 'index',
                     callbacks: {
                         title: function(context) {
                             const carIndex = context[0].dataIndex;
@@ -2600,11 +2249,11 @@ function updatePriceChartOptimized() {
                 }
             }
         },
-        plugins: [enhancedBrandLogoPlugin]
+        plugins: [brandLogoPlugin]
     });
 }
 
-function updateGroundClearanceChartOptimized() {
+function updateGroundClearanceChart() {
     const canvas = document.getElementById('groundClearanceChart');
     if (!canvas) return;
     
@@ -2614,17 +2263,29 @@ function updateGroundClearanceChartOptimized() {
         chartInstances.groundClearance.destroy();
     }
 
-    const chartData = prepareChartData();
+    // Enhanced labels with Brand + Model + Year
+    const labels = comparedCars.map(car => {
+        const brand = car.specs.Brand || 'Unknown';
+        const model = car.specs.Model || 'Unknown';
+        const variant = car.variant || 'Unknown';
+        const year = car.year || '';
+        
+        return `${variant}\n${brand} - ${model}\n(${year})`;
+    });
+    
+    const data = comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0);
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
 
     chartInstances.groundClearance = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: chartData.labels,
+            labels: labels,
             datasets: [{
                 label: 'Ground Clearance (cm)',
-                data: chartData.groundClearanceData,
-                backgroundColor: chartData.colors,
-                borderColor: chartData.borderColors,
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false,
@@ -2633,10 +2294,6 @@ function updateGroundClearanceChartOptimized() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: {
-                duration: 750,
-                easing: 'easeOutQuart'
-            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -2647,8 +2304,6 @@ function updateGroundClearanceChartOptimized() {
                     borderWidth: 2,
                     cornerRadius: 8,
                     displayColors: false,
-                    intersect: false,
-                    mode: 'index',
                     callbacks: {
                         title: function(context) {
                             const carIndex = context[0].dataIndex;
@@ -2687,11 +2342,11 @@ function updateGroundClearanceChartOptimized() {
                 }
             }
         },
-        plugins: [enhancedBrandLogoPlugin]
+        plugins: [brandLogoPlugin]
     });
 }
 
-function updateSeatingCapacityChartOptimized() {
+function updateSeatingCapacityChart() {
     const canvas = document.getElementById('seatingCapacityChart');
     if (!canvas) return;
     
@@ -2701,17 +2356,29 @@ function updateSeatingCapacityChartOptimized() {
         chartInstances.seatingCapacity.destroy();
     }
 
-    const chartData = prepareChartData();
+    // Enhanced labels with Brand + Model + Year
+    const labels = comparedCars.map(car => {
+        const brand = car.specs.Brand || 'Unknown';
+        const model = car.specs.Model || 'Unknown';
+        const variant = car.variant || 'Unknown';
+        const year = car.year || '';
+        
+        return `${variant}\n${brand} - ${model}\n(${year})`;
+    });
+    
+    const data = comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0);
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
 
     chartInstances.seatingCapacity = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: chartData.labels,
+            labels: labels,
             datasets: [{
                 label: 'Seating Capacity',
-                data: chartData.seatingData,
-                backgroundColor: chartData.colors,
-                borderColor: chartData.borderColors,
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false,
@@ -2720,10 +2387,6 @@ function updateSeatingCapacityChartOptimized() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: {
-                duration: 750,
-                easing: 'easeOutQuart'
-            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -2734,8 +2397,6 @@ function updateSeatingCapacityChartOptimized() {
                     borderWidth: 2,
                     cornerRadius: 8,
                     displayColors: false,
-                    intersect: false,
-                    mode: 'index',
                     callbacks: {
                         title: function(context) {
                             const carIndex = context[0].dataIndex;
@@ -2775,11 +2436,11 @@ function updateSeatingCapacityChartOptimized() {
                 }
             }
         },
-        plugins: [enhancedBrandLogoPlugin]
+        plugins: [brandLogoPlugin]
     });
 }
 
-function updateCargoSpaceChartOptimized() {
+function updateCargoSpaceChart() {
     const canvas = document.getElementById('cargoSpaceChart');
     if (!canvas) return;
     
@@ -2789,17 +2450,29 @@ function updateCargoSpaceChartOptimized() {
         chartInstances.cargoSpace.destroy();
     }
 
-    const chartData = prepareChartData();
+    // Enhanced labels with Brand + Model + Year
+    const labels = comparedCars.map(car => {
+        const brand = car.specs.Brand || 'Unknown';
+        const model = car.specs.Model || 'Unknown';
+        const variant = car.variant || 'Unknown';
+        const year = car.year || '';
+        
+        return `${variant}\n${brand} - ${model}\n(${year})`;
+    });
+    
+    const data = comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0);
+    const colors = chartBackgroundColors.slice(0, comparedCars.length);
+    const borderColors = chartColors.slice(0, comparedCars.length);
 
     chartInstances.cargoSpace = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: chartData.labels,
+            labels: labels,
             datasets: [{
                 label: 'Cargo Space (L)',
-                data: chartData.cargoData,
-                backgroundColor: chartData.colors,
-                borderColor: chartData.borderColors,
+                data: data,
+                backgroundColor: colors,
+                borderColor: borderColors,
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false,
@@ -2808,10 +2481,6 @@ function updateCargoSpaceChartOptimized() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            animation: {
-                duration: 750,
-                easing: 'easeOutQuart'
-            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -2822,8 +2491,6 @@ function updateCargoSpaceChartOptimized() {
                     borderWidth: 2,
                     cornerRadius: 8,
                     displayColors: false,
-                    intersect: false,
-                    mode: 'index',
                     callbacks: {
                         title: function(context) {
                             const carIndex = context[0].dataIndex;
@@ -2862,12 +2529,12 @@ function updateCargoSpaceChartOptimized() {
                 }
             }
         },
-        plugins: [enhancedBrandLogoPlugin]
+        plugins: [brandLogoPlugin]
     });
 }
 
 // FIXED: Radar chart with proper aspect ratio and no stretching
-function updateRadarChartOptimized() {
+function updateRadarChart() {
     const canvas = document.getElementById('radarChart');
     if (!canvas) {
         console.error('Radar chart canvas not found');
@@ -2885,7 +2552,7 @@ function updateRadarChartOptimized() {
     const containerRect = container.getBoundingClientRect();
     
     // Calculate proper dimensions maintaining aspect ratio
-    const maxSize = Math.min(containerRect.width * 0.85, 600);
+    const maxSize = Math.min(containerRect.width * 0.85, 500);
     canvas.style.width = maxSize + 'px';
     canvas.style.height = maxSize + 'px';
     
@@ -2944,7 +2611,7 @@ function updateRadarChartOptimized() {
             pointBackgroundColor: chartColors[index % chartColors.length],
             pointBorderColor: '#fff',
             pointBorderWidth: 3,
-            pointRadius: 9, // Increased point size
+            pointRadius: 8, // Increased point size
             hidden: false
         };
     });
@@ -2960,10 +2627,6 @@ function updateRadarChartOptimized() {
             maintainAspectRatio: true, // FIXED: Maintain aspect ratio
             aspectRatio: 1, // FIXED: Force square aspect ratio
             devicePixelRatio: dpr,
-            animation: {
-                duration: 750,
-                easing: 'easeOutQuart'
-            },
             plugins: {
                 legend: {
                     display: true,
@@ -3066,8 +2729,8 @@ function updateRadarChartOptimized() {
                     borderWidth: 4
                 },
                 point: {
-                    radius: 9,
-                    hoverRadius: 13
+                    radius: 8,
+                    hoverRadius: 12
                 }
             }
         }
@@ -3090,8 +2753,8 @@ function addIndividualToggleControls() {
         const togglesDiv = document.createElement('div');
         togglesDiv.className = 'individual-toggles';
         togglesDiv.style.cssText = `
-            margin-top: 1rem;
-            padding: 1rem;
+            margin-top: 1.5rem;
+            padding: 1.5rem;
             background: rgba(180, 155, 102, 0.1);
             border-radius: 10px;
             border: 1px solid rgba(180, 155, 102, 0.3);
@@ -3201,54 +2864,50 @@ function addIndividualToggleControls() {
     }
 }
 
-// MAIN: Optimized chart update function with better performance
-async function updateAllChartsOptimized() {
-    console.log('🔄 Optimized chart update for', comparedCars.length, 'cars');
+// Update all charts with logo support
+async function updateAllCharts() {
+    console.log('🔄 Updating all charts for', comparedCars.length, 'cars');
     
     if (comparedCars.length === 0) {
-        const sections = ['compare-charts-section', 'radar-chart-section', 'comparison-cards-wrapper'];
-        sections.forEach(sectionId => {
-            const section = document.getElementById(sectionId);
-            if (section) section.style.display = 'none';
-        });
+        const chartsSection = document.getElementById('compare-charts-section');
+        const radarSection = document.getElementById('radar-chart-section');
+        const cardsWrapper = document.getElementById('comparison-cards-wrapper');
         
-        // Efficiently destroy all charts
-        Object.values(chartInstances).forEach(chart => chart?.destroy());
+        if (chartsSection) chartsSection.style.display = 'none';
+        if (radarSection) radarSection.style.display = 'none';
+        if (cardsWrapper) cardsWrapper.style.display = 'none';
+        
+        // Destroy all existing charts
+        Object.values(chartInstances).forEach(chart => {
+            if (chart) chart.destroy();
+        });
         chartInstances = {};
         return;
     }
 
-    // Show all sections efficiently
-    const sections = ['compare-charts-section', 'radar-chart-section', 'comparison-cards-wrapper'];
-    sections.forEach(sectionId => {
-        const section = document.getElementById(sectionId);
-        if (section) section.style.display = 'block';
-    });
+    // Show all sections
+    const chartsSection = document.getElementById('compare-charts-section');
+    const radarSection = document.getElementById('radar-chart-section');
+    const cardsWrapper = document.getElementById('comparison-cards-wrapper');
     
-    // Preload logos with progress indicator
-    await preloadBrandLogosWithProgress();
+    if (chartsSection) chartsSection.style.display = 'block';
+    if (radarSection) radarSection.style.display = 'block';
+    if (cardsWrapper) cardsWrapper.style.display = 'block';
     
-    // Batch chart updates for better performance
-    requestAnimationFrame(() => {
-        console.log('🎨 Creating optimized charts...');
-        
-        // Update charts in optimal order (fastest first)
-        const chartUpdaters = [
-            () => updateHorsepowerChartOptimized(),
-            () => updatePriceChartOptimized(),
-            () => updateGroundClearanceChartOptimized(),
-            () => updateSeatingCapacityChartOptimized(),
-            () => updateCargoSpaceChartOptimized(),
-            () => updateRadarChartOptimized()
-        ];
-        
-        // Stagger chart creation for smoother performance
-        chartUpdaters.forEach((updater, index) => {
-            setTimeout(updater, index * 50);
-        });
-        
-        console.log('✅ All optimized charts updated');
-    });
+    // Preload brand logos first
+    await preloadBrandLogos();
+    
+    // Wait for DOM to be ready, then create all charts
+    setTimeout(() => {
+        console.log('🎨 Creating charts with brand logos...');
+        updateHorsepowerChart();
+        updatePriceChart();
+        updateGroundClearanceChart();
+        updateCargoSpaceChart();
+        updateSeatingCapacityChart();
+        updateRadarChart();
+        console.log('✅ All charts updated with logos');
+    }, 300);
 }
 
 // Event listeners for dropdowns
@@ -3270,22 +2929,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Handle window resize for responsive charts
 window.addEventListener('resize', function() {
-    // Debounce resize events
-    clearTimeout(window.resizeTimeout);
-    window.resizeTimeout = setTimeout(() => {
-        Object.values(chartInstances).forEach(chart => {
-            if (chart && chart.canvas.id !== 'radarChart') {
-                chart.resize();
-            }
-        });
-        
-        // Special handling for radar chart to maintain aspect ratio
-        if (chartInstances.radar) {
-            setTimeout(() => {
-                updateRadarChartOptimized();
-            }, 100);
+    Object.values(chartInstances).forEach(chart => {
+        if (chart) {
+            chart.resize();
         }
-    }, 300);
+    });
+    
+    // Special handling for radar chart to maintain aspect ratio
+    if (chartInstances.radar) {
+        setTimeout(() => {
+            updateRadarChart();
+        }, 100);
+    }
 });
 
 // Clean up chart instances when page unloads
