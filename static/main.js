@@ -1162,7 +1162,7 @@ async function loadDefaultCars() {
 }
 
 ///////////////////////
-// Comparison  Page //
+// Comparison Page  //
 /////////////////////
 
 // Global variables for compare page
@@ -1410,7 +1410,7 @@ async function compareCars() {
         
         // Update all charts including radar
         setTimeout(() => {
-            updateAllCharts();
+            updateAllChartsOptimized();
         }, 100);
         
         // Show success message and reset form
@@ -1469,7 +1469,7 @@ async function populateBrandsForCompare() {
 }
 
 /////////////////////////
-// Compare Charts Logo //
+// Compare Charts Logo - ENHANCED VERSION //
 /////////////////////////
 
 // Global object to store loaded logo images
@@ -1560,17 +1560,17 @@ const enhancedBrandProcessingConfig = {
     }
 };
 
-// ENHANCED: Better text fallback logo creation with proper text fitting
+// ENHANCED: Better text fallback logo creation with LARGER size for visibility
 function createTextFallbackLogo(text) {
     const canvas = document.createElement('canvas');
-    canvas.width = 100;
-    canvas.height = 100;
+    canvas.width = 140; // Increased size for better visibility
+    canvas.height = 140;
     const ctx = canvas.getContext('2d');
     
     // Background circle using your site's theme color
     ctx.fillStyle = '#b49b66';
     ctx.beginPath();
-    ctx.arc(50, 50, 45, 0, 2 * Math.PI);
+    ctx.arc(70, 70, 65, 0, 2 * Math.PI);
     ctx.fill();
     
     // Enhanced text fitting logic for long brand names
@@ -1578,7 +1578,7 @@ function createTextFallbackLogo(text) {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     
-    let fontSize = 20;
+    let fontSize = 28;
     let lines = [];
     
     // Handle long brand names by splitting them
@@ -1588,32 +1588,32 @@ function createTextFallbackLogo(text) {
             // Split into two lines
             const mid = Math.ceil(text.length / 2);
             lines = [text.substring(0, mid), text.substring(mid)];
-            fontSize = 10;
+            fontSize = 14;
         } else {
             // Single line but smaller font
             lines = [text];
-            fontSize = 12;
+            fontSize = 16;
         }
     } else if (text.length > 5) {
         lines = [text];
-        fontSize = 14;
+        fontSize = 18;
     } else if (text.length > 3) {
         lines = [text];
-        fontSize = 16;
+        fontSize = 22;
     } else {
         lines = [text];
-        fontSize = 20;
+        fontSize = 28;
     }
     
     ctx.font = `bold ${fontSize}px Arial`;
     
     // Draw text lines
     if (lines.length === 1) {
-        ctx.fillText(lines[0], 50, 50);
+        ctx.fillText(lines[0], 70, 70);
     } else {
         // Two lines
-        ctx.fillText(lines[0], 50, 42);
-        ctx.fillText(lines[1], 50, 58);
+        ctx.fillText(lines[0], 70, 60);
+        ctx.fillText(lines[1], 70, 80);
     }
     
     // Convert to image
@@ -1709,10 +1709,10 @@ function enhancedProcessSvgForChart(svgText, brandName, config) {
             throw new Error('No SVG element found');
         }
         
-        // Set consistent dimensions
-        svgElement.setAttribute('width', '100');
-        svgElement.setAttribute('height', '100');
-        svgElement.setAttribute('viewBox', '0 0 100 100');
+        // Set consistent dimensions (increased for better visibility)
+        svgElement.setAttribute('width', '140');
+        svgElement.setAttribute('height', '140');
+        svgElement.setAttribute('viewBox', '0 0 140 140');
         
         // STEP 1: Aggressive cleanup for complex logos
         console.log(`🧹 Aggressive cleanup for ${brandName}...`);
@@ -1878,10 +1878,10 @@ function forceCompleteMonochrome(svgElement, themeColor, config) {
 // Create fallback SVG for processing failures
 function createFallbackSvg(text) {
     return `
-        <svg width="100" height="100" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="50" cy="50" r="45" fill="#b49b66" stroke="none"/>
-            <text x="50" y="55" text-anchor="middle" fill="white" 
-                  font-family="Arial, sans-serif" font-weight="bold" font-size="16">
+        <svg width="140" height="140" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="70" cy="70" r="65" fill="#b49b66" stroke="none"/>
+            <text x="70" y="75" text-anchor="middle" fill="white" 
+                  font-family="Arial, sans-serif" font-weight="bold" font-size="20">
                 ${text}
             </text>
         </svg>
@@ -1938,37 +1938,33 @@ async function svgToImageWithRetry(svgString, fallbackText, maxRetries = 3) {
     }
 }
 
-// Function to preload all brand logos for compared cars
-async function preloadBrandLogos() {
+// Enhanced logo preloading with progress
+async function preloadBrandLogosWithProgress() {
     const brands = [...new Set(comparedCars.map(car => car.specs.Brand))];
-    console.log('🔄 Preloading SVG logos for brands:', brands);
+    console.log('🔄 Preloading logos with progress for brands:', brands);
     
-    // Show loading indicator
-    showLogoLoadingStatus(`Loading logos for ${brands.length} brands...`);
+    let loadedCount = 0;
+    showLogoLoadingStatus(`Loading logos... 0/${brands.length}`);
     
     const loadPromises = brands.map(async (brand) => {
         try {
             await loadBrandLogo(brand);
+            loadedCount++;
+            showLogoLoadingStatus(`Loading logos... ${loadedCount}/${brands.length}`);
             return { brand, success: true };
         } catch (error) {
             console.warn(`Failed to load logo for ${brand}:`, error);
+            loadedCount++;
+            showLogoLoadingStatus(`Loading logos... ${loadedCount}/${brands.length}`);
             return { brand, success: false };
         }
     });
     
     const results = await Promise.all(loadPromises);
-    
     const successCount = results.filter(r => r.success).length;
-    const failedBrands = results.filter(r => !r.success).map(r => r.brand);
     
-    console.log(`✅ Loaded ${successCount}/${brands.length} brand logos`);
-    if (failedBrands.length > 0) {
-        console.warn('❌ Failed to load logos for:', failedBrands);
-    }
-    
-    showLogoLoadingStatus(`Loaded ${successCount}/${brands.length} logos`, 2000);
-    
-    console.log('📊 Available brand logos:', Object.keys(brandLogos).filter(key => brandLogos[key] !== null));
+    showLogoLoadingStatus(`✅ Loaded ${successCount}/${brands.length} logos`, 2000);
+    console.log('📊 Available optimized logos:', Object.keys(brandLogos).length);
 }
 
 // Function to show logo loading status
@@ -2010,92 +2006,103 @@ function showLogoLoadingStatus(message, autoHideDelay = null) {
     }
 }
 
-// ENHANCED: Improved brand logo plugin with proper brand identification
-const brandLogoPlugin = {
-    id: 'brandLogo',
+// ENHANCED: Optimal logo sizing algorithm for better space utilization
+function calculateOptimalLogoSize(barWidth, barHeight, chartWidth) {
+    // Dynamic sizing based on chart dimensions and bar size
+    const chartBasedSize = chartWidth / 12; // Scale with chart width
+    const barBasedSize = Math.min(barWidth * 0.7, barHeight * 0.55); // Increased ratios
+    const optimalSize = Math.min(chartBasedSize, barBasedSize);
+    
+    // More aggressive size ranges for better visibility
+    const maxLogoSize = Math.min(90, chartWidth / 6); // Scale max with chart
+    const minLogoSize = Math.max(32, chartWidth / 20); // Scale min with chart
+    
+    return Math.max(minLogoSize, Math.min(optimalSize, maxLogoSize));
+}
+
+// ENHANCED: Improved brand logo plugin with LARGER logos and better positioning
+const enhancedBrandLogoPlugin = {
+    id: 'enhancedBrandLogo',
     afterDatasetsDraw: function(chart, args, options) {
-        const { ctx, data, chartArea, scales } = chart;
+        const { ctx, data, chartArea } = chart;
         
         if (!data.datasets || !data.datasets[0] || !comparedCars) return;
         
         ctx.save();
         
-        // Loop through each bar
+        // Get chart dimensions for optimal sizing
+        const chartWidth = chartArea.width;
+        const chartHeight = chartArea.height;
+        
         data.datasets[0].data.forEach((value, index) => {
             if (index >= comparedCars.length) return;
             
             const car = comparedCars[index];
-            const brandName = car.specs.Brand; // FIXED: Use car.specs.Brand directly
-            
-            console.log(`🎨 Drawing logo for car ${index}: Brand="${brandName}", Variant="${car.variant}"`);
-            
-            // Get the correct logo using the brand name
+            const brandName = car.specs.Brand;
             const logoKey = String(brandName).toLowerCase().replace(/[\s-]/g, '').trim();
             const logo = brandLogos[logoKey];
             
-            // Get bar position
             const meta = chart.getDatasetMeta(0);
             const bar = meta.data[index];
             
             if (!bar) return;
             
-            // Calculate bar dimensions
             const barWidth = bar.width;
             const barHeight = Math.abs(bar.y - bar.base);
             
-            // Improved logo sizing
-            let logoSize;
+            // Use enhanced size calculation
+            const logoSize = calculateOptimalLogoSize(barWidth, barHeight, chartWidth);
             
-            const widthBasedSize = barWidth * 0.5;
-            const heightBasedSize = barHeight * 0.35;
-            
-            logoSize = Math.min(widthBasedSize, heightBasedSize);
-            
-            const maxLogoSize = 45;
-            const minLogoSize = 18;
-            logoSize = Math.max(minLogoSize, Math.min(logoSize, maxLogoSize));
-            
-            // Position logo in the center of the bar
             const logoX = bar.x - logoSize / 2;
             const logoY = bar.y + (bar.base - bar.y) / 2 - logoSize / 2;
             
-            const minBarHeightForLogo = logoSize + 8;
+            const minBarHeightForLogo = logoSize + 15;
             
             if (barHeight > minBarHeightForLogo && logo) {
                 try {
-                    // Enhanced white circle background
+                    // Enhanced background with better proportions
                     ctx.beginPath();
-                    const circleRadius = logoSize / 2 + 4;
+                    const circleRadius = logoSize / 2 + 10; // Increased padding
                     ctx.arc(bar.x, bar.y + (bar.base - bar.y) / 2, circleRadius, 0, 2 * Math.PI);
                     
-                    // White background with subtle gradient
+                    // Improved gradient
                     const gradient = ctx.createRadialGradient(
                         bar.x, bar.y + (bar.base - bar.y) / 2, 0,
                         bar.x, bar.y + (bar.base - bar.y) / 2, circleRadius
                     );
                     gradient.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
-                    gradient.addColorStop(1, 'rgba(255, 255, 255, 0.92)');
+                    gradient.addColorStop(0.7, 'rgba(255, 255, 255, 0.95)');
+                    gradient.addColorStop(1, 'rgba(245, 245, 245, 0.9)');
                     
                     ctx.fillStyle = gradient;
                     ctx.fill();
                     
-                    // Border using your site's theme color
-                    ctx.strokeStyle = 'rgba(180, 155, 102, 0.5)';
-                    ctx.lineWidth = 2;
+                    // Enhanced border
+                    ctx.strokeStyle = 'rgba(180, 155, 102, 0.8)';
+                    ctx.lineWidth = 3;
                     ctx.stroke();
                     
-                    // Draw the logo
+                    // Add subtle shadow
+                    ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+                    ctx.shadowBlur = 6;
+                    ctx.shadowOffsetY = 3;
+                    
+                    // Draw the logo with better quality
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
                     ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
                     
-                    console.log(`✅ Successfully drew logo for ${brandName}`);
+                    // Reset shadow
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetY = 0;
                     
                 } catch (error) {
-                    console.warn('❌ Error drawing logo for', brandName, ':', error);
-                    drawBrandNameFallback(ctx, chart, index, brandName, logoSize);
+                    console.warn('Error drawing enhanced logo for', brandName, ':', error);
+                    drawEnhancedBrandNameFallback(ctx, chart, index, brandName, logoSize, chartWidth);
                 }
-            } else if (barHeight > 25) {
-                // Show brand name for smaller bars
-                drawBrandNameFallback(ctx, chart, index, brandName, Math.min(logoSize, 30));
+            } else if (barHeight > 40) {
+                drawEnhancedBrandNameFallback(ctx, chart, index, brandName, logoSize, chartWidth);
             }
         });
         
@@ -2103,8 +2110,8 @@ const brandLogoPlugin = {
     }
 };
 
-// Fallback function to draw brand name when logo is not available or bar is too small
-function drawBrandNameFallback(ctx, chart, index, brandName, size) {
+// FIXED: Enhanced text fallback with ALWAYS center-aligned text (no rotation)
+function drawEnhancedBrandNameFallback(ctx, chart, index, brandName, size, chartWidth) {
     const meta = chart.getDatasetMeta(0);
     const bar = meta.data[index];
     
@@ -2113,56 +2120,64 @@ function drawBrandNameFallback(ctx, chart, index, brandName, size) {
     const barHeight = Math.abs(bar.y - bar.base);
     const barWidth = bar.width;
     
-    // Only draw text if bar is tall enough
-    if (barHeight > 20) {
+    if (barHeight > 35) {
         ctx.save();
         
-        // Determine font size based on available space
-        const fontSize = Math.min(Math.max(size * 0.3, 10), 14);
+        // Dynamic font sizing based on chart width
+        const baseFontSize = Math.max(13, chartWidth / 35);
+        const fontSize = Math.min(Math.max(size * 0.4, baseFontSize), 20);
         
-        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.font = `bold ${fontSize}px Arial, sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         
-        // Prepare brand name text
-        const displayText = brandName.length > 6 ? brandName.substring(0, 6) : brandName;
-        const textWidth = ctx.measureText(displayText).width;
+        // Smart text truncation
+        let displayText = brandName;
+        if (brandName.length > 10) {
+            displayText = brandName.substring(0, 8) + '…';
+        } else if (brandName.length > 8) {
+            displayText = brandName.substring(0, 8);
+        }
         
-        // Create background circle/rectangle for text
+        const textWidth = ctx.measureText(displayText).width;
         const centerX = bar.x;
         const centerY = bar.y + (bar.base - bar.y) / 2;
         
-        // Background
-        ctx.beginPath();
-        if (barWidth < textWidth + 10) {
-            // If bar is narrow, use circular background
-            const radius = Math.min(barWidth * 0.4, fontSize + 8);
-            ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-        } else {
-            // If bar is wide enough, use rounded rectangle
-            const rectWidth = textWidth + 8;
-            const rectHeight = fontSize + 6;
-            ctx.roundRect(centerX - rectWidth/2, centerY - rectHeight/2, rectWidth, rectHeight, 4);
-        }
+        // FIXED: Always use center alignment, no rotation
+        const rectWidth = Math.max(textWidth + 18, 55);
+        const rectHeight = fontSize + 12;
         
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+        // Enhanced background with gradient
+        const bgGradient = ctx.createLinearGradient(
+            centerX - rectWidth/2, centerY - rectHeight/2,
+            centerX + rectWidth/2, centerY + rectHeight/2
+        );
+        bgGradient.addColorStop(0, 'rgba(255, 255, 255, 0.98)');
+        bgGradient.addColorStop(1, 'rgba(248, 248, 248, 0.95)');
+        
+        ctx.beginPath();
+        ctx.roundRect(centerX - rectWidth/2, centerY - rectHeight/2, rectWidth, rectHeight, 10);
+        ctx.fillStyle = bgGradient;
         ctx.fill();
-        ctx.strokeStyle = 'rgba(180, 155, 102, 0.4)';
-        ctx.lineWidth = 1;
+        
+        // Enhanced border
+        ctx.strokeStyle = 'rgba(180, 155, 102, 0.7)';
+        ctx.lineWidth = 2;
         ctx.stroke();
         
-        // Draw text
-        ctx.fillStyle = '#b49b66';
+        // Add subtle text shadow
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+        ctx.shadowBlur = 2;
+        ctx.shadowOffsetY = 1;
         
-        if (barWidth < textWidth + 10 && barHeight > textWidth + 10) {
-            // Rotate text for narrow bars if there's enough height
-            ctx.translate(centerX, centerY);
-            ctx.rotate(-Math.PI / 2);
-            ctx.fillText(displayText, 0, 0);
-        } else {
-            // Normal horizontal text
-            ctx.fillText(displayText, centerX, centerY);
-        }
+        // Draw text (ALWAYS CENTER ALIGNED - NO ROTATION)
+        ctx.fillStyle = '#8b6914';
+        ctx.fillText(displayText, centerX, centerY);
+        
+        // Reset shadow
+        ctx.shadowColor = 'transparent';
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
         
         ctx.restore();
     }
@@ -2181,6 +2196,29 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
         this.arcTo(x, y, x + width, y, radius);
         this.closePath();
         return this;
+    };
+}
+
+// Efficient data preparation function
+function prepareChartData() {
+    const labels = comparedCars.map(car => {
+        const brand = car.specs.Brand || 'Unknown';
+        const model = car.specs.Model || 'Unknown';
+        const variant = car.variant || 'Unknown';
+        const year = car.year || '';
+        
+        return `${variant}\n${brand} - ${model}\n(${year})`;
+    });
+    
+    return {
+        labels,
+        horsepowerData: comparedCars.map(car => parseInt(car.specs.Horsepower) || 0),
+        priceData: comparedCars.map(car => parseFloat(car.specs.Price) || 0),
+        groundClearanceData: comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0),
+        seatingData: comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0),
+        cargoData: comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0),
+        colors: chartBackgroundColors.slice(0, comparedCars.length),
+        borderColors: chartColors.slice(0, comparedCars.length)
     };
 }
 
@@ -2232,7 +2270,7 @@ function removeCarFromComparison(carId) {
     }
     
     comparedCars = comparedCars.filter(car => car.id !== carId);
-    updateAllCharts();
+    updateAllChartsOptimized();
     
     // Hide comparison sections if no cars left
     if (comparedCars.length === 0) {
@@ -2384,9 +2422,9 @@ function createProgressBar(value, type) {
     return progressContainer;
 }
 
-// ENHANCED: Updated chart functions with Brand + Model labels and new colors
+// ENHANCED: Chart creation functions with optimized performance
 
-function updateHorsepowerChart() {
+function updateHorsepowerChartOptimized() {
     const canvas = document.getElementById('horsepowerChart');
     if (!canvas) return;
     
@@ -2396,29 +2434,17 @@ function updateHorsepowerChart() {
         chartInstances.horsepower.destroy();
     }
 
-    // Enhanced labels with Brand + Model + Year
-    const labels = comparedCars.map(car => {
-        const brand = car.specs.Brand || 'Unknown';
-        const model = car.specs.Model || 'Unknown';
-        const variant = car.variant || 'Unknown';
-        const year = car.year || '';
-        
-        return `${variant}\n${brand} - ${model}\n(${year})`;
-    });
-    
-    const data = comparedCars.map(car => parseInt(car.specs.Horsepower) || 0);
-    const colors = chartBackgroundColors.slice(0, comparedCars.length);
-    const borderColors = chartColors.slice(0, comparedCars.length);
+    const chartData = prepareChartData();
 
     chartInstances.horsepower = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels: chartData.labels,
             datasets: [{
                 label: 'Horsepower (HP)',
-                data: data,
-                backgroundColor: colors,
-                borderColor: borderColors,
+                data: chartData.horsepowerData,
+                backgroundColor: chartData.colors,
+                borderColor: chartData.borderColors,
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false,
@@ -2427,6 +2453,10 @@ function updateHorsepowerChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: {
+                duration: 750,
+                easing: 'easeOutQuart'
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -2437,6 +2467,8 @@ function updateHorsepowerChart() {
                     borderWidth: 2,
                     cornerRadius: 8,
                     displayColors: false,
+                    intersect: false,
+                    mode: 'index',
                     callbacks: {
                         title: function(context) {
                             const carIndex = context[0].dataIndex;
@@ -2470,16 +2502,16 @@ function updateHorsepowerChart() {
                         maxRotation: 45, 
                         minRotation: 0,
                         color: '#666',
-                        font: { size: 10 }
+                        font: { size: 11 }
                     }
                 }
             }
         },
-        plugins: [brandLogoPlugin]
+        plugins: [enhancedBrandLogoPlugin]
     });
 }
 
-function updatePriceChart() {
+function updatePriceChartOptimized() {
     const canvas = document.getElementById('priceChart');
     if (!canvas) return;
     
@@ -2489,29 +2521,17 @@ function updatePriceChart() {
         chartInstances.price.destroy();
     }
 
-    // Enhanced labels with Brand + Model + Year
-    const labels = comparedCars.map(car => {
-        const brand = car.specs.Brand || 'Unknown';
-        const model = car.specs.Model || 'Unknown';
-        const variant = car.variant || 'Unknown';
-        const year = car.year || '';
-        
-        return `${variant}\n${brand} - ${model}\n(${year})`;
-    });
-    
-    const data = comparedCars.map(car => parseFloat(car.specs.Price) || 0);
-    const colors = chartBackgroundColors.slice(0, comparedCars.length);
-    const borderColors = chartColors.slice(0, comparedCars.length);
+    const chartData = prepareChartData();
 
     chartInstances.price = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels: chartData.labels,
             datasets: [{
                 label: 'Price (PHP)',
-                data: data,
-                backgroundColor: colors,
-                borderColor: borderColors,
+                data: chartData.priceData,
+                backgroundColor: chartData.colors,
+                borderColor: chartData.borderColors,
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false,
@@ -2520,6 +2540,10 @@ function updatePriceChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: {
+                duration: 750,
+                easing: 'easeOutQuart'
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -2530,6 +2554,8 @@ function updatePriceChart() {
                     borderWidth: 2,
                     cornerRadius: 8,
                     displayColors: false,
+                    intersect: false,
+                    mode: 'index',
                     callbacks: {
                         title: function(context) {
                             const carIndex = context[0].dataIndex;
@@ -2569,16 +2595,16 @@ function updatePriceChart() {
                         maxRotation: 45, 
                         minRotation: 0,
                         color: '#666',
-                        font: { size: 10 }
+                        font: { size: 11 }
                     }
                 }
             }
         },
-        plugins: [brandLogoPlugin]
+        plugins: [enhancedBrandLogoPlugin]
     });
 }
 
-function updateGroundClearanceChart() {
+function updateGroundClearanceChartOptimized() {
     const canvas = document.getElementById('groundClearanceChart');
     if (!canvas) return;
     
@@ -2588,29 +2614,17 @@ function updateGroundClearanceChart() {
         chartInstances.groundClearance.destroy();
     }
 
-    // Enhanced labels with Brand + Model + Year
-    const labels = comparedCars.map(car => {
-        const brand = car.specs.Brand || 'Unknown';
-        const model = car.specs.Model || 'Unknown';
-        const variant = car.variant || 'Unknown';
-        const year = car.year || '';
-        
-        return `${variant}\n${brand} - ${model}\n(${year})`;
-    });
-    
-    const data = comparedCars.map(car => parseFloat(car.specs.GroundClearance) || 0);
-    const colors = chartBackgroundColors.slice(0, comparedCars.length);
-    const borderColors = chartColors.slice(0, comparedCars.length);
+    const chartData = prepareChartData();
 
     chartInstances.groundClearance = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels: chartData.labels,
             datasets: [{
                 label: 'Ground Clearance (cm)',
-                data: data,
-                backgroundColor: colors,
-                borderColor: borderColors,
+                data: chartData.groundClearanceData,
+                backgroundColor: chartData.colors,
+                borderColor: chartData.borderColors,
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false,
@@ -2619,6 +2633,10 @@ function updateGroundClearanceChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: {
+                duration: 750,
+                easing: 'easeOutQuart'
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -2629,6 +2647,8 @@ function updateGroundClearanceChart() {
                     borderWidth: 2,
                     cornerRadius: 8,
                     displayColors: false,
+                    intersect: false,
+                    mode: 'index',
                     callbacks: {
                         title: function(context) {
                             const carIndex = context[0].dataIndex;
@@ -2662,16 +2682,16 @@ function updateGroundClearanceChart() {
                         maxRotation: 45, 
                         minRotation: 0,
                         color: '#666',
-                        font: { size: 10 }
+                        font: { size: 11 }
                     }
                 }
             }
         },
-        plugins: [brandLogoPlugin]
+        plugins: [enhancedBrandLogoPlugin]
     });
 }
 
-function updateSeatingCapacityChart() {
+function updateSeatingCapacityChartOptimized() {
     const canvas = document.getElementById('seatingCapacityChart');
     if (!canvas) return;
     
@@ -2681,29 +2701,17 @@ function updateSeatingCapacityChart() {
         chartInstances.seatingCapacity.destroy();
     }
 
-    // Enhanced labels with Brand + Model + Year
-    const labels = comparedCars.map(car => {
-        const brand = car.specs.Brand || 'Unknown';
-        const model = car.specs.Model || 'Unknown';
-        const variant = car.variant || 'Unknown';
-        const year = car.year || '';
-        
-        return `${variant}\n${brand} - ${model}\n(${year})`;
-    });
-    
-    const data = comparedCars.map(car => parseInt(car.specs.SeatingCapacity) || 0);
-    const colors = chartBackgroundColors.slice(0, comparedCars.length);
-    const borderColors = chartColors.slice(0, comparedCars.length);
+    const chartData = prepareChartData();
 
     chartInstances.seatingCapacity = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels: chartData.labels,
             datasets: [{
                 label: 'Seating Capacity',
-                data: data,
-                backgroundColor: colors,
-                borderColor: borderColors,
+                data: chartData.seatingData,
+                backgroundColor: chartData.colors,
+                borderColor: chartData.borderColors,
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false,
@@ -2712,6 +2720,10 @@ function updateSeatingCapacityChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: {
+                duration: 750,
+                easing: 'easeOutQuart'
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -2722,6 +2734,8 @@ function updateSeatingCapacityChart() {
                     borderWidth: 2,
                     cornerRadius: 8,
                     displayColors: false,
+                    intersect: false,
+                    mode: 'index',
                     callbacks: {
                         title: function(context) {
                             const carIndex = context[0].dataIndex;
@@ -2756,16 +2770,16 @@ function updateSeatingCapacityChart() {
                         maxRotation: 45, 
                         minRotation: 0,
                         color: '#666',
-                        font: { size: 10 }
+                        font: { size: 11 }
                     }
                 }
             }
         },
-        plugins: [brandLogoPlugin]
+        plugins: [enhancedBrandLogoPlugin]
     });
 }
 
-function updateCargoSpaceChart() {
+function updateCargoSpaceChartOptimized() {
     const canvas = document.getElementById('cargoSpaceChart');
     if (!canvas) return;
     
@@ -2775,29 +2789,17 @@ function updateCargoSpaceChart() {
         chartInstances.cargoSpace.destroy();
     }
 
-    // Enhanced labels with Brand + Model + Year
-    const labels = comparedCars.map(car => {
-        const brand = car.specs.Brand || 'Unknown';
-        const model = car.specs.Model || 'Unknown';
-        const variant = car.variant || 'Unknown';
-        const year = car.year || '';
-        
-        return `${variant}\n${brand} - ${model}\n(${year})`;
-    });
-    
-    const data = comparedCars.map(car => parseFloat(car.specs.Cargospace) || 0);
-    const colors = chartBackgroundColors.slice(0, comparedCars.length);
-    const borderColors = chartColors.slice(0, comparedCars.length);
+    const chartData = prepareChartData();
 
     chartInstances.cargoSpace = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels: chartData.labels,
             datasets: [{
                 label: 'Cargo Space (L)',
-                data: data,
-                backgroundColor: colors,
-                borderColor: borderColors,
+                data: chartData.cargoData,
+                backgroundColor: chartData.colors,
+                borderColor: chartData.borderColors,
                 borderWidth: 2,
                 borderRadius: 8,
                 borderSkipped: false,
@@ -2806,6 +2808,10 @@ function updateCargoSpaceChart() {
         options: {
             responsive: true,
             maintainAspectRatio: false,
+            animation: {
+                duration: 750,
+                easing: 'easeOutQuart'
+            },
             plugins: {
                 legend: { display: false },
                 tooltip: {
@@ -2816,6 +2822,8 @@ function updateCargoSpaceChart() {
                     borderWidth: 2,
                     cornerRadius: 8,
                     displayColors: false,
+                    intersect: false,
+                    mode: 'index',
                     callbacks: {
                         title: function(context) {
                             const carIndex = context[0].dataIndex;
@@ -2849,17 +2857,17 @@ function updateCargoSpaceChart() {
                         maxRotation: 45, 
                         minRotation: 0,
                         color: '#666',
-                        font: { size: 10 }
+                        font: { size: 11 }
                     }
                 }
             }
         },
-        plugins: [brandLogoPlugin]
+        plugins: [enhancedBrandLogoPlugin]
     });
 }
 
-// Enhanced radar chart with more opacity and new colors
-function updateRadarChart() {
+// FIXED: Radar chart with proper aspect ratio and no stretching
+function updateRadarChartOptimized() {
     const canvas = document.getElementById('radarChart');
     if (!canvas) {
         console.error('Radar chart canvas not found');
@@ -2872,14 +2880,20 @@ function updateRadarChart() {
         chartInstances.radar.destroy();
     }
 
-    // Set canvas size for better clarity
+    // FIXED: Proper canvas sizing to prevent stretching
+    const container = canvas.parentElement;
+    const containerRect = container.getBoundingClientRect();
+    
+    // Calculate proper dimensions maintaining aspect ratio
+    const maxSize = Math.min(containerRect.width * 0.85, 600);
+    canvas.style.width = maxSize + 'px';
+    canvas.style.height = maxSize + 'px';
+    
+    // Set actual canvas dimensions
     const dpr = window.devicePixelRatio || 1;
-    const rect = canvas.getBoundingClientRect();
-    canvas.width = rect.width * dpr;
-    canvas.height = rect.height * dpr;
+    canvas.width = maxSize * dpr;
+    canvas.height = maxSize * dpr;
     ctx.scale(dpr, dpr);
-    canvas.style.width = rect.width + 'px';
-    canvas.style.height = rect.height + 'px';
 
     // Calculate scaling values (same logic as before)
     const actualMaxValues = {
@@ -2930,7 +2944,7 @@ function updateRadarChart() {
             pointBackgroundColor: chartColors[index % chartColors.length],
             pointBorderColor: '#fff',
             pointBorderWidth: 3,
-            pointRadius: 7,
+            pointRadius: 9, // Increased point size
             hidden: false
         };
     });
@@ -2942,9 +2956,14 @@ function updateRadarChart() {
             datasets: datasets
         },
         options: {
-            responsive: true,
-            maintainAspectRatio: false,
+            responsive: false, // FIXED: Disable responsive to prevent stretching
+            maintainAspectRatio: true, // FIXED: Maintain aspect ratio
+            aspectRatio: 1, // FIXED: Force square aspect ratio
             devicePixelRatio: dpr,
+            animation: {
+                duration: 750,
+                easing: 'easeOutQuart'
+            },
             plugins: {
                 legend: {
                     display: true,
@@ -3047,8 +3066,8 @@ function updateRadarChart() {
                     borderWidth: 4
                 },
                 point: {
-                    radius: 7,
-                    hoverRadius: 10
+                    radius: 9,
+                    hoverRadius: 13
                 }
             }
         }
@@ -3071,8 +3090,8 @@ function addIndividualToggleControls() {
         const togglesDiv = document.createElement('div');
         togglesDiv.className = 'individual-toggles';
         togglesDiv.style.cssText = `
-            margin-top: 1.5rem;
-            padding: 1.5rem;
+            margin-top: 1rem;
+            padding: 1rem;
             background: rgba(180, 155, 102, 0.1);
             border-radius: 10px;
             border: 1px solid rgba(180, 155, 102, 0.3);
@@ -3182,50 +3201,54 @@ function addIndividualToggleControls() {
     }
 }
 
-// Update all charts with logo support
-async function updateAllCharts() {
-    console.log('🔄 Updating all charts for', comparedCars.length, 'cars');
+// MAIN: Optimized chart update function with better performance
+async function updateAllChartsOptimized() {
+    console.log('🔄 Optimized chart update for', comparedCars.length, 'cars');
     
     if (comparedCars.length === 0) {
-        const chartsSection = document.getElementById('compare-charts-section');
-        const radarSection = document.getElementById('radar-chart-section');
-        const cardsWrapper = document.getElementById('comparison-cards-wrapper');
-        
-        if (chartsSection) chartsSection.style.display = 'none';
-        if (radarSection) radarSection.style.display = 'none';
-        if (cardsWrapper) cardsWrapper.style.display = 'none';
-        
-        // Destroy all existing charts
-        Object.values(chartInstances).forEach(chart => {
-            if (chart) chart.destroy();
+        const sections = ['compare-charts-section', 'radar-chart-section', 'comparison-cards-wrapper'];
+        sections.forEach(sectionId => {
+            const section = document.getElementById(sectionId);
+            if (section) section.style.display = 'none';
         });
+        
+        // Efficiently destroy all charts
+        Object.values(chartInstances).forEach(chart => chart?.destroy());
         chartInstances = {};
         return;
     }
 
-    // Show all sections
-    const chartsSection = document.getElementById('compare-charts-section');
-    const radarSection = document.getElementById('radar-chart-section');
-    const cardsWrapper = document.getElementById('comparison-cards-wrapper');
+    // Show all sections efficiently
+    const sections = ['compare-charts-section', 'radar-chart-section', 'comparison-cards-wrapper'];
+    sections.forEach(sectionId => {
+        const section = document.getElementById(sectionId);
+        if (section) section.style.display = 'block';
+    });
     
-    if (chartsSection) chartsSection.style.display = 'block';
-    if (radarSection) radarSection.style.display = 'block';
-    if (cardsWrapper) cardsWrapper.style.display = 'block';
+    // Preload logos with progress indicator
+    await preloadBrandLogosWithProgress();
     
-    // Preload brand logos first
-    await preloadBrandLogos();
-    
-    // Wait for DOM to be ready, then create all charts
-    setTimeout(() => {
-        console.log('🎨 Creating charts with brand logos...');
-        updateHorsepowerChart();
-        updatePriceChart();
-        updateGroundClearanceChart();
-        updateCargoSpaceChart();
-        updateSeatingCapacityChart();
-        updateRadarChart();
-        console.log('✅ All charts updated with logos');
-    }, 300);
+    // Batch chart updates for better performance
+    requestAnimationFrame(() => {
+        console.log('🎨 Creating optimized charts...');
+        
+        // Update charts in optimal order (fastest first)
+        const chartUpdaters = [
+            () => updateHorsepowerChartOptimized(),
+            () => updatePriceChartOptimized(),
+            () => updateGroundClearanceChartOptimized(),
+            () => updateSeatingCapacityChartOptimized(),
+            () => updateCargoSpaceChartOptimized(),
+            () => updateRadarChartOptimized()
+        ];
+        
+        // Stagger chart creation for smoother performance
+        chartUpdaters.forEach((updater, index) => {
+            setTimeout(updater, index * 50);
+        });
+        
+        console.log('✅ All optimized charts updated');
+    });
 }
 
 // Event listeners for dropdowns
@@ -3247,11 +3270,22 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // Handle window resize for responsive charts
 window.addEventListener('resize', function() {
-    Object.values(chartInstances).forEach(chart => {
-        if (chart) {
-            chart.resize();
+    // Debounce resize events
+    clearTimeout(window.resizeTimeout);
+    window.resizeTimeout = setTimeout(() => {
+        Object.values(chartInstances).forEach(chart => {
+            if (chart && chart.canvas.id !== 'radarChart') {
+                chart.resize();
+            }
+        });
+        
+        // Special handling for radar chart to maintain aspect ratio
+        if (chartInstances.radar) {
+            setTimeout(() => {
+                updateRadarChartOptimized();
+            }, 100);
         }
-    });
+    }, 300);
 });
 
 // Clean up chart instances when page unloads
@@ -3262,6 +3296,9 @@ window.addEventListener('beforeunload', function() {
         }
     });
 });
+
+// Initialize compare page when DOM is ready
+document.addEventListener('DOMContentLoaded', initializeComparePage);
 
 //////////////////////////////////
 // Shows corresponding models  //
