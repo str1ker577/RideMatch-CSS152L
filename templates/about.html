@@ -126,22 +126,65 @@
         </div>
       </div>
     
-      <div id="signup-popup" class="popup">
-        <div class="popup-content">
-            <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
-            <h1>Sign Up</h1>
-            <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
-                <input type="email" name="email_signup" placeholder="Email" required>
-                <input type="password" name="password_signup" placeholder="Password" required>
-                <button type="submit">Sign Up</button>
-            </form>
-            <p class="success-message"></p>
-            <p class="error-message12"></p> <!-- Error message element -->
+<div id="signup-popup" class="popup">
+  <div class="popup-content">
+      <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+      <h1>Sign Up</h1>
+      <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+          <!-- NEW: Username field -->
+          <input type="text" name="username" id="username_signup" placeholder="Username" required minlength="3" maxlength="20">
+          <small class="username-hint">Username must be 3-20 characters, letters and numbers only</small>
+          
+          <input type="email" name="email_signup" placeholder="Email" required>
+          <input type="password" name="password_signup" placeholder="Password" required>
+          
+          <!-- NEW: Profile picture upload (optional) -->
+          <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="margin: 10px 0;">
+          <small class="file-hint">Profile picture (optional)</small>
+          
+          <button type="submit">Sign Up</button>
+      </form>
+      <p class="success-message"></p>
+      <p class="error-message12"></p>
+      <!-- NEW: Username availability message -->
+      <p class="username-status"></p>
+
+      <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+  </div>
+</div>
+
+<!-- WELCOME SECTION -->
+<div class="welcome-section">
+  <!-- UPDATED: Now shows username instead of email -->
+  <span class="welcome-text" id="welcome-text">Welcome!</span>
+  <button class="login-button" id="login-button" onclick="togglePopup('login-popup')" style="display: block;">Login</button>
   
-            <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
-        </div>
-      </div>
-  
+  <!-- UPDATED: Profile container with username display -->
+  <div class="profile-container" id="profile-container" style="display: none;">
+    
+    <!-- UPDATED: Show username next to profile -->
+    <span class="username-display" id="username-display" style="margin-right: 10px; color: #b49b66; font-weight: bold;"></span>
+    
+    <!-- Default icon shown when no profile picture is available -->
+    <i class='bx bxs-user-circle bx-rotate-90 bx-flip-horizontal'
+       id="profile-icon"
+       style="font-size: 36px; color:#b49b66; cursor: pointer;"
+       onclick="toggleLogoutDropdown()"></i>
+
+    <!-- Profile picture, hidden by default -->
+    <img src="" alt="Profile Picture"
+         id="profile-pic"
+         class="profile-pic"
+         style="display: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;"
+         onclick="toggleLogoutDropdown()">
+
+    <!-- UPDATED: Dropdown with profile link -->
+    <div class="logout-dropdown" id="logout-dropdown">
+      <a href="/profile">Edit Profile</a>
+      <a href="#" onclick="handleLogout()">Sign Out</a>
+    </div>
+  </div>
+</div>
     <!-- Navbar -->
     <header>
       <!-- Centered Logo -->
