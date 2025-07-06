@@ -121,42 +121,46 @@ async function initializeFirebase() {
         }
         
         // UPDATED: Enhanced authentication state monitoring
-        auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                currentUser = user;
-                userName = user.email;
+auth.onAuthStateChanged(async (user) => {
+    if (user) {
+        currentUser = user;
+        userName = user.email;
+        
+        // NEW: Fetch user profile data including username
+        try {
+            const profileResponse = await fetch(`${baseUrl}/get-user-profile`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ uid: user.uid })
+            });
+            
+            if (profileResponse.ok) {
+                const profileData = await profileResponse.json();
+                userDisplayName = profileData.username || user.displayName || user.email;
+                console.log('User profile loaded:', profileData);
                 
-                // NEW: Fetch user profile data including username
-                try {
-                    const profileResponse = await fetch(`${baseUrl}/get-user-profile`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ uid: user.uid })
-                    });
-                    
-                    if (profileResponse.ok) {
-                        const profileData = await profileResponse.json();
-                        userDisplayName = profileData.username || user.displayName || user.email;
-                        console.log('User profile loaded:', profileData);
-                    } else {
-                        // Fallback to Firebase user data
-                        userDisplayName = user.displayName || user.email;
-                    }
-                } catch (error) {
-                    console.error('Error fetching user profile:', error);
-                    userDisplayName = user.displayName || user.email;
-                }
-                
-                updateUIForAuthState();
-                console.log('User is signed in:', user.email, 'Username:', userDisplayName);
+                // FIXED: Call updateUIForAuthState with user and profile data
+                updateUIForAuthState(user, profileData);
             } else {
-                currentUser = null;
-                userName = null;
-                userDisplayName = null;
-                updateUIForAuthState();
-                console.log('User is signed out');
+                // Fallback to Firebase user data
+                userDisplayName = user.displayName || user.email;
+                updateUIForAuthState(user, { username: userDisplayName });
             }
-        });
+        } catch (error) {
+            console.error('Error fetching user profile:', error);
+            userDisplayName = user.displayName || user.email;
+            updateUIForAuthState(user, { username: userDisplayName });
+        }
+        
+        console.log('User is signed in:', user.email, 'Username:', userDisplayName);
+    } else {
+        currentUser = null;
+        userName = null;
+        userDisplayName = null;
+        updateUIForAuthState(null, null); // FIXED: Pass null explicitly
+        console.log('User is signed out');
+    }
+});
         
     } catch (error) {
         console.error('Firebase initialization failed:', error);
