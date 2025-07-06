@@ -153,38 +153,6 @@
   </div>
 </div>
 
-<!-- WELCOME SECTION -->
-<div class="welcome-section">
-  <!-- UPDATED: Now shows username instead of email -->
-  <span class="welcome-text" id="welcome-text">Welcome!</span>
-  <button class="login-button" id="login-button" onclick="togglePopup('login-popup')" style="display: block;">Login</button>
-  
-  <!-- UPDATED: Profile container with username display -->
-  <div class="profile-container" id="profile-container" style="display: none;">
-    
-    <!-- UPDATED: Show username next to profile -->
-    <span class="username-display" id="username-display" style="margin-right: 10px; color: #b49b66; font-weight: bold;"></span>
-    
-    <!-- Default icon shown when no profile picture is available -->
-    <i class='bx bxs-user-circle bx-rotate-90 bx-flip-horizontal'
-       id="profile-icon"
-       style="font-size: 36px; color:#b49b66; cursor: pointer;"
-       onclick="toggleLogoutDropdown()"></i>
-
-    <!-- Profile picture, hidden by default -->
-    <img src="" alt="Profile Picture"
-         id="profile-pic"
-         class="profile-pic"
-         style="display: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;"
-         onclick="toggleLogoutDropdown()">
-
-    <!-- UPDATED: Dropdown with profile link -->
-    <div class="logout-dropdown" id="logout-dropdown">
-      <a href="/profile">Edit Profile</a>
-      <a href="#" onclick="handleLogout()">Sign Out</a>
-    </div>
-  </div>
-</div>
     <!-- Navbar -->
     <header>
       <!-- Centered Logo -->
