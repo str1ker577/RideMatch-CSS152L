@@ -162,7 +162,6 @@ async function initializeFirebase() {
         console.error('Firebase initialization failed:', error);
     }
 }
-
 function updateUIForAuthState(user = null, userData = null) {
     console.log('Updating UI for auth state:', user ? 'logged in' : 'logged out');
     
@@ -212,7 +211,7 @@ function updateUIForAuthState(user = null, userData = null) {
             }
         }
         
-        // NEW: Load user favorites for duplicate checking
+        // Load user favorites for duplicate checking
         loadUserFavoritesForDuplicateCheck();
         
     } else {
