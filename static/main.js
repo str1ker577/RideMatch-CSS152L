@@ -11,6 +11,7 @@ let auth; // Global auth object
 let userName = null; // Keep your existing userName variable
 let currentUser = null;
 let userDisplayName = null; // NEW: For storing username
+let userFavorites = new Set();
 
 // Function to get current user name
 function getCurrentUserName() {
@@ -169,15 +170,14 @@ auth.onAuthStateChanged(async (user) => {
 function updateUIForAuthState(user = null, userData = null) {
     console.log('🔄 Updating UI for auth state:', user ? 'logged in' : 'logged out');
     
-    // Find all the elements and log their status
+    // ✅ FIXED: Safely get DOM elements with null checks
     const loginButton = document.getElementById('login-button');
-    const profileContainer = document.getElementById('profile-container');
+    const profileContainer = document.getElementById('profile-container'); // ✅ FIXED: Proper element reference
     const welcomeText = document.getElementById('welcome-text');
     const profileIcon = document.getElementById('profile-icon');
     const profilePic = document.getElementById('profile-pic');
     const usernameDisplay = document.getElementById('username-display');
 
-    // DEBUG: Log which elements were found
     console.log('🔍 DOM Elements found:', {
         loginButton: !!loginButton,
         profileContainer: !!profileContainer,
@@ -187,56 +187,32 @@ function updateUIForAuthState(user = null, userData = null) {
         usernameDisplay: !!usernameDisplay
     });
 
-    // Use current user if not provided
     const currentUser = user || (auth && auth.currentUser);
     const currentUserData = userData || { username: userDisplayName };
-
-    console.log('👤 User data:', {
-        hasCurrentUser: !!currentUser,
-        userDisplayName: userDisplayName,
-        userEmail: currentUser ? currentUser.email : 'none'
-    });
 
     if (currentUser && (userDisplayName || currentUser.email)) {
         console.log('✅ User is logged in - updating UI');
         
-        // User is logged in
         if (loginButton) {
-            console.log('🔄 Hiding login button');
             loginButton.style.display = 'none';
-        } else {
-            console.log('❌ Login button not found!');
         }
         
         if (profileContainer) {
-            console.log('🔄 Showing profile container');
             profileContainer.style.display = 'flex';
-        } else {
-            console.log('❌ Profile container not found!');
         }
         
-        // Update welcome text with username
         const displayName = userDisplayName || currentUser.displayName || currentUser.email;
         if (welcomeText) {
-            console.log('🔄 Updating welcome text to:', `Welcome, ${displayName}!`);
             welcomeText.textContent = `Welcome, ${displayName}!`;
-        } else {
-            console.log('❌ Welcome text element not found!');
         }
         
-        // Update username display
         if (usernameDisplay) {
-            console.log('🔄 Updating username display to:', displayName);
             usernameDisplay.textContent = displayName;
-        } else {
-            console.log('❌ Username display element not found!');
         }
         
-        // Handle profile picture
         const profilePictureUrl = currentUser.photoURL || currentUserData.profilePictureUrl;
         if (profilePictureUrl) {
             if (profilePic) {
-                console.log('🔄 Setting profile picture:', profilePictureUrl);
                 profilePic.src = profilePictureUrl;
                 profilePic.style.display = 'block';
             }
@@ -244,7 +220,6 @@ function updateUIForAuthState(user = null, userData = null) {
                 profileIcon.style.display = 'none';
             }
         } else {
-            console.log('📷 No profile picture URL found');
             if (profilePic) {
                 profilePic.style.display = 'none';
             }
@@ -253,7 +228,7 @@ function updateUIForAuthState(user = null, userData = null) {
             }
         }
         
-        // Load user favorites for duplicate checking
+        // ✅ FIXED: Load user favorites with proper error handling
         if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
             loadUserFavoritesForDuplicateCheck();
         }
@@ -261,17 +236,13 @@ function updateUIForAuthState(user = null, userData = null) {
     } else {
         console.log('❌ User is logged out - updating UI');
         
-        // User is logged out
         if (loginButton) {
-            console.log('🔄 Showing login button');
             loginButton.style.display = 'block';
         }
         if (profileContainer) {
-            console.log('🔄 Hiding profile container');
             profileContainer.style.display = 'none';
         }
         if (welcomeText) {
-            console.log('🔄 Resetting welcome text');
             welcomeText.textContent = 'Welcome!';
         }
         if (usernameDisplay) {
@@ -285,8 +256,8 @@ function updateUIForAuthState(user = null, userData = null) {
             profileIcon.style.display = 'block';
         }
         
-        // Clear favorites when logged out
-        if (typeof userFavorites !== 'undefined') {
+        // ✅ FIXED: Clear favorites safely
+        if (userFavorites) {
             userFavorites.clear();
         }
     }
@@ -479,7 +450,7 @@ function handleLogin(event) {
     
     console.log('📧 Email:', email);
     
-    // Enhanced Firebase check
+    // ✅ FIXED: Enhanced Firebase checks
     if (typeof firebase === 'undefined') {
         console.error('❌ Firebase library not loaded');
         const errorElement = document.querySelector('.error-message');
@@ -492,7 +463,6 @@ function handleLogin(event) {
     if (!auth) {
         console.error('❌ Firebase auth not initialized, attempting to initialize...');
         
-        // Try to reinitialize
         try {
             auth = firebase.auth();
             console.log('✅ Auth reinitialized successfully');
@@ -508,7 +478,6 @@ function handleLogin(event) {
     
     console.log('✅ Firebase auth ready, proceeding with login');
     
-    // Show loading state
     const submitButton = event.target.querySelector('button[type="submit"]');
     const originalText = submitButton ? submitButton.textContent : '';
     if (submitButton) {
@@ -516,14 +485,11 @@ function handleLogin(event) {
         submitButton.disabled = true;
     }
     
-    // Use Firebase client-side authentication
     auth.signInWithEmailAndPassword(email, password)
         .then((userCredential) => {
-            // User logged in successfully
             const user = userCredential.user;
             console.log('✅ User logged in:', user.email);
             
-            // Get the ID token and send to your backend for session creation
             user.getIdToken().then((idToken) => {
                 console.log('🔄 Sending token to backend for session creation...');
                 
@@ -552,35 +518,27 @@ function handleLogin(event) {
                 if (data.status === 'success') {
                     console.log('✅ Backend session created successfully');
                     
-                    // Update global variables
                     userName = user.email;
                     currentUser = user;
                     
-                    // Clear error messages
                     const errorMsg = document.querySelector('.error-message');
                     const errorMsg12 = document.querySelector('.error-message12');
                     if (errorMsg) errorMsg.textContent = '';
                     if (errorMsg12) errorMsg12.textContent = '';
                     
-                    // Close popup and update UI
                     togglePopup('login-popup');
                     
-                    // Update sidebar if elements exist
-                    if (typeof sidebar !== 'undefined' && sidebar) {
-                        sidebar.classList.remove('open');
-                    }
-                    if (typeof menuButton !== 'undefined' && menuButton) {
-                        menuButton.style.display = 'block';
-                    }
-                    if (typeof closeButton !== 'undefined' && closeButton) {
-                        closeButton.style.display = 'none';
-                    }
+                    // ✅ FIXED: Safely update sidebar
+                    const sidebar = document.getElementById('sidebar');
+                    const menuButton = document.getElementById('menu-button');
+                    const closeButton = document.getElementById('close-button');
                     
-                    // Force UI update after successful login
+                    if (sidebar) sidebar.classList.remove('open');
+                    if (menuButton) menuButton.style.display = 'block';
+                    if (closeButton) closeButton.style.display = 'none';
+                    
                     setTimeout(() => {
-                        if (typeof updateUIForAuthState === 'function') {
-                            updateUIForAuthState(user, { username: data.username });
-                        }
+                        updateUIForAuthState(user, { username: data.username });
                     }, 100);
                     
                 } else {
@@ -591,13 +549,11 @@ function handleLogin(event) {
             .catch(backendError => {
                 console.error('❌ Backend session creation failed:', backendError);
                 
-                // Show error to user
                 const errorElement = document.querySelector('.error-message');
                 if (errorElement) {
                     errorElement.textContent = 'Login succeeded but session creation failed. Please try again.';
                 }
                 
-                // Sign out from Firebase since backend session failed
                 auth.signOut();
             });
         })
@@ -610,7 +566,6 @@ function handleLogin(event) {
             if (errorElement) errorElement.textContent = getFirebaseErrorMessage(error.code);
         })
         .finally(() => {
-            // Reset button state
             if (submitButton) {
                 submitButton.textContent = originalText;
                 submitButton.disabled = false;
@@ -1243,9 +1198,9 @@ function displayFilteredCars(data) {
         const fuelTypeIcon = getFuelTypeIcon(car.Fuel_Type);
         
         // UPDATED: Check if car is already liked and set appropriate heart style
-        const isLiked = userFavorites.has(car.Variant);
+        const isLiked = userFavorites && userFavorites.has(car.Variant);
         const heartClass = isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
-        const heartColor = isLiked ? '#e74c3c' : '#b49b66'; // Red if liked, gold if not
+        const heartColor = isLiked ? '#e74c3c' : '#b49b66';
         
         row.innerHTML = `
         <td>${car.Brand || "Unknown"}</td>
@@ -3902,9 +3857,6 @@ async function addToFaveFromCalculator(event, variant) {
 // ENHANCED FAVOURITES FUNCTIONALITY //
 ///////////////////////////////////////
 
-// Global variable to store user's current favorites for quick checking
-let userFavorites = new Set();
-
 // Load user favorites into memory for quick duplicate checking
 async function loadUserFavoritesForDuplicateCheck() {
     if (!auth || !auth.currentUser) {
@@ -3932,6 +3884,35 @@ async function loadUserFavoritesForDuplicateCheck() {
     } catch (error) {
         console.error('Error loading favorites for duplicate check:', error);
     }
+}
+
+function loadUserFavoritesForDuplicateCheck() {
+    if (!auth || !auth.currentUser) {
+        userFavorites.clear();
+        return;
+    }
+
+    fetch(`${baseUrl}/get-faves`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+    })
+    .then(response => {
+        if (response.ok) {
+            return response.json();
+        }
+        throw new Error('Failed to load favorites');
+    })
+    .then(favorites => {
+        userFavorites.clear();
+        favorites.forEach(fav => {
+            userFavorites.add(fav.variant);
+        });
+        console.log('Loaded favorites for duplicate check:', userFavorites);
+        updateHeartColorsOnPage();
+    })
+    .catch(error => {
+        console.error('Error loading favorites for duplicate check:', error);
+    });
 }
 
 // Update heart colors based on current favorites
