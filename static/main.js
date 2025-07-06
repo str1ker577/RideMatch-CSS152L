@@ -2026,109 +2026,68 @@ async function svgToImageWithRetry(svgString, fallbackText, maxRetries = 3) {
 }
 
 // ALTERNATIVE: Enhanced SVG logo processing for better centering
-// FIXED: Brand logo plugin with proper centering
-const brandLogoPlugin = {
-    id: 'brandLogo',
-    afterDatasetsDraw: function(chart, args, options) {
-        const { ctx, data } = chart;
+async function loadBrandLogo(brandName) {
+    if (!brandName) return null;
+    
+    const logoKey = String(brandName).toLowerCase().replace(/[\s-]/g, '').trim();
+    
+    console.log(`🔍 Loading logo for brand: "${brandName}" (key: "${logoKey}")`);
+    
+    // Return cached logo if already loaded
+    if (brandLogos[logoKey]) {
+        console.log(`✅ Using cached logo for: ${brandName}`);
+        return brandLogos[logoKey];
+    }
+    
+    const config = enhancedBrandProcessingConfig[logoKey] || {};
+    
+    // Handle redirects
+    if (config.type === 'redirect') {
+        console.log(`🔄 Redirecting ${brandName} to ${config.redirectTo}`);
+        return await loadBrandLogo(config.redirectTo);
+    }
+    
+    // Handle missing SVGs with text fallback
+    if (config.type === 'missing_svg' || config.useTextFallback) {
+        console.log(`📝 Creating text fallback for ${brandName}`);
+        const textLogo = await createTextFallbackLogo(config.fallbackText || brandName.toUpperCase());
+        brandLogos[logoKey] = textLogo;
+        return textLogo;
+    }
+    
+    try {
+        const svgPath = `/static/brand_logo/${logoKey}_logo.svg`;
+        const response = await fetch(svgPath);
         
-        if (!data.datasets || !data.datasets[0] || !comparedCars || comparedCars.length === 0) {
-            return;
+        if (!response.ok) {
+            console.warn(`⚠️ SVG not found for ${brandName}, using text fallback`);
+            const textLogo = await createTextFallbackLogo(config.fallbackText || brandName.toUpperCase());
+            brandLogos[logoKey] = textLogo;
+            return textLogo;
         }
         
-        ctx.save();
+        const svgText = await response.text();
         
-        // Loop through each bar
-        data.datasets[0].data.forEach((value, index) => {
-            if (index >= comparedCars.length) return;
-            
-            const car = comparedCars[index];
-            const brandName = car.specs.Brand;
-            
-            if (!brandName) return;
-            
-            // Get the correct logo using the brand name
-            const logoKey = String(brandName).toLowerCase().replace(/[\s-]/g, '').trim();
-            const logo = brandLogos[logoKey];
-            
-            // Get bar position
-            const meta = chart.getDatasetMeta(0);
-            const bar = meta.data[index];
-            
-            if (!bar) return;
-            
-            // Calculate positions
-            const barWidth = Math.abs(bar.width || 40);
-            const barHeight = Math.abs((bar.y || 0) - (bar.base || 0));
-            const centerX = bar.x || 0;
-            
-            let centerY;
-            if (bar.y < bar.base) {
-                centerY = bar.y + (bar.base - bar.y) / 2;
-            } else {
-                centerY = bar.base + (bar.y - bar.base) / 2;
-            }
-            
-            // Smart logo sizing
-            let logoSize = Math.min(barWidth * 0.6, 45);
-            logoSize = Math.max(25, Math.min(logoSize, 60));
-            
-            // Only show logo if bar is big enough
-            const minBarHeight = logoSize + 20;
-            const minBarWidth = logoSize + 10;
-            
-            if (barHeight > minBarHeight && barWidth > minBarWidth) {
-                if (logo && logo.complete && logo.naturalHeight !== 0) {
-                    try {
-                        // Draw white circular background
-                        const backgroundRadius = logoSize / 2 + 5;
-                        ctx.beginPath();
-                        ctx.arc(centerX, centerY, backgroundRadius, 0, 2 * Math.PI);
-                        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-                        ctx.fill();
-                        ctx.strokeStyle = 'rgba(180, 155, 102, 0.7)';
-                        ctx.lineWidth = 2;
-                        ctx.stroke();
-                        
-                        // FIXED: Proper logo centering with clipping
-                        ctx.save();
-                        
-                        // Create circular clipping path
-                        ctx.beginPath();
-                        ctx.arc(centerX, centerY, backgroundRadius - 3, 0, 2 * Math.PI);
-                        ctx.clip();
-                        
-                        // FIXED: Calculate exact center position
-                        const logoX = centerX - logoSize / 2;
-                        const logoY = centerY - logoSize / 2;
-                        
-                        // FIXED: Set proper rendering settings
-                        ctx.imageSmoothingEnabled = true;
-                        ctx.imageSmoothingQuality = 'high';
-                        
-                        // FIXED: Draw logo with proper scaling and centering
-                        ctx.drawImage(
-                            logo,           // source image
-                            0, 0,          // source x, y (start from top-left of image)
-                            logo.naturalWidth, logo.naturalHeight, // source width, height (full image)
-                            logoX, logoY,  // destination x, y (centered)
-                            logoSize, logoSize // destination width, height (scaled)
-                        );
-                        
-                        ctx.restore(); // Restore clipping
-                        
-                        console.log(`✅ Drew centered ${brandName} logo at (${logoX}, ${logoY})`);
-                        
-                    } catch (error) {
-                        console.warn(`❌ Error drawing logo for ${brandName}:`, error);
-                    }
-                }
-            }
-        });
+        if (!svgText || !svgText.includes('<svg')) {
+            throw new Error('Invalid SVG content');
+        }
         
-        ctx.restore();
+        // FIXED: Convert SVG to properly centered image
+        const img = await svgToProperlycenteredImage(svgText, brandName);
+        
+        brandLogos[logoKey] = img;
+        console.log(`✅ Successfully loaded centered logo for: ${brandName}`);
+        return img;
+        
+    } catch (error) {
+        console.warn(`❌ Error loading SVG for ${brandName}:`, error);
+        
+        // Create text fallback as last resort
+        const textLogo = await createTextFallbackLogo(config.fallbackText || brandName.toUpperCase());
+        brandLogos[logoKey] = textLogo;
+        return textLogo;
     }
-};
+}
 
 // FIXED: New function to properly center SVG content
 async function svgToProperlycenteredImage(svgText, brandName) {
@@ -2175,7 +2134,6 @@ async function svgToProperlycenteredImage(svgText, brandName) {
         }
     });
 }
-
 // Fallback function to draw brand name when logo is not available or bar is too small
 function drawBrandNameFallback(ctx, chart, index, brandName, size) {
     const meta = chart.getDatasetMeta(0);
