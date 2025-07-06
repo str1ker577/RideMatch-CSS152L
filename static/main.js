@@ -682,64 +682,6 @@ function resetAllFilters() {
     updateSliderValue("ground-clearance", "cm", false);
 }
 
-// UPDATED: DOMContentLoaded event listener
-document.addEventListener("DOMContentLoaded", function () {
-    console.log('DOM loaded, initializing...');
-    
-    // Initialize Firebase first
-    initializeFirebase();
-
-    // NEW: Populate years dropdown for main filter page
-    populateYearsForFilter();
-
-    // Only load favorites if the favorites container exists
-    const favoritesContainer = document.getElementById("favorites-items");
-    if (favoritesContainer) {
-        console.log('Favorites page detected, will load favorites after auth');
-        // Don't load favorites immediately, wait for auth state
-        // The auth state change handler will trigger loadFavorites when user is confirmed
-        
-        // Set up a listener for when the user auth state is determined
-        const checkAuthAndLoadFavorites = () => {
-            if (auth && auth.currentUser) {
-                console.log('Auth confirmed, loading favorites');
-                loadFavorites();
-            } else if (auth) {
-                console.log('No current user, skipping favorites load');
-            } else {
-                // Auth not ready yet, check again in a bit
-                setTimeout(checkAuthAndLoadFavorites, 500);
-            }
-        };
-        
-        // Start checking after a small delay to let Firebase initialize
-        setTimeout(checkAuthAndLoadFavorites, 1000);
-    }
-
-    // Initialize other components as before
-    const filterButton = document.getElementById("filter-btn"); 
-    const resultsFrame = document.querySelector(".results-frame");
-
-    // Only initialize sliders if they exist on this page
-    const priceSlider = document.getElementById("price");
-    const horsepowerSlider = document.getElementById("horsepower");
-    const seatingSlider = document.getElementById("seating");
-
-    // Check if all required slider elements exist before trying to use them
-    if (priceSlider && horsepowerSlider && seatingSlider) {
-        // Set sliders to their initial values
-        priceSlider.value = priceSlider.max; // This will be 25,000,000 now
-        horsepowerSlider.value = horsepowerSlider.min;
-        seatingSlider.value = "0";
-
-        // Update displayed values to match the values
-        updateSliderValue("price", "₱", true);
-        updateSliderValue("horsepower", "HP", false);
-        updateSliderValue("seating", "seats", false);
-    }
-});
-
-
 //////////////////////////////// 
 // Shows the filtered Results //
 //////////////////////////////
@@ -848,60 +790,6 @@ function getFuelTypeIcon(fuelType) {
 //////////////////////////////////////
 //When Filter is button is Pressed //
 ////////////////////////////////////
-
-
-document.addEventListener("DOMContentLoaded", function () {
-    console.log('DOM loaded, initializing...');
-    
-    // Initialize Firebase first
-    initializeFirebase();
-
-    // Only load favorites if the favorites container exists
-    const favoritesContainer = document.getElementById("favorites-items");
-    if (favoritesContainer) {
-        console.log('Favorites page detected, will load favorites after auth');
-        // Don't load favorites immediately, wait for auth state
-        // The auth state change handler will trigger loadFavorites when user is confirmed
-        
-        // Set up a listener for when the user auth state is determined
-        const checkAuthAndLoadFavorites = () => {
-            if (auth && auth.currentUser) {
-                console.log('Auth confirmed, loading favorites');
-                loadFavorites();
-            } else if (auth) {
-                console.log('No current user, skipping favorites load');
-            } else {
-                // Auth not ready yet, check again in a bit
-                setTimeout(checkAuthAndLoadFavorites, 500);
-            }
-        };
-        
-        // Start checking after a small delay to let Firebase initialize
-        setTimeout(checkAuthAndLoadFavorites, 1000);
-    }
-
-    // Initialize other components as before
-    const filterButton = document.getElementById("filter-btn"); 
-    const resultsFrame = document.querySelector(".results-frame");
-
-    // Only initialize sliders if they exist on this page
-    const priceSlider = document.getElementById("price");
-    const horsepowerSlider = document.getElementById("horsepower");
-    const seatingSlider = document.getElementById("seating");
-
-    // Check if all required slider elements exist before trying to use them
-    if (priceSlider && horsepowerSlider && seatingSlider) {
-        // Ensure sliders start at minimum values
-        priceSlider.value = priceSlider.max;
-        horsepowerSlider.value = horsepowerSlider.min;
-        seatingSlider.value = "0";
-
-        // Update displayed values to match the min values
-        updateSliderValue("price", "₱", true);
-        updateSliderValue("horsepower", "HP", false);
-        updateSliderValue("seating", "seats", false);
-    }
-});
 
 function toggleDropdown() {
     const dropdown = document.getElementById("sortDropdown");
@@ -1192,34 +1080,153 @@ const chartBackgroundColors = [
     'rgba(88, 28, 135, 0.75)'     // Deep Purple
 ];
 
-// Function to populate models based on selected brand
-async function populateModels() {
-    const brand = document.getElementById('brand').value;
-    const modelDropdown = document.getElementById('model');
-    const variantDropdown = document.getElementById('variant');
-    const yearDropdown = document.getElementById('year');
+// FIXED: Initialize compare page properly
+function initializeComparePage() {
+    console.log('Initializing compare page...');
     
-    // Reset dependent dropdowns
-    modelDropdown.innerHTML = '<option value="">Select Model</option>';
-    variantDropdown.innerHTML = '<option value="">Select Variant</option>';
-    yearDropdown.innerHTML = '<option value="">Select Year</option>';
+    // Check if we're on the compare page
+    const brandDropdown = document.getElementById('brand');
+    if (!brandDropdown) {
+        console.log('Not on compare page, skipping compare initialization');
+        return;
+    }
     
-    if (!brand) return;
+    // Load brands immediately
+    populateBrandsForCompare();
+    
+    // Preload some brand logos for better performance
+    setTimeout(() => {
+        preloadBrandLogos();
+    }, 2000);
+    
+    console.log('Compare page initialized successfully');
+}
+
+// FIXED: Improved populateBrandsForCompare function with error handling
+async function populateBrandsForCompare() {
+    const brandDropdown = document.getElementById('brand');
+    
+    if (!brandDropdown) {
+        console.log('Brand dropdown not found - not on compare page');
+        return;
+    }
 
     try {
-        const response = await fetch(`${baseUrl}/get_models?brand=${brand}`);
-        const models = await response.json();
+        console.log('🔍 Fetching all available brands for compare...');
         
-        models.forEach(model => {
+        // Show loading state
+        brandDropdown.innerHTML = '<option value="" disabled>Loading brands...</option>';
+        
+        const response = await fetch(`${baseUrl}/get_brands`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const brands = await response.json();
+        console.log('📅 Received brands:', brands);
+        
+        if (!Array.isArray(brands)) {
+            console.error('❌ Expected array of brands but got:', brands);
+            brandDropdown.innerHTML = '<option value="" disabled>Error loading brands</option>';
+            return;
+        }
+        
+        // Clear loading message and add default option
+        brandDropdown.innerHTML = '<option value="" selected disabled>Select Brand</option>';
+        
+        // FIXED: Remove duplicates and normalize brand names
+        const uniqueBrands = [...new Set(brands.map(brand => {
+            // Normalize brand names to handle duplicates
+            let normalizedBrand = brand.trim();
+            
+            // Handle specific duplicates
+            if (normalizedBrand.toLowerCase().includes('mercedes')) {
+                normalizedBrand = 'Mercedes-Benz';
+            }
+            
+            return normalizedBrand;
+        }))];
+        
+        // Sort brands alphabetically
+        uniqueBrands.sort();
+        
+        uniqueBrands.forEach(brand => {
+            const option = document.createElement('option');
+            option.value = brand;
+            option.textContent = brand;
+            brandDropdown.appendChild(option);
+        });
+        
+        console.log(`✅ Successfully populated ${uniqueBrands.length} unique brands in compare dropdown`);
+        
+    } catch (error) {
+        console.error('❌ Error fetching brands for compare:', error);
+        // Show error state in dropdown with retry option
+        brandDropdown.innerHTML = `
+            <option value="" disabled>Error loading brands</option>
+            <option value="retry" style="color: #e74c3c;">Click to retry</option>
+        `;
+        
+        // Add retry functionality
+        brandDropdown.addEventListener('change', function(e) {
+            if (e.target.value === 'retry') {
+                populateBrandsForCompare();
+            }
+        });
+        
+        // Show user-friendly error message
+        showCompareErrorMessage('Failed to load brands. Please check your connection and try again.');
+    }
+}
+
+// FIXED: Improved populateModels function with duplicate removal
+async function populateModels() {
+    const selectedBrand = document.getElementById('brand').value;
+    const modelSelect = document.getElementById('model');
+    const variantSelect = document.getElementById('variant');
+    const yearSelect = document.getElementById('year');
+
+    // Reset dependent dropdowns
+    modelSelect.innerHTML = '<option value="">Select Model</option>';
+    variantSelect.innerHTML = '<option value="">Select Variant</option>';
+    yearSelect.innerHTML = '<option value="">Select Year</option>';
+
+    if (!selectedBrand) {
+        return;
+    }
+
+    try {
+        console.log(`🔍 Fetching models for brand: ${selectedBrand}`);
+        modelSelect.innerHTML = '<option value="">Loading models...</option>';
+        
+        const response = await fetch(`${baseUrl}/get_models?brand=${encodeURIComponent(selectedBrand)}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const models = await response.json();
+        console.log(`📦 Received ${models.length} models for ${selectedBrand}:`, models);
+        
+        modelSelect.innerHTML = '<option value="">Select Model</option>';
+        
+        // FIXED: Remove duplicates and sort models
+        const uniqueModels = [...new Set(models.map(model => model.trim()))].sort();
+        
+        uniqueModels.forEach(model => {
             const option = document.createElement('option');
             option.value = model;
             option.textContent = model;
-            modelDropdown.appendChild(option);
+            modelSelect.appendChild(option);
         });
         
+        console.log(`✅ Successfully populated ${uniqueModels.length} unique models for ${selectedBrand}`);
+        
     } catch (error) {
-        console.error('Error fetching models:', error);
-        alert('Error fetching models. Please try again.');
+        console.error('❌ Error fetching models:', error);
+        modelSelect.innerHTML = '<option value="">Error loading models</option>';
+        showCompareErrorMessage('Error fetching models. Please try again.');
     }
 }
 
@@ -1248,7 +1255,7 @@ async function populateVariants() {
         
     } catch (error) {
         console.error('Error fetching variants:', error);
-        alert('Error fetching variants. Please try again.');
+        showCompareErrorMessage('Error fetching variants. Please try again.');
     }
 }
 
@@ -1349,7 +1356,7 @@ async function populateYears() {
     } catch (error) {
         console.error('❌ Error fetching years:', error);
         yearDropdown.innerHTML = '<option value="">Select Year</option>';
-        alert('Error fetching years. Please try again.');
+        showCompareErrorMessage('Error fetching years. Please try again.');
     }
 }
 
@@ -1419,52 +1426,141 @@ async function compareCars() {
 
     } catch (error) {
         console.error('Error fetching car specs:', error);
-        alert('Error fetching car specifications. Please try again.');
+        showCompareErrorMessage('Error fetching car specifications. Please try again.');
     }
 }
 
-// Function to populate brands dynamically
-async function populateBrandsForCompare() {
-    const brandDropdown = document.getElementById('brand');
-    
-    if (!brandDropdown) {
-        console.log('Brand dropdown not found - not on compare page');
+// FIXED: Enhanced addCarToComparison function with proper image handling
+function addCarToComparison(carId, variant, year, specs) {
+    const container = document.getElementById('comparison-container');
+    if (!container) {
+        console.error('Comparison container not found');
         return;
     }
+    
+    // Show comparison wrapper
+    const wrapper = document.getElementById('comparison-cards-wrapper');
+    const chartsSection = document.getElementById('compare-charts-section');
+    const radarSection = document.getElementById('radar-chart-section');
+    
+    if (wrapper) wrapper.style.display = 'block';
+    if (chartsSection) chartsSection.style.display = 'block';
+    if (radarSection) radarSection.style.display = 'block';
+    
+    // FIXED: Determine image URL with proper fallback
+    let imageUrl = '/static/resources/tesr.png'; // Default fallback
+    
+    // Try different image path patterns
+    if (specs.Image && specs.Image.trim() !== '') {
+        imageUrl = specs.Image;
+    } else if (specs.Brand && specs.Model) {
+        // Try to construct image path
+        const brandLower = specs.Brand.toLowerCase().replace(/\s+/g, '_');
+        const modelLower = specs.Model.toLowerCase().replace(/\s+/g, '_');
+        imageUrl = `/static/car_images/${brandLower}_${modelLower}.jpg`;
+    }
+    
+    console.log('Using image URL:', imageUrl, 'for car:', variant);
+    
+    // Check if car is already liked
+    const isLiked = userFavorites.has(variant);
+    const heartClass = isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
+    const heartColor = isLiked ? '#e74c3c' : '#b49b66';
+    
+    const carColumn = document.createElement('div');
+    carColumn.className = 'car-column';
+    carColumn.id = `car-${carId}`;
+    
+    carColumn.innerHTML = `
+        <div class="car-title">
+            <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                <span>${specs.Brand} ${specs.Model}</span>
+                <div class="heart-container">
+                    <i class="${heartClass}" 
+                       id="compare-like-icon" 
+                       style="color: ${heartColor}; cursor: pointer;" 
+                       onclick="addToFave(event, '${variant}')"></i>
+                </div>
+            </div>
+            <div style="font-size: 1rem; color: #666; margin-top: 0.5rem;">
+                ${variant} (${year})
+            </div>
+        </div>
+        
+        <div class="car-image-container">
+            <img src="${imageUrl}" 
+                 alt="${specs.Brand} ${specs.Model}" 
+                 class="car-image"
+                 onerror="this.src='/static/resources/tesr.png'; console.log('Image failed to load, using fallback for ${variant}');">
+        </div>
+        
+        <div class="spec-section">
+            <div class="spec-category">Vehicle Details</div>
+            <div class="spec-value"><span class="spec-label">Brand:</span> ${specs.Brand || 'N/A'}</div>
+            <div class="spec-value"><span class="spec-label">Model:</span> ${specs.Model || 'N/A'}</div>
+            <div class="spec-value"><span class="spec-label">Variant:</span> ${variant}</div>
+            <div class="spec-value"><span class="spec-label">Year:</span> ${year}</div>
+            <div class="spec-value"><span class="spec-label">Body Type:</span> ${specs.BodyType || 'N/A'}</div>
+        </div>
+        
+        <div class="spec-section">
+            <div class="spec-category">Performance</div>
+            <div class="spec-value"><span class="spec-label">Engine:</span> ${specs.Engine || 'N/A'}</div>
+            <div class="spec-value"><span class="spec-label">Horsepower:</span> ${specs.Horsepower ? specs.Horsepower + ' HP' : 'N/A'}</div>
+            <div class="spec-value"><span class="spec-label">Transmission:</span> ${specs.Transmission || 'N/A'}</div>
+            <div class="spec-value"><span class="spec-label">Drive Train:</span> ${specs.DriveTrain || 'N/A'}</div>
+            <div class="spec-value"><span class="spec-label">Fuel Type:</span> ${specs.FuelType || 'N/A'}</div>
+        </div>
+        
+        <div class="spec-section">
+            <div class="spec-category">Dimensions & Capacity</div>
+            <div class="spec-value"><span class="spec-label">Ground Clearance:</span> ${specs.GroundClearance ? specs.GroundClearance + ' cm' : 'N/A'}</div>
+            <div class="spec-value"><span class="spec-label">Cargo Space:</span> ${specs.Cargospace ? specs.Cargospace + ' L' : 'N/A'}</div>
+            <div class="spec-value"><span class="spec-label">Seating:</span> ${specs.SeatingCapacity ? specs.SeatingCapacity + ' seats' : 'N/A'}</div>
+        </div>
+        
+        <div class="price-comparison">
+            <div class="spec-label">Price</div>
+            <div class="price-value">₱${specs.Price ? parseInt(specs.Price).toLocaleString() : 'N/A'}</div>
+        </div>
+        
+        <button class="remove-btn" onclick="removeCarFromComparison('${carId}')">
+            <i class="fas fa-trash"></i> Remove Car
+        </button>
+    `;
+    
+    container.appendChild(carColumn);
+    console.log('Car added to comparison:', variant, year);
+}
 
-    try {
-        console.log('🔍 Fetching all available brands for compare...');
+// Function to remove car from comparison
+function removeCarFromComparison(carId) {
+    const carElement = document.getElementById(`car-${carId}`);
+    if (carElement) {
+        carElement.remove();
+    }
+    
+    // Remove from comparedCars array
+    comparedCars = comparedCars.filter(car => car.id !== carId);
+    
+    // Update charts
+    if (comparedCars.length > 0) {
+        updateAllCharts();
+    } else {
+        // Hide sections if no cars left
+        const wrapper = document.getElementById('comparison-cards-wrapper');
+        const chartsSection = document.getElementById('compare-charts-section');
+        const radarSection = document.getElementById('radar-chart-section');
         
-        const response = await fetch(`${baseUrl}/get_brands`);
+        if (wrapper) wrapper.style.display = 'none';
+        if (chartsSection) chartsSection.style.display = 'none';
+        if (radarSection) radarSection.style.display = 'none';
         
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const brands = await response.json();
-        console.log('📅 Received brands:', brands);
-        
-        if (!Array.isArray(brands)) {
-            console.error('❌ Expected array of brands but got:', brands);
-            return;
-        }
-        
-        // Clear loading message and populate with brands
-        brandDropdown.innerHTML = '<option value="" selected disabled>Select Brand</option>';
-        
-        brands.forEach(brand => {
-            const option = document.createElement('option');
-            option.value = brand;
-            option.textContent = brand;
-            brandDropdown.appendChild(option);
+        // Clear chart instances
+        Object.values(chartInstances).forEach(chart => {
+            if (chart) chart.destroy();
         });
-        
-        console.log(`✅ Successfully populated ${brands.length} brands in compare dropdown`);
-        
-    } catch (error) {
-        console.error('❌ Error fetching brands for compare:', error);
-        // Show error state in dropdown
-        brandDropdown.innerHTML = '<option value="" disabled>Error loading brands</option>';
+        chartInstances = {};
     }
 }
 
@@ -2611,6 +2707,212 @@ function updateCargoSpaceChart() {
         plugins: [brandLogoPlugin]
     });
 }
+
+// FIXED: Enhanced updateRadarChart function with better scaling
+function updateRadarChart() {
+    const canvas = document.getElementById('radarChart');
+    if (!canvas || comparedCars.length === 0) return;
+    
+    const ctx = canvas.getContext('2d');
+    
+    if (chartInstances.radar) {
+        chartInstances.radar.destroy();
+    }
+
+    // Prepare normalized data for radar chart
+    const datasets = comparedCars.map((car, index) => {
+        // Normalize values to 0-100 scale for radar chart
+        const horsepower = Math.min((parseFloat(car.specs.Horsepower) || 0) / 10, 100); // Scale HP
+        const price = Math.min((parseFloat(car.specs.Price) || 0) / 50000, 100); // Scale price
+        const groundClearance = Math.min((parseFloat(car.specs.GroundClearance) || 0) * 5, 100); // Scale GC
+        const cargoSpace = Math.min((parseFloat(car.specs.Cargospace) || 0) / 20, 100); // Scale cargo
+        const seatingCapacity = Math.min((parseInt(car.specs.SeatingCapacity) || 0) * 14, 100); // Scale seating
+        
+        return {
+            label: `${car.specs.Brand} ${car.specs.Model} ${car.variant} (${car.year})`,
+            data: [horsepower, price, groundClearance, cargoSpace, seatingCapacity],
+            backgroundColor: chartBackgroundColors[index % chartBackgroundColors.length],
+            borderColor: chartColors[index % chartColors.length],
+            borderWidth: 3,
+            pointBackgroundColor: chartColors[index % chartColors.length],
+            pointBorderColor: '#fff',
+            pointBorderWidth: 2,
+            pointRadius: 6,
+            pointHoverRadius: 8,
+            fill: true
+        };
+    });
+
+    chartInstances.radar = new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: ['Performance', 'Value', 'Ground Clearance', 'Cargo Space', 'Seating'],
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false, // FIXED: Allow flexible aspect ratio
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        padding: 20,
+                        usePointStyle: true,
+                        font: {
+                            size: 12,
+                            weight: 'bold'
+                        },
+                        color: '#333'
+                    }
+                },
+                tooltip: {
+                    backgroundColor: 'rgba(45, 45, 45, 0.95)',
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: '#b49b66',
+                    borderWidth: 2,
+                    cornerRadius: 8,
+                    callbacks: {
+                        title: function(context) {
+                            return context[0].dataset.label;
+                        },
+                        label: function(context) {
+                            const labels = ['Performance Score', 'Value Score', 'Ground Clearance Score', 'Cargo Score', 'Seating Score'];
+                            return `${labels[context.dataIndex]}: ${context.parsed.r.toFixed(1)}`;
+                        }
+                    }
+                }
+            },
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 100,
+                    min: 0,
+                    ticks: {
+                        stepSize: 20,
+                        color: '#666',
+                        font: {
+                            size: 11
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(180, 155, 102, 0.2)',
+                        lineWidth: 1
+                    },
+                    angleLines: {
+                        color: 'rgba(180, 155, 102, 0.3)',
+                        lineWidth: 1
+                    },
+                    pointLabels: {
+                        color: '#b49b66',
+                        font: {
+                            size: 13,
+                            weight: 'bold'
+                        }
+                    }
+                }
+            },
+            elements: {
+                line: {
+                    borderWidth: 3,
+                    tension: 0.1
+                },
+                point: {
+                    radius: 6,
+                    hoverRadius: 8
+                }
+            }
+        }
+    });
+}
+
+// Function to update all charts including radar
+function updateAllCharts() {
+    if (comparedCars.length === 0) return;
+    
+    console.log('Updating all charts for', comparedCars.length, 'cars');
+    
+    // Preload brand logos before updating charts
+    preloadBrandLogos().then(() => {
+        updateHorsepowerChart();
+        updatePriceChart();
+        updateGroundClearanceChart();
+        updateSeatingCapacityChart();
+        updateCargoSpaceChart();
+        updateRadarChart(); // FIXED: Include radar chart in updates
+    });
+}
+
+// FIXED: Enhanced showSuccessMessage function
+function showSuccessMessage() {
+    const successDiv = document.getElementById('compare-success-message');
+    if (successDiv) {
+        successDiv.style.display = 'block';
+        
+        // Hide after 3 seconds
+        setTimeout(() => {
+            successDiv.style.display = 'none';
+        }, 3000);
+    }
+}
+
+// FIXED: Enhanced resetCompareForm function
+function resetCompareForm() {
+    const form = document.getElementById('compare-form');
+    if (form) {
+        form.reset();
+        
+        // Reset all dropdowns to their default states
+        const brandSelect = document.getElementById('brand');
+        const modelSelect = document.getElementById('model');
+        const variantSelect = document.getElementById('variant');
+        const yearSelect = document.getElementById('year');
+        
+        if (brandSelect) brandSelect.selectedIndex = 0;
+        if (modelSelect) modelSelect.innerHTML = '<option value="">Select Model</option>';
+        if (variantSelect) variantSelect.innerHTML = '<option value="">Select Variant</option>';
+        if (yearSelect) yearSelect.innerHTML = '<option value="">Select Year</option>';
+    }
+}
+
+// Helper function to show error messages
+function showCompareErrorMessage(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'compare-error-message';
+    messageDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #e74c3c;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        max-width: 300px;
+    `;
+    messageDiv.innerHTML = `
+        <i class="fas fa-exclamation-circle" style="margin-right: 8px;"></i>
+        ${message}
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.parentNode.removeChild(messageDiv);
+        }
+    }, 5000);
+}
+
+// Make functions globally available
+window.populateModels = populateModels;
+window.populateVariants = populateVariants;
+window.populateYears = populateYears;
+window.compareCars = compareCars;
+window.removeCarFromComparison = removeCarFromComparison;
+window.initializeComparePage = initializeComparePage;
 
 //////////////////////////////////
 // Shows corresponding models  //
@@ -3927,71 +4229,6 @@ function updateCalculationPreview() {
         }
     }
 }
-
-// MODIFIED: Initialize calculator when DOM loads
-document.addEventListener("DOMContentLoaded", function () {
-    console.log('DOM loaded, initializing enhanced like functionality...');
-    
-    // Initialize Firebase first
-    initializeFirebase();
-
-    // NEW: Initialize compare page
-    initializeComparePage();
-
-    // Set up auth state listener to load favorites when user logs in
-    const setupFavoritesLoader = () => {
-        if (typeof auth !== 'undefined' && auth) {
-            auth.onAuthStateChanged((user) => {
-                if (user) {
-                    // User logged in - load their favorites for duplicate checking
-                    console.log('User logged in, loading favorites for duplicate checking');
-                    setTimeout(() => {
-                        loadUserFavoritesForDuplicateCheck();
-                    }, 1000); // Small delay to ensure everything is ready
-                } else {
-                    // User logged out - clear favorites
-                    console.log('User logged out, clearing favorites');
-                    userFavorites.clear();
-                }
-            });
-        } else {
-            // Auth not ready yet, try again
-            setTimeout(setupFavoritesLoader, 500);
-        }
-    };
-    
-    setupFavoritesLoader();
-
-    // Rest of your existing DOMContentLoaded code...
-    const favoritesContainer = document.getElementById("favorites-items");
-    if (favoritesContainer) {
-        const checkAuthAndLoadFavorites = () => {
-            if (auth && auth.currentUser) {
-                loadFavorites();
-            } else if (auth) {
-                console.log('No current user, skipping favorites load');
-            } else {
-                setTimeout(checkAuthAndLoadFavorites, 500);
-            }
-        };
-        setTimeout(checkAuthAndLoadFavorites, 1000);
-    }
-
-    // Your existing slider initialization code...
-    const priceSlider = document.getElementById("price");
-    const horsepowerSlider = document.getElementById("horsepower");
-    const seatingSlider = document.getElementById("seating");
-
-    if (priceSlider && horsepowerSlider && seatingSlider) {
-        priceSlider.value = priceSlider.max;
-        horsepowerSlider.value = horsepowerSlider.min;
-        seatingSlider.value = "0";
-
-        updateSliderValue("price", "₱", true);
-        updateSliderValue("horsepower", "HP", false);
-        updateSliderValue("seating", "seats", false);
-    }
-});
 
 // Make functions globally available
 window.addToFave = addToFave;
@@ -5541,3 +5778,93 @@ function sortPosts(posts) {
   window.closeAskModal = closeAskModal;
 
 })();
+
+document.addEventListener("DOMContentLoaded", function () {
+    console.log('DOM loaded, initializing...');
+    
+    // Initialize Firebase first
+    initializeFirebase();
+
+    // NEW: Initialize compare page IMMEDIATELY after Firebase
+    initializeComparePage();
+
+    // NEW: Populate years dropdown for main filter page
+    populateYearsForFilter();
+
+    // Only load favorites if the favorites container exists
+    const favoritesContainer = document.getElementById("favorites-items");
+    if (favoritesContainer) {
+        console.log('Favorites page detected, will load favorites after auth');
+        // Don't load favorites immediately, wait for auth state
+        // The auth state change handler will trigger loadFavorites when user is confirmed
+        
+        // Set up a listener for when the user auth state is determined
+        const checkAuthAndLoadFavorites = () => {
+            if (auth && auth.currentUser) {
+                console.log('Auth confirmed, loading favorites');
+                loadFavorites();
+            } else if (auth) {
+                console.log('No current user, skipping favorites load');
+            } else {
+                // Auth not ready yet, check again in a bit
+                setTimeout(checkAuthAndLoadFavorites, 500);
+            }
+        };
+        
+        // Start checking after a small delay to let Firebase initialize
+        setTimeout(checkAuthAndLoadFavorites, 1000);
+    }
+
+    // Set up auth state listener to load favorites when user logs in
+    const setupFavoritesLoader = () => {
+        if (typeof auth !== 'undefined' && auth) {
+            auth.onAuthStateChanged((user) => {
+                if (user) {
+                    // User logged in - load their favorites for duplicate checking
+                    console.log('User logged in, loading favorites for duplicate checking');
+                    setTimeout(() => {
+                        loadUserFavoritesForDuplicateCheck();
+                    }, 1000); // Small delay to ensure everything is ready
+                } else {
+                    // User logged out - clear favorites
+                    console.log('User logged out, clearing favorites');
+                    userFavorites.clear();
+                }
+            });
+        } else {
+            // Auth not ready yet, try again
+            setTimeout(setupFavoritesLoader, 500);
+        }
+    };
+    
+    setupFavoritesLoader();
+
+    // Initialize other components as before
+    const filterButton = document.getElementById("filter-btn"); 
+    const resultsFrame = document.querySelector(".results-frame");
+
+    // Only initialize sliders if they exist on this page
+    const priceSlider = document.getElementById("price");
+    const horsepowerSlider = document.getElementById("horsepower");
+    const seatingSlider = document.getElementById("seating");
+
+    // Check if all required slider elements exist before trying to use them
+    if (priceSlider && horsepowerSlider && seatingSlider) {
+        // Set sliders to their initial values
+        priceSlider.value = priceSlider.max; // This will be 25,000,000 now
+        horsepowerSlider.value = horsepowerSlider.min;
+        seatingSlider.value = "0";
+
+        // Update displayed values to match the values
+        updateSliderValue("price", "₱", true);
+        updateSliderValue("horsepower", "HP", false);
+        updateSliderValue("seating", "seats", false);
+    }
+
+    // ENHANCED: Initialize calculator listeners if on calculator page
+    if (document.getElementById("monthly-income")) {
+        setupCalculatorListeners();
+    }
+
+    console.log('✅ All page initialization completed successfully');
+});

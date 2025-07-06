@@ -1381,11 +1381,11 @@ footer {
   width: 100% !important;
 }
 
-/* RADAR CHART SECTION - FIXED STRETCHING WITH BETTER CENTERING */
+/* FIXED: Radar Chart Section - Proper Scaling and Proportions */
 .radar-chart-section {
   width: 100%;
   margin: 3rem auto;
-  padding: 3rem; /* RESTORED: Original padding */
+  padding: 3rem;
   background: rgba(255, 255, 255, 0.95);
   border: 2px solid var(--second-color);
   border-radius: 20px;
@@ -1398,19 +1398,19 @@ footer {
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 2rem 0; /* RESTORED: Original padding */
+  padding: 2rem 0;
+  width: 100%;
 }
 
+/* FIXED: Proper radar chart container sizing to prevent stretching */
 .radar-chart-container {
-  width: 80%; /* RESTORED: Original width for good proportions */
-  max-width: 800px; /* RESTORED: Original max-width */
-  aspect-ratio: 1.2; /* FIXED: Proper aspect ratio to prevent stretching */
-  min-height: 600px; /* Minimum height */
-  max-height: 800px; /* Maximum height */
+  width: 70%; /* Reduced from 80% for better proportions */
+  max-width: 700px; /* Reduced from 800px */
+  height: 700px; /* Fixed height instead of aspect-ratio */
   background: white;
   border: 2px solid rgba(180, 155, 102, 0.3);
   border-radius: 15px;
-  padding: 2rem; /* RESTORED: Original padding */
+  padding: 2rem;
   box-shadow: 0 10px 25px rgba(0,0,0,0.1);
   transition: all 0.3s ease;
   display: flex;
@@ -1425,12 +1425,15 @@ footer {
   border-color: var(--second-color);
 }
 
+/* FIXED: Canvas sizing to maintain proper proportions */
 .radar-chart-container canvas {
   flex: 1;
   width: 100% !important;
-  height: 60% !important; /* Adjusted to prevent stretching */
-  min-height: 350px !important;
-  max-height: 500px !important;
+  height: 100% !important; /* Changed from 60% to 100% */
+  max-width: 100% !important;
+  max-height: 600px !important; /* Maximum height to prevent stretching */
+  min-height: 400px !important; /* Minimum height for smaller screens */
+  object-fit: contain; /* Maintain aspect ratio */
 }
 
 /* Individual Toggle Controls Styling */
@@ -1453,7 +1456,7 @@ footer {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Existing Compare Cards Styles - RESTORED ORIGINAL SPACING */
+/* FIXED: Car Comparison Cards */
 .comp_table_frame {
   width: 95%; /* RESTORED: Original width */
   margin: 2rem auto; /* RESTORED: Original margin */
@@ -1473,6 +1476,7 @@ footer {
   flex-wrap: nowrap;
 }
 
+/* Enhanced car column styling */
 .car-column {
   min-width: 350px;
   max-width: 350px;
@@ -1485,11 +1489,24 @@ footer {
   flex-direction: column;
   gap: 1rem;
   transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.car-column::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--second-color), #d4af37);
 }
 
 .car-column:hover {
   transform: translateY(-8px);
   box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+  border-color: #d4af37;
 }
 
 .car-title {
@@ -1502,26 +1519,30 @@ footer {
   text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
 }
 
+/* FIXED: Heart icon positioning in compare cards */
 .car-title .heart-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
 }
 
 .car-title .heart-container i {
-    transition: all 0.3s ease;
-    font-size: 1.2rem;
+  transition: all 0.3s ease;
+  font-size: 1.2rem;
+  cursor: pointer;
 }
 
 .car-title .heart-container i:hover {
-    transform: scale(1.2);
-    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
+  transform: scale(1.2);
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));
 }
 
 .car-title > div {
-    width: 100%;
+  width: 100%;
 }
 
+/* FIXED: Car image container styling to ensure images display properly */
 .car-image-container {
   display: flex;
   justify-content: center;
@@ -1531,6 +1552,7 @@ footer {
   height: 180px;
   background: linear-gradient(135deg, #f8f9fa, #e9ecef);
   border: 2px solid #e9ecef;
+  position: relative;
 }
 
 .car-image {
@@ -1538,6 +1560,34 @@ footer {
   height: 100%;
   object-fit: cover;
   border-radius: 8px;
+  transition: transform 0.3s ease;
+  position: relative;
+  z-index: 2;
+}
+
+.car-image:hover {
+  transform: scale(1.05);
+}
+
+/* Loading state for images */
+.car-image-container::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 40px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid var(--second-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  z-index: 1;
+}
+
+@keyframes spin {
+  0% { transform: translate(-50%, -50%) rotate(0deg); }
+  100% { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 .spec-section {
@@ -1629,6 +1679,46 @@ footer {
   box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
 }
 
+/* FIXED: Error message styling for compare page */
+.compare-error-message {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  background: #e74c3c;
+  color: white;
+  padding: 12px 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 10000;
+  font-size: 14px;
+  max-width: 300px;
+  animation: slideInRight 0.3s ease;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+/* Loading dropdown option styling */
+select option[value="retry"] {
+  background-color: #ffe6e6;
+  color: #e74c3c;
+  font-weight: bold;
+}
+
+select option[disabled] {
+  background-color: #f5f5f5;
+  color: #999;
+  font-style: italic;
+}
+
 /* Animation */
 @keyframes fadeInUp {
   from {
@@ -1641,7 +1731,7 @@ footer {
   }
 }
 
-/* RESPONSIVE DESIGN - RESTORED ORIGINAL BREAKPOINTS */
+/* FIXED: Responsive Design */
 @media (max-width: 1200px) {
   .compare-charts-grid {
     grid-template-columns: 1fr;
@@ -1655,9 +1745,14 @@ footer {
   }
 
   .radar-chart-container {
-        width: 90%;
-        height: 750px;
-    }
+    width: 80%;
+    max-width: 650px;
+    height: 650px;
+  }
+  
+  .radar-chart-container canvas {
+    max-height: 550px !important;
+  }
 }
 
 @media (max-width: 900px) {
@@ -1684,9 +1779,15 @@ footer {
   }
 
   .radar-chart-container {
-        height: 700px;
-        width: 95%;
-    }
+    width: 85%;
+    max-width: 600px;
+    height: 600px;
+  }
+  
+  .radar-chart-container canvas {
+    max-height: 500px !important;
+    min-height: 350px !important;
+  }
   
   .radar-chart-section {
     padding: 2rem;
@@ -1737,19 +1838,21 @@ footer {
   }
 
   .radar-chart-container {
-        height: 650px;
-        width: 95%;
-        padding: 1rem;
-    }
+    width: 90%;
+    max-width: 500px;
+    height: 550px;
+    padding: 1.5rem;
+  }
+  
+  .radar-chart-container canvas {
+    max-height: 450px !important;
+    min-height: 300px !important;
+  }
   
   .radar-chart-section {
     padding: 1.5rem;
     margin: 2rem auto;
   }
-  
-  .radar-chart-container canvas {
-        min-height: 300px !important;
-    }
 
   .compare-inner-frame {
     max-width: 100%;
@@ -1778,18 +1881,20 @@ footer {
   }
 
   .radar-chart-container {
-        height: 600px;
-        width: 95%;
-        padding: 1rem;
-    }
-  
-  .radar-chart-section {
+    width: 95%;
+    max-width: 400px;
+    height: 500px;
     padding: 1rem;
   }
   
   .radar-chart-container canvas {
-        min-height: 250px !important;
-    }
+    max-height: 400px !important;
+    min-height: 250px !important;
+  }
+  
+  .radar-chart-section {
+    padding: 1rem;
+  }
 
   .compare-chart-container {
     padding: 1rem;
