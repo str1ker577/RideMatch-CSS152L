@@ -2025,8 +2025,6 @@ async function svgToImageWithRetry(svgString, fallbackText, maxRetries = 3) {
     }
 }
 
-// ENHANCED: Improved brand logo plugin with proper brand identification
-// FIXED: Brand logo plugin with proper SVG positioning
 const brandLogoPlugin = {
     id: 'brandLogo',
     afterDatasetsDraw: function(chart, args, options) {
@@ -2057,12 +2055,11 @@ const brandLogoPlugin = {
             
             if (!bar) return;
             
-            // FIXED: Better position calculations
+            // Calculate positions
             const barWidth = Math.abs(bar.width || 40);
             const barHeight = Math.abs((bar.y || 0) - (bar.base || 0));
             const centerX = bar.x || 0;
             
-            // FIXED: Proper centerY calculation
             let centerY;
             if (bar.y < bar.base) {
                 centerY = bar.y + (bar.base - bar.y) / 2;
@@ -2070,11 +2067,11 @@ const brandLogoPlugin = {
                 centerY = bar.base + (bar.y - bar.base) / 2;
             }
             
-            // FIXED: Smart logo sizing - only show if bar is big enough
+            // Smart logo sizing
             let logoSize = Math.min(barWidth * 0.6, 45);
             logoSize = Math.max(25, Math.min(logoSize, 60));
             
-            // FIXED: Only show logo if bar is tall enough AND wide enough
+            // Only show logo if bar is big enough
             const minBarHeight = logoSize + 20;
             const minBarWidth = logoSize + 10;
             
@@ -2091,43 +2088,45 @@ const brandLogoPlugin = {
                         ctx.lineWidth = 2;
                         ctx.stroke();
                         
-                        // FIXED: Draw the logo with proper centering
+                        // FIXED: Proper logo centering with clipping
+                        ctx.save();
+                        
+                        // Create circular clipping path
+                        ctx.beginPath();
+                        ctx.arc(centerX, centerY, backgroundRadius - 3, 0, 2 * Math.PI);
+                        ctx.clip();
+                        
+                        // FIXED: Calculate exact center position
                         const logoX = centerX - logoSize / 2;
                         const logoY = centerY - logoSize / 2;
                         
-                        // Ensure we're within canvas bounds
-                        if (logoX >= 0 && logoY >= 0 && 
-                            logoX + logoSize <= chart.width && 
-                            logoY + logoSize <= chart.height) {
-                            
-                            // FIXED: Set proper rendering context for SVGs
-                            ctx.globalCompositeOperation = 'source-over';
-                            ctx.imageSmoothingEnabled = true;
-                            ctx.imageSmoothingQuality = 'high';
-                            
-                            ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
-                            
-                            console.log(`✅ Drew ${brandName} logo at (${logoX}, ${logoY}) size ${logoSize}`);
-                        }
+                        // FIXED: Set proper rendering settings
+                        ctx.imageSmoothingEnabled = true;
+                        ctx.imageSmoothingQuality = 'high';
+                        
+                        // FIXED: Draw logo with proper scaling and centering
+                        ctx.drawImage(
+                            logo,           // source image
+                            0, 0,          // source x, y (start from top-left of image)
+                            logo.naturalWidth, logo.naturalHeight, // source width, height (full image)
+                            logoX, logoY,  // destination x, y (centered)
+                            logoSize, logoSize // destination width, height (scaled)
+                        );
+                        
+                        ctx.restore(); // Restore clipping
+                        
+                        console.log(`✅ Drew centered ${brandName} logo at (${logoX}, ${logoY})`);
                         
                     } catch (error) {
                         console.warn(`❌ Error drawing logo for ${brandName}:`, error);
-                        // FIXED: Don't show fallback text if logo fails - just skip
                     }
                 }
-                // FIXED: Don't show any fallback text - only show logos that work
             }
-            // FIXED: Don't show anything if bar is too small
         });
         
         ctx.restore();
     }
 };
-function drawBrandTextFallback(ctx, centerX, centerY, brandName, size) {
-    // FIXED: Don't draw any fallback text
-    // This function is now empty to prevent inconsistent text display
-    return;
-}
 
 // Fallback function to draw brand name when logo is not available or bar is too small
 function drawBrandNameFallback(ctx, chart, index, brandName, size) {
