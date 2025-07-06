@@ -1302,7 +1302,7 @@ footer {
 /* BAR CHARTS SECTION - CONSTRAINED WIDTH */
 .compare-charts-section {
   width: 85%; /* FIXED: Exact width from your image */
-  max-width: 2000px; /* FIXED: Slightly smaller max width */
+  max-width: 2500px; /* FIXED: Slightly smaller max width */
   margin: 3rem auto;
   padding: 3rem;
   background: rgba(255, 255, 255, 0.95);
