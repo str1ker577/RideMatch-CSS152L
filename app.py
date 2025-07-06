@@ -1036,16 +1036,6 @@ def calculator():
 def forum():
     return render_template('forum.html')
 
-@app.route('/profile', methods=['GET', 'POST'])
-def profile():
-    if 'user' not in session:
-        return redirect(url_for('home'))
-    
-    if request.method == 'POST':
-        pass
-    
-    return render_template('profile.html')
-
 #################################
 # Toggle Favorite/Like Function #
 #################################
