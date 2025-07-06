@@ -1763,64 +1763,34 @@ select option[disabled] {
 @media (max-width: 1200px) {
   .compare-charts-grid {
     grid-template-columns: 1fr;
-    grid-template-rows: repeat(5, 500px);
+    grid-template-rows: repeat(5, 450px);
     gap: 2rem;
+    height: auto;
   }
 
   .compare-charts-grid .compare-chart-container:nth-child(5) {
     grid-column: 1;
-    max-width: 100%;
   }
 
   .radar-chart-container {
-    width: 85%;
-    height: 750px;
-  }
-  
-  .radar-chart-container canvas {
-    max-height: 600px !important;
-  }
-}
-
-@media (max-width: 900px) {
-  .compare-chart-container {
-    height: 450px;
-  }
-  
-  .compare-chart-container canvas {
-    height: 350px !important;
-    max-height: 350px !important;
-  }
-  
-  .compare-charts-grid {
-    grid-template-rows: repeat(5, 450px);
-  }
-
-  .radar-chart-container {
-    width: 90%;
-    height: 700px;
+    width: 80%;
+    max-width: 650px;
+    height: 650px;
   }
   
   .radar-chart-container canvas {
     max-height: 550px !important;
-    min-height: 400px !important;
-  }
-
-  /* Stack toggle controls on smaller screens */
-  .individual-toggles div[style*="flex"] {
-    flex-direction: column !important;
-    gap: 1rem !important;
   }
 }
 
-@media (max-width: 768px) {
-  .compare-charts-section {
-    padding: 1.5rem;
+@media (max-width: 900px) {
+  .car-column {
+    min-width: 300px;
+    max-width: 300px;
   }
   
   .compare-chart-container {
     height: 400px;
-    padding: 1rem;
   }
   
   .compare-chart-container canvas {
@@ -1830,29 +1800,60 @@ select option[disabled] {
   
   .compare-charts-grid {
     grid-template-rows: repeat(5, 400px);
-    gap: 1.5rem;
+  }
+  
+  .compare-charts-section {
+    padding: 2rem;
   }
 
   .radar-chart-container {
-    width: 95%;
-    height: 650px;
-    padding: 1.5rem;
+    width: 85%;
+    max-width: 600px;
+    height: 600px;
   }
   
   .radar-chart-container canvas {
     max-height: 500px !important;
     min-height: 350px !important;
   }
+  
+  .radar-chart-section {
+    padding: 2rem;
+  }
 
-  .individual-toggles {
-    padding: 1rem;
+  /* Adjust toggle controls for smaller screens */
+  .individual-toggles div[style*="flex"] {
+    flex-direction: column !important;
+    gap: 0.8rem !important;
   }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
+  #comparison-container {
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .car-column {
+    width: 100%;
+    max-width: 100%;
+  }
+  
+  .compare-outer-frame {
+    padding: 1rem;
+  }
+  
+  .compare-charts-section {
+    padding: 1.5rem;
+    margin: 2rem auto;
+  }
+  
+  .compare-charts-title {
+    font-size: 2rem;
+  }
+  
   .compare-chart-container {
     height: 350px;
-    padding: 0.75rem;
   }
   
   .compare-chart-container canvas {
@@ -1865,18 +1866,85 @@ select option[disabled] {
   }
 
   .radar-chart-container {
-    width: 95%;
-    height: 600px;
-    padding: 1rem;
+    width: 90%;
+    max-width: 500px;
+    height: 550px;
+    padding: 1.5rem;
   }
   
   .radar-chart-container canvas {
     max-height: 450px !important;
     min-height: 300px !important;
   }
+  
+  .radar-chart-section {
+    padding: 1.5rem;
+    margin: 2rem auto;
+  }
 
+  .compare-inner-frame {
+    max-width: 100%;
+    padding: 1.5rem;
+  }
+
+  /* Stack toggle controls on mobile */
+  .individual-toggles div[style*="flex"] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  
+  .individual-toggles div[style*="display: flex"] {
+    margin-bottom: 0.5rem;
+    justify-content: flex-start !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .compare-filter-title {
+    font-size: 2rem;
+  }
+  
+  .compare-charts-grid {
+    grid-template-rows: repeat(5, 320px);
+  }
+
+  .radar-chart-container {
+    width: 95%;
+    max-width: 400px;
+    height: 500px;
+    padding: 1rem;
+  }
+  
+  .radar-chart-container canvas {
+    max-height: 400px !important;
+    min-height: 250px !important;
+  }
+  
+  .radar-chart-section {
+    padding: 1rem;
+  }
+
+  .compare-chart-container {
+    padding: 1rem;
+    height: 300px;
+  }
+  
+  .compare-chart-container canvas {
+    height: 200px !important;
+    max-height: 200px !important;
+  }
+  
+  .compare-chart-header h3 {
+    font-size: 1.2rem;
+  }
+  
+  .compare-charts-title {
+    font-size: 1.8rem;
+  }
+
+  /* Smaller toggle controls on very small screens */
   .individual-toggles {
-    font-size: 0.85rem;
+    font-size: 0.8rem;
   }
   
   .individual-toggles label {
