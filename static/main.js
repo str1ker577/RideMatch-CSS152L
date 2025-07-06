@@ -92,24 +92,36 @@ document.addEventListener('click', function(event) {
 // Initialize Firebase when the page loads
 async function initializeFirebase() {
     try {
-        // Get Firebase config from your Python backend
-        const response = await fetch('/firebase-config');
-        const firebaseConfig = await response.json();
+        console.log('🔄 Starting Firebase initialization...');
         
-        // IMPORTANT: Always use the correct database URL for your Asia Southeast region
-        firebaseConfig.databaseURL = 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app';
-        
-        console.log('Firebase config with correct database URL:', firebaseConfig);
-        
-        // Initialize Firebase only if not already initialized
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-            console.log('Firebase initialized successfully');
-        } else {
-            console.log('Firebase already initialized');
+        // Check if Firebase is already initialized
+        if (firebase.apps.length > 0) {
+            console.log('✅ Firebase already initialized');
+            auth = firebase.auth();
+            return;
         }
         
+        console.log('📡 Fetching Firebase config...');
+        const response = await fetch('/firebase-config');
+        
+        if (!response.ok) {
+            throw new Error(`Failed to fetch Firebase config: ${response.status}`);
+        }
+        
+        const firebaseConfig = await response.json();
+        
+        // Ensure we have the correct database URL
+        firebaseConfig.databaseURL = 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app';
+        
+        console.log('🔧 Firebase config loaded:', firebaseConfig);
+        
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        console.log('✅ Firebase app initialized successfully');
+        
+        // Initialize auth
         auth = firebase.auth();
+        console.log('✅ Firebase auth initialized successfully');
         
         // Test database connection
         try {
@@ -121,52 +133,76 @@ async function initializeFirebase() {
             console.error('❌ Firebase database connection failed:', dbError);
         }
         
-        // UPDATED: Enhanced authentication state monitoring
-auth.onAuthStateChanged(async (user) => {
-    if (user) {
-        currentUser = user;
-        userName = user.email;
-        
-        // NEW: Fetch user profile data including username
-        try {
-            const profileResponse = await fetch(`${baseUrl}/get-user-profile`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ uid: user.uid })
-            });
+        // Set up auth state listener
+        auth.onAuthStateChanged(async (user) => {
+            console.log('🔄 Auth state changed:', user ? user.email : 'signed out');
             
-            if (profileResponse.ok) {
-                const profileData = await profileResponse.json();
-                userDisplayName = profileData.username || user.displayName || user.email;
-                console.log('User profile loaded:', profileData);
+            if (user) {
+                currentUser = user;
+                userName = user.email;
                 
-                // FIXED: Call updateUIForAuthState with user and profile data
-                updateUIForAuthState(user, profileData);
+                try {
+                    const profileResponse = await fetch(`${baseUrl}/get-user-profile`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uid: user.uid })
+                    });
+                    
+                    if (profileResponse.ok) {
+                        const profileData = await profileResponse.json();
+                        userDisplayName = profileData.username || user.displayName || user.email;
+                        console.log('✅ User profile loaded:', profileData);
+                        updateUIForAuthState(user, profileData);
+                    } else {
+                        userDisplayName = user.displayName || user.email;
+                        updateUIForAuthState(user, { username: userDisplayName });
+                    }
+                } catch (error) {
+                    console.error('Error fetching user profile:', error);
+                    userDisplayName = user.displayName || user.email;
+                    updateUIForAuthState(user, { username: userDisplayName });
+                }
+                
+                console.log('✅ User is signed in:', user.email, 'Username:', userDisplayName);
             } else {
-                // Fallback to Firebase user data
-                userDisplayName = user.displayName || user.email;
-                updateUIForAuthState(user, { username: userDisplayName });
+                currentUser = null;
+                userName = null;
+                userDisplayName = null;
+                updateUIForAuthState(null, null);
+                console.log('✅ User is signed out');
             }
-        } catch (error) {
-            console.error('Error fetching user profile:', error);
-            userDisplayName = user.displayName || user.email;
-            updateUIForAuthState(user, { username: userDisplayName });
-        }
+        });
         
-        console.log('User is signed in:', user.email, 'Username:', userDisplayName);
-    } else {
-        currentUser = null;
-        userName = null;
-        userDisplayName = null;
-        updateUIForAuthState(null, null); // FIXED: Pass null explicitly
-        console.log('User is signed out');
-    }
-});
+        console.log('✅ Firebase initialization completed successfully');
         
     } catch (error) {
-        console.error('Firebase initialization failed:', error);
+        console.error('❌ Firebase initialization failed:', error);
+        console.error('Error details:', error.message);
+        
+        // Show user-friendly error
+        const errorDiv = document.createElement('div');
+        errorDiv.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #e74c3c;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            z-index: 10000;
+            font-size: 14px;
+        `;
+        errorDiv.textContent = 'Authentication system failed to load. Please refresh the page.';
+        document.body.appendChild(errorDiv);
+        
+        setTimeout(() => {
+            if (errorDiv.parentNode) {
+                errorDiv.parentNode.removeChild(errorDiv);
+            }
+        }, 5000);
     }
 }
+
 function updateUIForAuthState(user = null, userData = null) {
     console.log('🔄 Updating UI for auth state:', user ? 'logged in' : 'logged out');
     
@@ -450,7 +486,7 @@ function handleLogin(event) {
     
     console.log('📧 Email:', email);
     
-    // ✅ FIXED: Enhanced Firebase checks
+    // Check if Firebase is available
     if (typeof firebase === 'undefined') {
         console.error('❌ Firebase library not loaded');
         const errorElement = document.querySelector('.error-message');
@@ -460,17 +496,39 @@ function handleLogin(event) {
         return;
     }
     
+    // Check if Firebase is initialized
+    if (firebase.apps.length === 0) {
+        console.error('❌ Firebase not initialized, attempting to initialize...');
+        
+        // Try to initialize Firebase
+        initializeFirebase().then(() => {
+            console.log('🔄 Firebase initialized, retrying login...');
+            // Retry login after initialization
+            setTimeout(() => {
+                handleLogin(event);
+            }, 1000);
+        }).catch(error => {
+            console.error('❌ Failed to initialize Firebase:', error);
+            const errorElement = document.querySelector('.error-message');
+            if (errorElement) {
+                errorElement.textContent = 'Authentication system failed to initialize. Please refresh the page.';
+            }
+        });
+        return;
+    }
+    
+    // Check if auth is available
     if (!auth) {
-        console.error('❌ Firebase auth not initialized, attempting to initialize...');
+        console.error('❌ Firebase auth not available, attempting to get auth...');
         
         try {
             auth = firebase.auth();
-            console.log('✅ Auth reinitialized successfully');
+            console.log('✅ Auth object created successfully');
         } catch (initError) {
-            console.error('❌ Failed to reinitialize auth:', initError);
+            console.error('❌ Failed to create auth object:', initError);
             const errorElement = document.querySelector('.error-message');
             if (errorElement) {
-                errorElement.textContent = 'Authentication system not ready. Please refresh the page and try again.';
+                errorElement.textContent = 'Authentication not ready. Please refresh the page and try again.';
             }
             return;
         }
@@ -490,7 +548,7 @@ function handleLogin(event) {
             const user = userCredential.user;
             console.log('✅ User logged in:', user.email);
             
-            user.getIdToken().then((idToken) => {
+            return user.getIdToken().then((idToken) => {
                 console.log('🔄 Sending token to backend for session creation...');
                 
                 return fetch('/verify-token', {
@@ -528,7 +586,7 @@ function handleLogin(event) {
                     
                     togglePopup('login-popup');
                     
-                    // ✅ FIXED: Safely update sidebar
+                    // Update sidebar safely
                     const sidebar = document.getElementById('sidebar');
                     const menuButton = document.getElementById('menu-button');
                     const closeButton = document.getElementById('close-button');
@@ -545,25 +603,15 @@ function handleLogin(event) {
                     console.error('❌ Backend authentication failed:', data);
                     throw new Error(data.message || 'Backend authentication failed');
                 }
-            })
-            .catch(backendError => {
-                console.error('❌ Backend session creation failed:', backendError);
-                
-                const errorElement = document.querySelector('.error-message');
-                if (errorElement) {
-                    errorElement.textContent = 'Login succeeded but session creation failed. Please try again.';
-                }
-                
-                auth.signOut();
             });
         })
         .catch((error) => {
-            console.error('❌ Firebase login error:', error);
+            console.error('❌ Login error:', error);
             const successElement = document.querySelector('.success-message');
             const errorElement = document.querySelector('.error-message');
             
             if (successElement) successElement.textContent = '';
-            if (errorElement) errorElement.textContent = getFirebaseErrorMessage(error.code);
+            if (errorElement) errorElement.textContent = getFirebaseErrorMessage(error.code) || error.message;
         })
         .finally(() => {
             if (submitButton) {
@@ -571,6 +619,51 @@ function handleLogin(event) {
                 submitButton.disabled = false;
             }
         });
+}
+
+// ✅ FIXED: Enhanced DOMContentLoaded with Firebase initialization
+document.addEventListener("DOMContentLoaded", function () {
+    console.log('🔄 DOM loaded, initializing...');
+    
+    // Initialize Firebase IMMEDIATELY
+    initializeFirebase().then(() => {
+        console.log('✅ Firebase initialization completed');
+    }).catch(error => {
+        console.error('❌ Firebase initialization failed in DOMContentLoaded:', error);
+    });
+    
+    // Setup slider values
+    setTimeout(() => {
+        updateSliderValue("price", "", true);
+        updateSliderValue("horsepower", "HP", false);
+        updateSliderValue("seating", "seats", false);
+        updateSliderValue("cargo-space", "L", false);
+        updateSliderValue("ground-clearance", "cm", false);
+    }, 500);
+    
+    // Ensure username display element exists
+    setTimeout(() => {
+        ensureUsernameDisplay();
+    }, 1000);
+});
+
+// ✅ FIXED: Add ensureUsernameDisplay function if missing
+function ensureUsernameDisplay() {
+    let usernameDisplay = document.getElementById('username-display');
+    const profileContainer = document.getElementById('profile-container');
+    
+    if (!usernameDisplay && profileContainer) {
+        console.log('🔧 Creating missing username display element');
+        usernameDisplay = document.createElement('span');
+        usernameDisplay.id = 'username-display';
+        usernameDisplay.className = 'username-display';
+        usernameDisplay.style.marginRight = '10px';
+        usernameDisplay.style.color = '#b49b66';
+        usernameDisplay.style.fontWeight = 'bold';
+        
+        profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
+        console.log('✅ Username display element created and added');
+    }
 }
 
 // Helper function for user-friendly error messages (keep your existing one)
