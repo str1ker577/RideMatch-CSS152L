@@ -10,11 +10,13 @@ const baseUrl = isLocalhost ? 'http://127.0.0.1:8000' : window.location.origin;
 let auth; // Global auth object
 let userName = null; // Keep your existing userName variable
 let currentUser = null;
+let userDisplayName = null; // NEW: For storing username
 
 // Function to get current user name
 function getCurrentUserName() {
   if (auth && auth.currentUser) {
-    return auth.currentUser.displayName || auth.currentUser.email || 'Anonymous';
+    // Priority: username > displayName > email > 'Anonymous'
+    return userDisplayName || auth.currentUser.displayName || auth.currentUser.email || 'Anonymous';
   }
   return 'Anonymous';
 }
@@ -22,34 +24,8 @@ function getCurrentUserName() {
 let currentCarData = []; // Global variable to store current car data for sorting
 let defaultCarsLoaded = false;
 
-function updateUIForAuthState() {
-  console.log('Forum: Updating UI for auth state, currentUser:', currentUser ? currentUser.email : 'none');
-  
-  const askBtn = document.querySelector('.ask-btn');
-  if (!askBtn) {
-    console.log('Forum: Ask button not found, not on forum page');
-    return; // Not on forum page
-  }
-  
-  if (!currentUser) {
-    console.log('Forum: User not logged in, showing login prompt');
-    askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
-    askBtn.onclick = () => {
-      if (typeof togglePopup === 'function') {
-        togglePopup('login-popup');
-      }
-    };
-  } else {
-    console.log('Forum: User logged in, showing ask question button');
-    askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
-    askBtn.onclick = () => openAskModal();
-  }
-}
-
-
 window.removeFavoriteFromDisplay = removeFavoriteFromDisplay;
 window.addToFave = addToFave;
-
 
 const isComparePage = document.getElementById('compare-charts-section') !== null;
 const isFilterPage = document.getElementById('year') !== null;
@@ -134,66 +110,50 @@ async function initializeFirebase() {
         
         auth = firebase.auth();
         
-        // FIXED: Test database connection properly
+        // Test database connection
         try {
-            // Test the database connection
             const database = firebase.database();
             const testRef = database.ref('test');
-            await testRef.once('value'); // This will throw an error if connection fails
+            await testRef.once('value');
             console.log('✅ Firebase database connection successful');
         } catch (dbError) {
             console.error('❌ Firebase database connection failed:', dbError);
-            // Don't throw here, let the app continue but log the error
         }
         
-        // Monitor authentication state
-        auth.onAuthStateChanged((user) => {
+        // UPDATED: Enhanced authentication state monitoring
+        auth.onAuthStateChanged(async (user) => {
             if (user) {
-                userName = user.email;
-
-                // Update welcome message
-                const welcomeText = document.getElementById('welcome-text');
-                if (welcomeText) welcomeText.textContent = `Welcome, ${userName}`;
-
-                // Hide login button, show profile pic/icon container
-                const loginBtn = document.getElementById('login-button');
-                const profileContainer = document.getElementById('profile-container');
-                if (loginBtn) loginBtn.style.display = 'none';
-                if (profileContainer) profileContainer.style.display = 'block';
-
-                // Profile image vs icon logic
-                const profilePic = document.getElementById('profile-pic');
-                const profileIcon = document.getElementById('profile-icon');
-
                 currentUser = user;
-                updateUIForAuthState();
-
-                if (user.photoURL) {
-                    if (profileIcon) profileIcon.style.display = 'none';
-                    if (profilePic) {
-                        profilePic.src = user.photoURL;
-                        profilePic.style.display = 'block';
+                userName = user.email;
+                
+                // NEW: Fetch user profile data including username
+                try {
+                    const profileResponse = await fetch(`${baseUrl}/get-user-profile`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ uid: user.uid })
+                    });
+                    
+                    if (profileResponse.ok) {
+                        const profileData = await profileResponse.json();
+                        userDisplayName = profileData.username || user.displayName || user.email;
+                        console.log('User profile loaded:', profileData);
+                    } else {
+                        // Fallback to Firebase user data
+                        userDisplayName = user.displayName || user.email;
                     }
-                } else {
-                    if (profileIcon) profileIcon.style.display = 'inline-block';
-                    if (profilePic) profilePic.style.display = 'none';
+                } catch (error) {
+                    console.error('Error fetching user profile:', error);
+                    userDisplayName = user.displayName || user.email;
                 }
-
-                console.log('User is signed in:', user.email);
-            } else {
-                userName = null;
-
-                const welcomeText = document.getElementById('welcome-text');
-                if (welcomeText) welcomeText.textContent = 'Welcome!';
-
-                const loginBtn = document.getElementById('login-button');
-                const profileContainer = document.getElementById('profile-container');
-                if (loginBtn) loginBtn.style.display = 'block';
-                if (profileContainer) profileContainer.style.display = 'none';
-
-                currentUser = null;
+                
                 updateUIForAuthState();
-
+                console.log('User is signed in:', user.email, 'Username:', userDisplayName);
+            } else {
+                currentUser = null;
+                userName = null;
+                userDisplayName = null;
+                updateUIForAuthState();
                 console.log('User is signed out');
             }
         });
@@ -246,34 +206,112 @@ function handleLogout() {
 
 function handleSignup(event) {
     event.preventDefault();
+    
     const email = document.querySelector('input[name="email_signup"]').value;
     const password = document.querySelector('input[name="password_signup"]').value;
+    const username = document.querySelector('input[name="username"]').value.trim();
+    const profilePictureFile = document.getElementById('profile_picture').files[0];
+    
+    console.log('Signup attempt with username:', username);
     
     if (!auth) {
         console.error('Firebase not initialized');
         return;
     }
     
+    // Validate username
+    if (username.length < 3 || username.length > 20) {
+        document.querySelector('.error-message12').textContent = 'Username must be 3-20 characters long';
+        return;
+    }
+    
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+        document.querySelector('.error-message12').textContent = 'Username can only contain letters, numbers, and underscores';
+        return;
+    }
+    
+    // Show loading state
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    const originalText = submitButton.textContent;
+    submitButton.textContent = 'Creating Account...';
+    submitButton.disabled = true;
+    
     // Use Firebase client-side authentication
     auth.createUserWithEmailAndPassword(email, password)
-        .then((userCredential) => {
-            // User signed up successfully
+        .then(async (userCredential) => {
             const user = userCredential.user;
             console.log('User signed up:', user.email);
             
-            // Display success message
-            document.querySelector('.success-message').textContent = "Signup successful! Please log in.";
-            document.querySelector('.error-message12').textContent = '';
-            document.querySelector('.error-message').textContent = '';
-            
-            // Close signup popup and show login (keep your existing UI logic)
-            togglePopup('signup-popup');
-            togglePopup('login-popup');
+            try {
+                // Prepare user data for backend
+                let profilePictureUrl = null;
+                
+                // Handle profile picture upload if provided
+                if (profilePictureFile) {
+                    const formData = new FormData();
+                    formData.append('profile_picture', profilePictureFile);
+                    formData.append('user_id', user.uid);
+                    
+                    const uploadResponse = await fetch(`${baseUrl}/upload-profile-picture`, {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    if (uploadResponse.ok) {
+                        const uploadResult = await uploadResponse.json();
+                        profilePictureUrl = uploadResult.url;
+                    }
+                }
+                
+                // Send user data to backend
+                const response = await fetch(`${baseUrl}/complete-signup`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        uid: user.uid,
+                        email: user.email,
+                        username: username,
+                        profilePictureUrl: profilePictureUrl
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.message || 'Failed to complete signup');
+                }
+                
+                // Update Firebase user profile
+                await user.updateProfile({
+                    displayName: username,
+                    photoURL: profilePictureUrl
+                });
+                
+                // Display success message
+                document.querySelector('.success-message').textContent = "Account created successfully! Please log in.";
+                document.querySelector('.error-message12').textContent = '';
+                document.querySelector('.error-message').textContent = '';
+                
+                // Close signup popup and show login
+                togglePopup('signup-popup');
+                togglePopup('login-popup');
+                
+            } catch (backendError) {
+                console.error('Backend signup error:', backendError);
+                document.querySelector('.error-message12').textContent = backendError.message || 'Failed to complete account setup';
+                
+                // Delete the Firebase user since backend setup failed
+                await user.delete();
+            }
         })
         .catch((error) => {
             console.error('Signup error:', error);
             document.querySelector('.success-message').textContent = '';
             document.querySelector('.error-message12').textContent = getFirebaseErrorMessage(error.code);
+        })
+        .finally(() => {
+            // Reset button
+            submitButton.textContent = originalText;
+            submitButton.disabled = false;
         });
 }
 
@@ -398,6 +436,290 @@ function getFirebaseErrorMessage(errorCode) {
             return 'Too many failed attempts. Please try again later.';
         default:
             return 'Authentication failed. Please try again.';
+    }
+}
+
+/////////////////////////////
+// Username Functionality //
+///////////////////////////
+
+// NEW: Function to check username availability
+async function checkUsernameAvailability(username) {
+  try {
+    const response = await fetch(`${baseUrl}/check-username`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: username })
+    });
+    
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error('Error checking username availability:', error);
+    return { available: false, error: 'Connection error' };
+  }
+}
+
+function setupUsernameValidation() {
+  const usernameInput = document.getElementById('username_signup');
+  const statusElement = document.querySelector('.username-status');
+  
+  if (!usernameInput || !statusElement) return;
+  
+  let checkTimeout;
+  
+  usernameInput.addEventListener('input', function() {
+    const username = this.value.trim();
+    
+    // Clear previous timeout
+    clearTimeout(checkTimeout);
+    statusElement.textContent = '';
+    statusElement.className = 'username-status';
+    
+    // Basic validation
+    if (username.length < 3) {
+      statusElement.textContent = 'Username must be at least 3 characters';
+      statusElement.className = 'username-status unavailable';
+      return;
+    }
+    
+    if (username.length > 20) {
+      statusElement.textContent = 'Username must be less than 20 characters';
+      statusElement.className = 'username-status unavailable';
+      return;
+    }
+    
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      statusElement.textContent = 'Username can only contain letters, numbers, and underscores';
+      statusElement.className = 'username-status unavailable';
+      return;
+    }
+    
+    // Check availability after 500ms delay
+    checkTimeout = setTimeout(async () => {
+      statusElement.textContent = 'Checking availability...';
+      statusElement.className = 'username-status';
+      
+      const result = await checkUsernameAvailability(username);
+      
+      if (result.available) {
+        statusElement.textContent = '✓ Username available';
+        statusElement.className = 'username-status available';
+      } else {
+        statusElement.textContent = result.message || 'Username not available';
+        statusElement.className = 'username-status unavailable';
+      }
+    }, 500);
+  });
+}
+
+/////////////////////////////////
+// Profile Page Functionality //
+///////////////////////////////
+
+function loadProfilePage() {
+    if (!currentUser) {
+        window.location.href = '/';
+        return;
+    }
+    
+    loadUserProfile();
+}
+
+async function loadUserProfile() {
+    try {
+        const response = await fetch(`${baseUrl}/get-user-profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid: currentUser.uid })
+        });
+        
+        if (response.ok) {
+            const profile = await response.json();
+            
+            // Update profile display
+            document.getElementById('current-username').value = profile.username || '';
+            document.getElementById('current-email').value = profile.email || '';
+            document.getElementById('member-since').textContent = new Date(profile.memberSince).toLocaleDateString() || 'Unknown';
+            document.getElementById('total-favorites').textContent = profile.favoriteCount || '0';
+            
+            // Update profile picture
+            const currentPic = document.getElementById('current-profile-pic');
+            const defaultIcon = document.getElementById('default-profile-icon');
+            
+            if (profile.profilePictureUrl) {
+                currentPic.src = profile.profilePictureUrl;
+                currentPic.style.display = 'block';
+                defaultIcon.style.display = 'none';
+            } else {
+                currentPic.style.display = 'none';
+                defaultIcon.style.display = 'block';
+            }
+        }
+    } catch (error) {
+        console.error('Error loading profile:', error);
+    }
+}
+
+function enableUsernameEdit() {
+    document.getElementById('current-username').style.display = 'none';
+    document.getElementById('edit-username-btn').style.display = 'none';
+    document.getElementById('username-edit-form').style.display = 'block';
+    
+    const newUsernameInput = document.getElementById('new-username');
+    newUsernameInput.value = document.getElementById('current-username').value;
+    newUsernameInput.focus();
+}
+
+function cancelUsernameEdit() {
+    document.getElementById('current-username').style.display = 'block';
+    document.getElementById('edit-username-btn').style.display = 'block';
+    document.getElementById('username-edit-form').style.display = 'none';
+    document.getElementById('username-validation').textContent = '';
+}
+
+async function saveUsername() {
+    const newUsername = document.getElementById('new-username').value.trim();
+    const validation = document.getElementById('username-validation');
+    
+    // Validate username
+    if (newUsername.length < 3 || newUsername.length > 20) {
+        validation.textContent = 'Username must be 3-20 characters long';
+        validation.className = 'username-validation invalid';
+        return;
+    }
+    
+    if (!/^[a-zA-Z0-9_]+$/.test(newUsername)) {
+        validation.textContent = 'Username can only contain letters, numbers, and underscores';
+        validation.className = 'username-validation invalid';
+        return;
+    }
+    
+    // Check if username is different
+    if (newUsername === document.getElementById('current-username').value) {
+        cancelUsernameEdit();
+        return;
+    }
+    
+    try {
+        validation.textContent = 'Saving...';
+        validation.className = 'username-validation';
+        
+        const response = await fetch(`${baseUrl}/update-username`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                uid: currentUser.uid,
+                newUsername: newUsername 
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('current-username').value = newUsername;
+            userDisplayName = newUsername;
+            
+            // Update Firebase user profile
+            await currentUser.updateProfile({ displayName: newUsername });
+            
+            // Update UI
+            updateUIForAuthState();
+            
+            validation.textContent = 'Username updated successfully!';
+            validation.className = 'username-validation valid';
+            
+            setTimeout(() => {
+                cancelUsernameEdit();
+            }, 2000);
+        } else {
+            validation.textContent = result.message || 'Failed to update username';
+            validation.className = 'username-validation invalid';
+        }
+    } catch (error) {
+        console.error('Error updating username:', error);
+        validation.textContent = 'Error updating username';
+        validation.className = 'username-validation invalid';
+    }
+}
+
+// NEW: Profile picture functions
+async function updateProfilePicture() {
+    const fileInput = document.getElementById('new-profile-picture');
+    const file = fileInput.files[0];
+    
+    if (!file) return;
+    
+    try {
+        const formData = new FormData();
+        formData.append('profile_picture', file);
+        formData.append('uid', currentUser.uid);
+        
+        const response = await fetch(`${baseUrl}/update-profile-picture`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            
+            // Update Firebase user profile
+            await currentUser.updateProfile({ photoURL: result.url });
+            
+            // Update UI
+            const currentPic = document.getElementById('current-profile-pic');
+            const defaultIcon = document.getElementById('default-profile-icon');
+            
+            currentPic.src = result.url;
+            currentPic.style.display = 'block';
+            defaultIcon.style.display = 'none';
+            
+            // Update header profile pic
+            updateUIForAuthState();
+            
+            alert('Profile picture updated successfully!');
+        } else {
+            const error = await response.json();
+            alert('Failed to update profile picture: ' + error.message);
+        }
+    } catch (error) {
+        console.error('Error updating profile picture:', error);
+        alert('Error updating profile picture');
+    }
+}
+
+async function removeProfilePicture() {
+    if (!confirm('Are you sure you want to remove your profile picture?')) return;
+    
+    try {
+        const response = await fetch(`${baseUrl}/remove-profile-picture`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ uid: currentUser.uid })
+        });
+        
+        if (response.ok) {
+            // Update Firebase user profile
+            await currentUser.updateProfile({ photoURL: null });
+            
+            // Update UI
+            const currentPic = document.getElementById('current-profile-pic');
+            const defaultIcon = document.getElementById('default-profile-icon');
+            
+            currentPic.style.display = 'none';
+            defaultIcon.style.display = 'block';
+            
+            // Update header profile pic
+            updateUIForAuthState();
+            
+            alert('Profile picture removed successfully!');
+        } else {
+            const error = await response.json();
+            alert('Failed to remove profile picture: ' + error.message);
+        }
+    } catch (error) {
+        console.error('Error removing profile picture:', error);
+        alert('Error removing profile picture');
     }
 }
 
@@ -5125,36 +5447,66 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
   }
 
   // Update UI based on auth state
-  function updateUIForAuthState() {
-    console.log('Forum: Updating UI, currentUser:', currentUser ? currentUser.email : 'none');
+function updateUIForAuthState() {
+  console.log('Forum: Updating UI for auth state, currentUser:', currentUser ? currentUser.email : 'none');
+  
+  // Update main welcome text and profile
+  const welcomeText = document.getElementById('welcome-text');
+  const loginBtn = document.getElementById('login-button');
+  const profileContainer = document.getElementById('profile-container');
+  const usernameDisplay = document.getElementById('username-display');
+  
+  if (!currentUser) {
+    console.log('Forum: User not logged in, showing login prompt');
     
+    if (welcomeText) welcomeText.textContent = 'Welcome!';
+    if (loginBtn) loginBtn.style.display = 'block';
+    if (profileContainer) profileContainer.style.display = 'none';
+    
+    // Update ask button for forum
     const askBtn = document.querySelector('.ask-btn');
-    
-    if (!askBtn) {
-      console.log('Forum: Ask button not found - not on forum page or not ready yet');
-      return;
-    }
-    
-    if (!currentUser) {
-      console.log('Forum: Setting up login prompt');
+    if (askBtn) {
       askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
       askBtn.onclick = () => {
         if (typeof togglePopup === 'function') {
           togglePopup('login-popup');
         }
       };
+    }
+  } else {
+    console.log('Forum: User logged in, updating UI');
+    
+    // Get username from user profile or use email as fallback
+    const displayName = userDisplayName || currentUser.displayName || currentUser.email || 'User';
+    
+    if (welcomeText) welcomeText.textContent = `Welcome, ${displayName}!`;
+    if (loginBtn) loginBtn.style.display = 'none';
+    if (profileContainer) profileContainer.style.display = 'block';
+    if (usernameDisplay) usernameDisplay.textContent = displayName;
+    
+    // Handle profile picture
+    const profilePic = document.getElementById('profile-pic');
+    const profileIcon = document.getElementById('profile-icon');
+    
+    if (currentUser.photoURL) {
+      if (profileIcon) profileIcon.style.display = 'none';
+      if (profilePic) {
+        profilePic.src = currentUser.photoURL;
+        profilePic.style.display = 'block';
+      }
     } else {
-      console.log('Forum: Setting up ask question button');
-      askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
-      askBtn.onclick = () => {
-        openAskModal();
-      };
+      if (profileIcon) profileIcon.style.display = 'inline-block';
+      if (profilePic) profilePic.style.display = 'none';
     }
     
-    if (typeof forumElements !== 'undefined' && forumElements) {
-      forumElements.askBtn = askBtn;
+    // Update ask button for forum
+    const askBtn = document.querySelector('.ask-btn');
+    if (askBtn) {
+      askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
+      askBtn.onclick = () => openAskModal();
     }
   }
+}
 
   // CLEANED: Load posts (removed tag filtering)
   async function loadPosts() {
@@ -6001,87 +6353,40 @@ document.addEventListener("DOMContentLoaded", function () {
     
     // Initialize Firebase first
     initializeFirebase();
-
-    // NEW: Initialize compare page IMMEDIATELY after Firebase
-    initializeComparePage();
-
-    // NEW: Populate years dropdown for main filter page
-    populateYearsForFilter();
-
-    // Only load favorites if the favorites container exists
-    const favoritesContainer = document.getElementById("favorites-items");
-    if (favoritesContainer) {
-        console.log('Favorites page detected, will load favorites after auth');
-        // Don't load favorites immediately, wait for auth state
-        // The auth state change handler will trigger loadFavorites when user is confirmed
-        
-        // Set up a listener for when the user auth state is determined
-        const checkAuthAndLoadFavorites = () => {
-            if (auth && auth.currentUser) {
-                console.log('Auth confirmed, loading favorites');
-                loadFavorites();
-            } else if (auth) {
-                console.log('No current user, skipping favorites load');
-            } else {
-                // Auth not ready yet, check again in a bit
-                setTimeout(checkAuthAndLoadFavorites, 500);
-            }
-        };
-        
-        // Start checking after a small delay to let Firebase initialize
-        setTimeout(checkAuthAndLoadFavorites, 1000);
-    }
-
-    // Set up auth state listener to load favorites when user logs in
-    const setupFavoritesLoader = () => {
-        if (typeof auth !== 'undefined' && auth) {
-            auth.onAuthStateChanged((user) => {
-                if (user) {
-                    // User logged in - load their favorites for duplicate checking
-                    console.log('User logged in, loading favorites for duplicate checking');
-                    setTimeout(() => {
-                        loadUserFavoritesForDuplicateCheck();
-                    }, 1000); // Small delay to ensure everything is ready
-                } else {
-                    // User logged out - clear favorites
-                    console.log('User logged out, clearing favorites');
-                    userFavorites.clear();
-                }
-            });
-        } else {
-            // Auth not ready yet, try again
-            setTimeout(setupFavoritesLoader, 500);
-        }
-    };
     
-    setupFavoritesLoader();
-
-    // Initialize other components as before
-    const filterButton = document.getElementById("filter-btn"); 
-    const resultsFrame = document.querySelector(".results-frame");
-
-    // Only initialize sliders if they exist on this page
-    const priceSlider = document.getElementById("price");
-    const horsepowerSlider = document.getElementById("horsepower");
-    const seatingSlider = document.getElementById("seating");
-
-    // Check if all required slider elements exist before trying to use them
-    if (priceSlider && horsepowerSlider && seatingSlider) {
-        // Set sliders to their initial values
-        priceSlider.value = priceSlider.max; // This will be 25,000,000 now
-        horsepowerSlider.value = horsepowerSlider.min;
-        seatingSlider.value = "0";
-
-        // Update displayed values to match the values
-        updateSliderValue("price", "₱", true);
-        updateSliderValue("horsepower", "HP", false);
-        updateSliderValue("seating", "seats", false);
+    // NEW: Setup username validation for signup
+    setupUsernameValidation();
+    
+    // NEW: Setup profile picture change handler
+    const profilePictureInput = document.getElementById('new-profile-picture');
+    if (profilePictureInput) {
+        profilePictureInput.addEventListener('change', updateProfilePicture);
     }
-
-    // ENHANCED: Initialize calculator listeners if on calculator page
-    if (document.getElementById("monthly-income")) {
-        setupCalculatorListeners();
+    
+    // NEW: Load profile page if we're on it
+    if (window.location.pathname === '/profile') {
+        // Wait for auth to initialize
+        setTimeout(() => {
+            if (currentUser) {
+                loadProfilePage();
+            } else {
+                // Check again after a bit more time
+                setTimeout(() => {
+                    if (currentUser) {
+                        loadProfilePage();
+                    } else {
+                        window.location.href = '/';
+                    }
+                }, 2000);
+            }
+        }, 1000);
     }
-
-    console.log('✅ All page initialization completed successfully');
+    
+    // ... rest of your existing initialization code
 });
+
+// NEW: Make profile functions globally available
+window.enableUsernameEdit = enableUsernameEdit;
+window.cancelUsernameEdit = cancelUsernameEdit;
+window.saveUsername = saveUsername;
+window.removeProfilePicture = removeProfilePicture;

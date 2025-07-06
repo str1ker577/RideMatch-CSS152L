@@ -21,38 +21,65 @@
 </head>
 <body>
 
-    <!-- Popup Containers -->
-    <div id="login-popup" class="popup">
-      <div class="popup-content">
-          <span class="close-btn" onclick="togglePopup('login-popup')">&times;</span>
-          <h1>Login</h1>
-          <form action="/login" method="POST" onsubmit="return handleLogin(event);">
+<div id="signup-popup" class="popup">
+  <div class="popup-content">
+      <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+      <h1>Sign Up</h1>
+      <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+          <!-- NEW: Username field -->
+          <input type="text" name="username" id="username_signup" placeholder="Username" required minlength="3" maxlength="20">
+          <small class="username-hint">Username must be 3-20 characters, letters and numbers only</small>
+          
+          <input type="email" name="email_signup" placeholder="Email" required>
+          <input type="password" name="password_signup" placeholder="Password" required>
+          
+          <!-- NEW: Profile picture upload (optional) -->
+          <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="margin: 10px 0;">
+          <small class="file-hint">Profile picture (optional)</small>
+          
+          <button type="submit">Sign Up</button>
+      </form>
+      <p class="success-message"></p>
+      <p class="error-message12"></p>
+      <!-- NEW: Username availability message -->
+      <p class="username-status"></p>
 
-              <input type="email" name="email" placeholder="Email" required>
-              <input type="password" name="password" placeholder="Password" required>
-              <button type="submit">Login</button>
-          </form>
-          <p class="success-message"></p>
-          <p class="error-message"></p> <!-- Error message element -->
-          <p>Don't have an account? <a href="javascript:void(0)" onclick="togglePopup('signup-popup'); togglePopup('login-popup')">Sign Up</a></p>
-      </div>
-    </div>
+      <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+  </div>
+</div>
+
+<!-- UPDATED WELCOME SECTION - Add this to all your HTML files -->
+<div class="welcome-section">
+  <!-- UPDATED: Now shows username instead of email -->
+  <span class="welcome-text" id="welcome-text">Welcome!</span>
+  <button class="login-button" id="login-button" onclick="togglePopup('login-popup')" style="display: block;">Login</button>
   
-    <div id="signup-popup" class="popup">
-      <div class="popup-content">
-          <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
-          <h1>Sign Up</h1>
-          <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
-              <input type="email" name="email_signup" placeholder="Email" required>
-              <input type="password" name="password_signup" placeholder="Password" required>
-              <button type="submit">Sign Up</button>
-          </form>
-          <p class="success-message"></p>
-          <p class="error-message12"></p> <!-- Error message element -->
+  <!-- UPDATED: Profile container with username display -->
+  <div class="profile-container" id="profile-container" style="display: none;">
+    
+    <!-- UPDATED: Show username next to profile -->
+    <span class="username-display" id="username-display" style="margin-right: 10px; color: #b49b66; font-weight: bold;"></span>
+    
+    <!-- Default icon shown when no profile picture is available -->
+    <i class='bx bxs-user-circle bx-rotate-90 bx-flip-horizontal'
+       id="profile-icon"
+       style="font-size: 36px; color:#b49b66; cursor: pointer;"
+       onclick="toggleLogoutDropdown()"></i>
 
-          <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
-      </div>
+    <!-- Profile picture, hidden by default -->
+    <img src="" alt="Profile Picture"
+         id="profile-pic"
+         class="profile-pic"
+         style="display: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;"
+         onclick="toggleLogoutDropdown()">
+
+    <!-- UPDATED: Dropdown with profile link -->
+    <div class="logout-dropdown" id="logout-dropdown">
+      <a href="/profile">Edit Profile</a>
+      <a href="#" onclick="handleLogout()">Sign Out</a>
     </div>
+  </div>
+</div>
 
   <!-- Navbar -->
   <header>
@@ -120,6 +147,68 @@
 </div>
   </header>
   
+
+<div class="profile-page-container">
+  <div class="profile-header">
+    <h1>My Profile</h1>
+  </div>
+  
+  <div class="profile-content">
+    <!-- Profile Picture Section -->
+    <div class="profile-picture-section">
+      <div class="current-picture">
+        <img id="current-profile-pic" src="" alt="Profile Picture" style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover;">
+        <i id="default-profile-icon" class='bx bxs-user-circle' style="font-size: 120px; color: #b49b66; display: none;"></i>
+      </div>
+      
+      <div class="picture-controls">
+        <input type="file" id="new-profile-picture" accept="image/*" style="display: none;">
+        <button onclick="document.getElementById('new-profile-picture').click()" class="upload-btn">
+          <i class="fas fa-camera"></i> Change Picture
+        </button>
+        <button onclick="removeProfilePicture()" class="remove-btn">
+          <i class="fas fa-trash"></i> Remove
+        </button>
+      </div>
+    </div>
+    
+    <!-- Username Section -->
+    <div class="username-section">
+      <h3>Username</h3>
+      <div class="username-controls">
+        <input type="text" id="current-username" placeholder="Loading..." readonly>
+        <button onclick="enableUsernameEdit()" id="edit-username-btn" class="edit-btn">
+          <i class="fas fa-edit"></i> Edit
+        </button>
+      </div>
+      
+      <!-- Username editing form (hidden by default) -->
+      <div id="username-edit-form" style="display: none;">
+        <input type="text" id="new-username" placeholder="Enter new username" minlength="3" maxlength="20">
+        <div class="edit-buttons">
+          <button onclick="saveUsername()" class="save-btn">Save</button>
+          <button onclick="cancelUsernameEdit()" class="cancel-btn">Cancel</button>
+        </div>
+        <p class="username-validation" id="username-validation"></p>
+      </div>
+    </div>
+    
+    <!-- Email Section (Read-only) -->
+    <div class="email-section">
+      <h3>Email</h3>
+      <input type="email" id="current-email" placeholder="Loading..." readonly>
+      <small>Email cannot be changed</small>
+    </div>
+    
+    <!-- Account Info -->
+    <div class="account-info">
+      <h3>Account Information</h3>
+      <p><strong>Member since:</strong> <span id="member-since">Loading...</span></p>
+      <p><strong>Total favorites:</strong> <span id="total-favorites">Loading...</span></p>
+    </div>
+  </div>
+</div>
+
 
 
     <footer>
