@@ -398,7 +398,9 @@ def get_firebase_config():
     app.logger.info("Firebase config requested")
     return jsonify(client_config)
 
-    # FIXED: Changed 'db' to 'firestore_db' to match your variable names
+# UPDATED: Enhanced verify-token route to include username (replace existing)
+@app.route('/verify-token', methods=['POST'])
+def verify_token():
     if not firestore_db:
         app.logger.error("Database not available for token verification")
         return jsonify({"status": "error", "message": "Database not available"}), 500
@@ -420,13 +422,26 @@ def get_firebase_config():
         decoded_token = auth.verify_id_token(id_token)
         uid = decoded_token['uid']
         
-        # Set session
+        # Get user profile data including username
+        user_ref = realtime_db_ref.child('users').child(uid)
+        user_data = user_ref.get()
+        
+        username = None
+        if user_data:
+            username = user_data.get('username')
+        
+        # Set enhanced session
         session['user'] = uid
         session['email'] = email
+        session['username'] = username  # NEW: Store username in session
         session['idToken'] = id_token
         
-        app.logger.info(f"✅ User {email} logged in successfully.")
-        return jsonify({"status": "success", "message": "Authentication successful"}), 200
+        app.logger.info(f"✅ User {email} logged in successfully with username: {username}")
+        return jsonify({
+            "status": "success", 
+            "message": "Authentication successful",
+            "username": username
+        }), 200
         
     except firebase_admin.auth.InvalidIdTokenError as e:
         app.logger.error(f"Invalid token error: {e}")
@@ -954,58 +969,6 @@ def serve_profile_picture(filename):
         app.logger.error(f"Error serving profile picture {filename}: {e}")
         return "Error serving profile picture", 500
 
-# UPDATED: Enhanced verify-token route to include username (replace existing)
-@app.route('/verify-token', methods=['POST'])
-def verify_token():
-    if not firestore_db:
-        app.logger.error("Database not available for token verification")
-        return jsonify({"status": "error", "message": "Database not available"}), 500
-    
-    try:
-        data = request.get_json()
-        if not data:
-            app.logger.error("No JSON data received")
-            return jsonify({"status": "error", "message": "No data provided"}), 400
-            
-        id_token = data.get('idToken')
-        email = data.get('email')
-        
-        if not id_token:
-            app.logger.error("No token provided in request")
-            return jsonify({"status": "error", "message": "No token provided"}), 400
-        
-        # Verify token with Firebase Admin
-        decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
-        
-        # Get user profile data including username
-        user_ref = realtime_db_ref.child('users').child(uid)
-        user_data = user_ref.get()
-        
-        username = None
-        if user_data:
-            username = user_data.get('username')
-        
-        # Set enhanced session
-        session['user'] = uid
-        session['email'] = email
-        session['username'] = username  # NEW: Store username in session
-        session['idToken'] = id_token
-        
-        app.logger.info(f"✅ User {email} logged in successfully with username: {username}")
-        return jsonify({
-            "status": "success", 
-            "message": "Authentication successful",
-            "username": username
-        }), 200
-        
-    except firebase_admin.auth.InvalidIdTokenError as e:
-        app.logger.error(f"Invalid token error: {e}")
-        return jsonify({"status": "error", "message": "Invalid token"}), 401
-    except Exception as e:
-        app.logger.error(f"Token verification failed: {str(e)}")
-        return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
-
 @app.route('/debug/users')
 def debug_users():
     """Debug endpoint to check user data"""
@@ -1034,7 +997,7 @@ def debug_users():
     except Exception as e:
         app.logger.error(f"Error fetching users debug info: {e}")
         return jsonify({"error": str(e)}), 500
-
+    
 ###################
 # HTML Page Links #
 ###################
