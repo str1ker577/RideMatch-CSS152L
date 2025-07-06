@@ -469,12 +469,51 @@ function handleSignup(event) {
 
 function handleLogin(event) {
     event.preventDefault();
+    
+    console.log('🔄 Login attempt started');
+    console.log('🔍 Firebase available:', typeof firebase !== 'undefined');
+    console.log('🔍 Auth object available:', typeof auth !== 'undefined' && auth !== null);
+    
     const email = document.querySelector('input[name="email"]').value;
     const password = document.querySelector('input[name="password"]').value;
     
-    if (!auth) {
-        console.error('Firebase not initialized');
+    console.log('📧 Email:', email);
+    
+    // Enhanced Firebase check
+    if (typeof firebase === 'undefined') {
+        console.error('❌ Firebase library not loaded');
+        const errorElement = document.querySelector('.error-message');
+        if (errorElement) {
+            errorElement.textContent = 'Authentication system not ready. Please refresh the page and try again.';
+        }
         return;
+    }
+    
+    if (!auth) {
+        console.error('❌ Firebase auth not initialized, attempting to initialize...');
+        
+        // Try to reinitialize
+        try {
+            auth = firebase.auth();
+            console.log('✅ Auth reinitialized successfully');
+        } catch (initError) {
+            console.error('❌ Failed to reinitialize auth:', initError);
+            const errorElement = document.querySelector('.error-message');
+            if (errorElement) {
+                errorElement.textContent = 'Authentication system not ready. Please refresh the page and try again.';
+            }
+            return;
+        }
+    }
+    
+    console.log('✅ Firebase auth ready, proceeding with login');
+    
+    // Show loading state
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    const originalText = submitButton ? submitButton.textContent : '';
+    if (submitButton) {
+        submitButton.textContent = 'Logging in...';
+        submitButton.disabled = true;
     }
     
     // Use Firebase client-side authentication
@@ -482,11 +521,11 @@ function handleLogin(event) {
         .then((userCredential) => {
             // User logged in successfully
             const user = userCredential.user;
-            console.log('User logged in:', user.email);
+            console.log('✅ User logged in:', user.email);
             
             // Get the ID token and send to your backend for session creation
             user.getIdToken().then((idToken) => {
-                console.log('Sending token to backend for session creation...');
+                console.log('🔄 Sending token to backend for session creation...');
                 
                 return fetch('/verify-token', {
                     method: 'POST',
@@ -499,7 +538,7 @@ function handleLogin(event) {
                     })
                 });
             }).then(response => {
-                console.log('Backend response status:', response.status);
+                console.log('📥 Backend response status:', response.status);
                 
                 if (!response.ok) {
                     throw new Error(`Backend authentication failed: ${response.status}`);
@@ -508,17 +547,14 @@ function handleLogin(event) {
                 return response.json();
             })
             .then(data => {
-                console.log('Backend response data:', data);
+                console.log('📥 Backend response data:', data);
                 
                 if (data.status === 'success') {
                     console.log('✅ Backend session created successfully');
                     
-                    // Update UI (keep your existing UI logic)
+                    // Update global variables
                     userName = user.email;
-                    const welcomeMessageElement = document.querySelector('.welcome-title');
-                    if (welcomeMessageElement) {
-                        welcomeMessageElement.textContent = `Welcome, ${userName}!`;
-                    }
+                    currentUser = user;
                     
                     // Clear error messages
                     const errorMsg = document.querySelector('.error-message');
@@ -539,13 +575,21 @@ function handleLogin(event) {
                     if (typeof closeButton !== 'undefined' && closeButton) {
                         closeButton.style.display = 'none';
                     }
+                    
+                    // Force UI update after successful login
+                    setTimeout(() => {
+                        if (typeof updateUIForAuthState === 'function') {
+                            updateUIForAuthState(user, { username: data.username });
+                        }
+                    }, 100);
+                    
                 } else {
                     console.error('❌ Backend authentication failed:', data);
                     throw new Error(data.message || 'Backend authentication failed');
                 }
             })
             .catch(backendError => {
-                console.error('Backend session creation failed:', backendError);
+                console.error('❌ Backend session creation failed:', backendError);
                 
                 // Show error to user
                 const errorElement = document.querySelector('.error-message');
@@ -558,12 +602,19 @@ function handleLogin(event) {
             });
         })
         .catch((error) => {
-            console.error('Firebase login error:', error);
+            console.error('❌ Firebase login error:', error);
             const successElement = document.querySelector('.success-message');
             const errorElement = document.querySelector('.error-message');
             
             if (successElement) successElement.textContent = '';
             if (errorElement) errorElement.textContent = getFirebaseErrorMessage(error.code);
+        })
+        .finally(() => {
+            // Reset button state
+            if (submitButton) {
+                submitButton.textContent = originalText;
+                submitButton.disabled = false;
+            }
         });
 }
 
