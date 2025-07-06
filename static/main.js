@@ -5595,65 +5595,123 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
   }
 
   // Update UI based on auth state
-function updateUIForAuthState() {
-  console.log('Forum: Updating UI for auth state, currentUser:', currentUser ? currentUser.email : 'none');
-  
-  // Update main welcome text and profile
-  const welcomeText = document.getElementById('welcome-text');
-  const loginBtn = document.getElementById('login-button');
-  const profileContainer = document.getElementById('profile-container');
-  const usernameDisplay = document.getElementById('username-display');
-  
-  if (!currentUser) {
-    console.log('Forum: User not logged in, showing login prompt');
+function updateUIForAuthState(user = null, userData = null) {
+    console.log('🔄 Updating UI for auth state:', user ? 'logged in' : 'logged out');
     
-    if (welcomeText) welcomeText.textContent = 'Welcome!';
-    if (loginBtn) loginBtn.style.display = 'block';
-    if (profileContainer) profileContainer.style.display = 'none';
-    
-    // Update ask button for forum
-    const askBtn = document.querySelector('.ask-btn');
-    if (askBtn) {
-      askBtn.innerHTML = '<i class="bx bx-plus"></i>Login to Ask';
-      askBtn.onclick = () => {
-        if (typeof togglePopup === 'function') {
-          togglePopup('login-popup');
-        }
-      };
-    }
-  } else {
-    console.log('Forum: User logged in, updating UI');
-    
-    // Get username from user profile or use email as fallback
-    const displayName = userDisplayName || currentUser.displayName || currentUser.email || 'User';
-    
-    if (welcomeText) welcomeText.textContent = `Welcome, ${displayName}!`;
-    if (loginBtn) loginBtn.style.display = 'none';
-    if (profileContainer) profileContainer.style.display = 'block';
-    if (usernameDisplay) usernameDisplay.textContent = displayName;
-    
-    // Handle profile picture
-    const profilePic = document.getElementById('profile-pic');
+    const loginButton = document.getElementById('login-button');
+    const profileContainer = document.getElementById('profile-container');
+    const welcomeText = document.getElementById('welcome-text');
     const profileIcon = document.getElementById('profile-icon');
-    
-    if (currentUser.photoURL) {
-      if (profileIcon) profileIcon.style.display = 'none';
-      if (profilePic) {
-        profilePic.src = currentUser.photoURL;
-        profilePic.style.display = 'block';
-      }
+    const profilePic = document.getElementById('profile-pic');
+    // REMOVED: usernameDisplay - we don't want a separate username display
+
+    // DEBUG: Log which elements were found
+    console.log('🔍 DOM Elements found:', {
+        loginButton: !!loginButton,
+        profileContainer: !!profileContainer,
+        welcomeText: !!welcomeText,
+        profileIcon: !!profileIcon,
+        profilePic: !!profilePic
+        // REMOVED: usernameDisplay from debug
+    });
+
+    // Use current user if not provided
+    const currentUser = user || (auth && auth.currentUser);
+    const currentUserData = userData || { username: userDisplayName };
+
+    console.log('👤 User data:', {
+        hasCurrentUser: !!currentUser,
+        userDisplayName: userDisplayName,
+        userEmail: currentUser ? currentUser.email : 'none'
+    });
+
+    if (currentUser && (userDisplayName || currentUser.email)) {
+        console.log('✅ User is logged in - updating UI');
+        
+        // User is logged in
+        if (loginButton) {
+            console.log('🔄 Hiding login button');
+            loginButton.style.display = 'none';
+        } else {
+            console.log('❌ Login button not found!');
+        }
+        
+        if (profileContainer) {
+            console.log('🔄 Showing profile container');
+            profileContainer.style.display = 'flex';
+        } else {
+            console.log('❌ Profile container not found!');
+        }
+        
+        // Update welcome text with username (this is the only place we show the name)
+        const displayName = userDisplayName || currentUser.displayName || currentUser.email;
+        if (welcomeText) {
+            console.log('🔄 Updating welcome text to:', `Welcome, ${displayName}!`);
+            welcomeText.textContent = `Welcome, ${displayName}!`;
+        } else {
+            console.log('❌ Welcome text element not found!');
+        }
+        
+        // REMOVED: Username display update - we don't want separate username text
+        
+        // Handle profile picture
+        const profilePictureUrl = currentUser.photoURL || currentUserData.profilePictureUrl;
+        if (profilePictureUrl) {
+            if (profilePic) {
+                console.log('🔄 Setting profile picture:', profilePictureUrl);
+                profilePic.src = profilePictureUrl;
+                profilePic.style.display = 'block';
+            }
+            if (profileIcon) {
+                profileIcon.style.display = 'none';
+            }
+        } else {
+            console.log('📷 No profile picture URL found');
+            if (profilePic) {
+                profilePic.style.display = 'none';
+            }
+            if (profileIcon) {
+                profileIcon.style.display = 'block';
+            }
+        }
+        
+        // Load user favorites for duplicate checking
+        if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
+            loadUserFavoritesForDuplicateCheck();
+        }
+        
     } else {
-      if (profileIcon) profileIcon.style.display = 'inline-block';
-      if (profilePic) profilePic.style.display = 'none';
+        console.log('❌ User is logged out - updating UI');
+        
+        // User is logged out
+        if (loginButton) {
+            console.log('🔄 Showing login button');
+            loginButton.style.display = 'block';
+        }
+        if (profileContainer) {
+            console.log('🔄 Hiding profile container');
+            profileContainer.style.display = 'none';
+        }
+        if (welcomeText) {
+            console.log('🔄 Resetting welcome text');
+            welcomeText.textContent = 'Welcome!';
+        }
+        // REMOVED: Clear username display - we don't have it anymore
+        if (profilePic) {
+            profilePic.style.display = 'none';
+            profilePic.src = '';
+        }
+        if (profileIcon) {
+            profileIcon.style.display = 'block';
+        }
+        
+        // Clear favorites when logged out
+        if (typeof userFavorites !== 'undefined') {
+            userFavorites.clear();
+        }
     }
     
-    // Update ask button for forum
-    const askBtn = document.querySelector('.ask-btn');
-    if (askBtn) {
-      askBtn.innerHTML = '<i class="bx bx-plus"></i>Ask a Question';
-      askBtn.onclick = () => openAskModal();
-    }
-  }
+    console.log('🏁 UI update completed');
 }
 
   // CLEANED: Load posts (removed tag filtering)
