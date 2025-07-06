@@ -163,6 +163,75 @@ async function initializeFirebase() {
     }
 }
 
+function updateUIForAuthState(user = null, userData = null) {
+    console.log('Updating UI for auth state:', user ? 'logged in' : 'logged out');
+    
+    const loginButton = document.getElementById('login-button');
+    const profileContainer = document.getElementById('profile-container');
+    const welcomeText = document.getElementById('welcome-text');
+    const profileIcon = document.getElementById('profile-icon');
+    const profilePic = document.getElementById('profile-pic');
+    const usernameDisplay = document.getElementById('username-display');
+
+    // Use current user if not provided
+    const currentUser = user || (auth && auth.currentUser);
+    const currentUserData = userData || { username: userDisplayName };
+
+    if (currentUser && (userDisplayName || currentUser.email)) {
+        // User is logged in
+        if (loginButton) loginButton.style.display = 'none';
+        if (profileContainer) profileContainer.style.display = 'flex';
+        
+        // Update welcome text with username
+        const displayName = userDisplayName || currentUser.displayName || currentUser.email;
+        if (welcomeText) {
+            welcomeText.textContent = `Welcome, ${displayName}!`;
+        }
+        
+        // Update username display
+        if (usernameDisplay) {
+            usernameDisplay.textContent = displayName;
+        }
+        
+        // Handle profile picture
+        const profilePictureUrl = currentUser.photoURL || currentUserData.profilePictureUrl;
+        if (profilePictureUrl) {
+            if (profilePic) {
+                profilePic.src = profilePictureUrl;
+                profilePic.style.display = 'block';
+            }
+            if (profileIcon) {
+                profileIcon.style.display = 'none';
+            }
+        } else {
+            if (profilePic) {
+                profilePic.style.display = 'none';
+            }
+            if (profileIcon) {
+                profileIcon.style.display = 'block';
+            }
+        }
+        
+        // NEW: Load user favorites for duplicate checking
+        loadUserFavoritesForDuplicateCheck();
+        
+    } else {
+        // User is logged out
+        if (loginButton) loginButton.style.display = 'block';
+        if (profileContainer) profileContainer.style.display = 'none';
+        if (welcomeText) welcomeText.textContent = 'Welcome!';
+        if (usernameDisplay) usernameDisplay.textContent = '';
+        if (profilePic) {
+            profilePic.style.display = 'none';
+            profilePic.src = '';
+        }
+        if (profileIcon) profileIcon.style.display = 'block';
+        
+        // Clear favorites when logged out
+        userFavorites.clear();
+    }
+}
+
 /////////////////////////////////////////
 // Denies access to users to the User //
 // Profile Page, unless signed in    //
