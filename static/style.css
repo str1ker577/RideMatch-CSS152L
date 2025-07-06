@@ -1301,8 +1301,8 @@ footer {
 
 /* BAR CHARTS SECTION - CONSTRAINED WIDTH */
 .compare-charts-section {
-  width: 75%; /* EXACTLY what you requested - 70-80% */
-  max-width: 1000px; /* Reasonable max width */
+  width: 90%; /* FIXED: Wider from 75% */
+  max-width: 1200px; /* FIXED: Increased from 1000px */
   margin: 3rem auto;
   padding: 3rem;
   background: rgba(255, 255, 255, 0.95);
@@ -1408,9 +1408,9 @@ footer {
 }
 
 .radar-chart-container {
-  width: 70%; /* Optimal size for radar */
-  max-width: 700px;
-  height: 700px; /* Fixed height */
+  width: 80%; /* FIXED: Increased from 70% */
+  max-width: 800px; /* FIXED: Increased from 700px */
+  height: 800px; /* FIXED: Increased from 700px */
   background: white;
   border: 2px solid rgba(180, 155, 102, 0.3);
   border-radius: 15px;
@@ -1422,7 +1422,6 @@ footer {
   overflow: hidden;
   position: relative;
 }
-
 .radar-chart-container:hover {
   transform: translateY(-8px);
   box-shadow: 0 15px 35px rgba(0,0,0,0.15);
@@ -1434,8 +1433,8 @@ footer {
   width: 100% !important;
   height: 100% !important;
   max-width: 100% !important;
-  max-height: 600px !important;
-  min-height: 400px !important;
+  max-height: 700px !important; /* FIXED: Increased from 600px */
+  min-height: 500px !important; /* FIXED: Increased from 400px */
   object-fit: contain;
 }
 

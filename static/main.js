@@ -2091,36 +2091,49 @@ const brandLogoPlugin = {
             
             if (!bar) return;
             
-            // Calculate positions and sizes
-            const barWidth = bar.width;
-            const barHeight = Math.abs(bar.y - bar.base);
-            const centerX = bar.x;
-            const centerY = bar.y + (bar.base - bar.y) / 2;
+            // FIXED: Better position calculations
+            const barWidth = Math.abs(bar.width || 40);
+            const barHeight = Math.abs((bar.y || 0) - (bar.base || 0));
+            const centerX = bar.x || 0;
+            
+            // FIXED: Proper centerY calculation
+            let centerY;
+            if (bar.y < bar.base) {
+                // Positive values (bar goes up)
+                centerY = bar.y + (bar.base - bar.y) / 2;
+            } else {
+                // Negative values (bar goes down) 
+                centerY = bar.base + (bar.y - bar.base) / 2;
+            }
             
             // Smart logo sizing based on bar dimensions
-            let logoSize = Math.min(barWidth * 0.5, barHeight * 0.3);
-            logoSize = Math.max(20, Math.min(logoSize, 50)); // Constrain size
+            let logoSize = Math.min(barWidth * 0.6, 45); // INCREASED: sizing
+            logoSize = Math.max(25, Math.min(logoSize, 60)); // INCREASED: limits
             
             // Only draw if bar is tall enough
-            if (barHeight > logoSize + 15) {
+            if (barHeight > logoSize + 10) {
                 if (logo && logo.complete && logo.naturalHeight !== 0) {
                     try {
-                        // Draw white circular background
-                        const backgroundRadius = logoSize / 2 + 4;
+                        // FIXED: Draw white circular background with better sizing
+                        const backgroundRadius = logoSize / 2 + 5;
                         ctx.beginPath();
                         ctx.arc(centerX, centerY, backgroundRadius, 0, 2 * Math.PI);
                         ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
                         ctx.fill();
-                        ctx.strokeStyle = 'rgba(180, 155, 102, 0.6)';
+                        ctx.strokeStyle = 'rgba(180, 155, 102, 0.7)';
                         ctx.lineWidth = 2;
                         ctx.stroke();
                         
-                        // Draw the logo centered
+                        // FIXED: Draw the logo centered with proper positioning
                         const logoX = centerX - logoSize / 2;
                         const logoY = centerY - logoSize / 2;
-                        ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
                         
-                        console.log(`✅ Drew logo for ${brandName} at position (${logoX}, ${logoY}) with size ${logoSize}`);
+                        // Ensure logo stays within canvas bounds
+                        if (logoX >= 0 && logoY >= 0 && 
+                            logoX + logoSize <= chart.width && 
+                            logoY + logoSize <= chart.height) {
+                            ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+                        }
                         
                     } catch (error) {
                         console.warn(`❌ Error drawing logo for ${brandName}:`, error);
@@ -2132,7 +2145,7 @@ const brandLogoPlugin = {
                 }
             } else if (barHeight > 25) {
                 // For smaller bars, just show brand abbreviation
-                drawBrandTextFallback(ctx, centerX, centerY, brandName, Math.min(logoSize, 30));
+                drawBrandTextFallback(ctx, centerX, centerY, brandName, Math.min(logoSize, 35));
             }
         });
         
@@ -2251,6 +2264,7 @@ if (!CanvasRenderingContext2D.prototype.roundRect) {
 
 // ENHANCED: Updated chart functions with Brand + Model labels and new colors
 
+// FIXED: Horsepower Chart with Brand-First Labels
 function updateHorsepowerChart() {
     const canvas = document.getElementById('horsepowerChart');
     if (!canvas) return;
@@ -2261,6 +2275,7 @@ function updateHorsepowerChart() {
         chartInstances.horsepower.destroy();
     }
 
+    // FIXED: Brand-first labels
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2343,6 +2358,7 @@ function updateHorsepowerChart() {
     });
 }
 
+// FIXED: Price Chart with Brand-First Labels
 function updatePriceChart() {
     const canvas = document.getElementById('priceChart');
     if (!canvas) return;
@@ -2353,6 +2369,7 @@ function updatePriceChart() {
         chartInstances.price.destroy();
     }
 
+    // FIXED: Brand-first labels
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2441,6 +2458,7 @@ function updatePriceChart() {
     });
 }
 
+// FIXED: Ground Clearance Chart with Brand-First Labels
 function updateGroundClearanceChart() {
     const canvas = document.getElementById('groundClearanceChart');
     if (!canvas) return;
@@ -2451,6 +2469,7 @@ function updateGroundClearanceChart() {
         chartInstances.groundClearance.destroy();
     }
 
+    // FIXED: Brand-first labels
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2533,6 +2552,7 @@ function updateGroundClearanceChart() {
     });
 }
 
+// FIXED: Seating Capacity Chart with Brand-First Labels
 function updateSeatingCapacityChart() {
     const canvas = document.getElementById('seatingCapacityChart');
     if (!canvas) return;
@@ -2543,6 +2563,7 @@ function updateSeatingCapacityChart() {
         chartInstances.seatingCapacity.destroy();
     }
 
+    // FIXED: Brand-first labels
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2626,6 +2647,7 @@ function updateSeatingCapacityChart() {
     });
 }
 
+// FIXED: Cargo Space Chart with Brand-First Labels
 function updateCargoSpaceChart() {
     const canvas = document.getElementById('cargoSpaceChart');
     if (!canvas) return;
@@ -2636,6 +2658,7 @@ function updateCargoSpaceChart() {
         chartInstances.cargoSpace.destroy();
     }
 
+    // FIXED: Brand-first labels
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2948,7 +2971,7 @@ function toggleRadarCarVisibility(index) {
 }
 
 // Make toggle function globally available
-window.toggleRadarDataset = toggleRadarDataset;
+window.toggleRadarCarVisibility = toggleRadarCarVisibility;
 
 // Function to update all charts including radar
 function updateAllCharts() {
