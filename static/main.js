@@ -167,8 +167,9 @@ auth.onAuthStateChanged(async (user) => {
     }
 }
 function updateUIForAuthState(user = null, userData = null) {
-    console.log('Updating UI for auth state:', user ? 'logged in' : 'logged out');
+    console.log('🔄 Updating UI for auth state:', user ? 'logged in' : 'logged out');
     
+    // Find all the elements and log their status
     const loginButton = document.getElementById('login-button');
     const profileContainer = document.getElementById('profile-container');
     const welcomeText = document.getElementById('welcome-text');
@@ -176,30 +177,66 @@ function updateUIForAuthState(user = null, userData = null) {
     const profilePic = document.getElementById('profile-pic');
     const usernameDisplay = document.getElementById('username-display');
 
+    // DEBUG: Log which elements were found
+    console.log('🔍 DOM Elements found:', {
+        loginButton: !!loginButton,
+        profileContainer: !!profileContainer,
+        welcomeText: !!welcomeText,
+        profileIcon: !!profileIcon,
+        profilePic: !!profilePic,
+        usernameDisplay: !!usernameDisplay
+    });
+
     // Use current user if not provided
     const currentUser = user || (auth && auth.currentUser);
     const currentUserData = userData || { username: userDisplayName };
 
+    console.log('👤 User data:', {
+        hasCurrentUser: !!currentUser,
+        userDisplayName: userDisplayName,
+        userEmail: currentUser ? currentUser.email : 'none'
+    });
+
     if (currentUser && (userDisplayName || currentUser.email)) {
+        console.log('✅ User is logged in - updating UI');
+        
         // User is logged in
-        if (loginButton) loginButton.style.display = 'none';
-        if (profileContainer) profileContainer.style.display = 'flex';
+        if (loginButton) {
+            console.log('🔄 Hiding login button');
+            loginButton.style.display = 'none';
+        } else {
+            console.log('❌ Login button not found!');
+        }
+        
+        if (profileContainer) {
+            console.log('🔄 Showing profile container');
+            profileContainer.style.display = 'flex';
+        } else {
+            console.log('❌ Profile container not found!');
+        }
         
         // Update welcome text with username
         const displayName = userDisplayName || currentUser.displayName || currentUser.email;
         if (welcomeText) {
+            console.log('🔄 Updating welcome text to:', `Welcome, ${displayName}!`);
             welcomeText.textContent = `Welcome, ${displayName}!`;
+        } else {
+            console.log('❌ Welcome text element not found!');
         }
         
         // Update username display
         if (usernameDisplay) {
+            console.log('🔄 Updating username display to:', displayName);
             usernameDisplay.textContent = displayName;
+        } else {
+            console.log('❌ Username display element not found!');
         }
         
         // Handle profile picture
         const profilePictureUrl = currentUser.photoURL || currentUserData.profilePictureUrl;
         if (profilePictureUrl) {
             if (profilePic) {
+                console.log('🔄 Setting profile picture:', profilePictureUrl);
                 profilePic.src = profilePictureUrl;
                 profilePic.style.display = 'block';
             }
@@ -207,6 +244,7 @@ function updateUIForAuthState(user = null, userData = null) {
                 profileIcon.style.display = 'none';
             }
         } else {
+            console.log('📷 No profile picture URL found');
             if (profilePic) {
                 profilePic.style.display = 'none';
             }
@@ -216,23 +254,44 @@ function updateUIForAuthState(user = null, userData = null) {
         }
         
         // Load user favorites for duplicate checking
-        loadUserFavoritesForDuplicateCheck();
+        if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
+            loadUserFavoritesForDuplicateCheck();
+        }
         
     } else {
+        console.log('❌ User is logged out - updating UI');
+        
         // User is logged out
-        if (loginButton) loginButton.style.display = 'block';
-        if (profileContainer) profileContainer.style.display = 'none';
-        if (welcomeText) welcomeText.textContent = 'Welcome!';
-        if (usernameDisplay) usernameDisplay.textContent = '';
+        if (loginButton) {
+            console.log('🔄 Showing login button');
+            loginButton.style.display = 'block';
+        }
+        if (profileContainer) {
+            console.log('🔄 Hiding profile container');
+            profileContainer.style.display = 'none';
+        }
+        if (welcomeText) {
+            console.log('🔄 Resetting welcome text');
+            welcomeText.textContent = 'Welcome!';
+        }
+        if (usernameDisplay) {
+            usernameDisplay.textContent = '';
+        }
         if (profilePic) {
             profilePic.style.display = 'none';
             profilePic.src = '';
         }
-        if (profileIcon) profileIcon.style.display = 'block';
+        if (profileIcon) {
+            profileIcon.style.display = 'block';
+        }
         
         // Clear favorites when logged out
-        userFavorites.clear();
+        if (typeof userFavorites !== 'undefined') {
+            userFavorites.clear();
+        }
     }
+    
+    console.log('🏁 UI update completed');
 }
 
 /////////////////////////////////////////
