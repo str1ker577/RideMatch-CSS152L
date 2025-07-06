@@ -10,7 +10,6 @@ import os
 import logging
 import time
 from datetime import datetime
-
 import os
 from werkzeug.utils import secure_filename
 from PIL import Image
@@ -800,41 +799,74 @@ def get_user_profile():
 @app.route('/update-username', methods=['POST'])
 def update_username():
     """Update user's username"""
+    app.logger.info("🔄 Update username request received")
+    
     if not realtime_db_ref:
+        app.logger.error("❌ Database not available")
         return jsonify({"error": "Database not available"}), 500
     
     try:
+        app.logger.info("📥 Getting request data...")
         data = request.get_json()
+        app.logger.info(f"📦 Request data: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received")
+            return jsonify({"error": "No data provided"}), 400
+        
         uid = data.get('uid')
         new_username = data.get('newUsername', '').strip()
         
+        app.logger.info(f"🔍 UID: {uid}")
+        app.logger.info(f"🔍 New username: {new_username}")
+        
         if not uid or not new_username:
+            app.logger.error("❌ Missing required fields")
             return jsonify({"error": "Missing required fields"}), 400
         
         # Validate username
+        app.logger.info("🔄 Validating username...")
         is_valid, message = validate_username(new_username)
+        app.logger.info(f"✅ Username validation result: {is_valid}, {message}")
+        
         if not is_valid:
             return jsonify({"error": message}), 400
         
         # Check if username is already taken (excluding current user)
+        app.logger.info("🔄 Checking username availability...")
         users_ref = realtime_db_ref.child('users')
-        existing_users = users_ref.order_by_child('username').equal_to(new_username).get()
+        
+        try:
+            existing_users = users_ref.order_by_child('username').equal_to(new_username).get()
+            app.logger.info(f"🔍 Existing users check result: {existing_users}")
+        except Exception as db_error:
+            app.logger.error(f"❌ Database query error: {db_error}")
+            return jsonify({"error": "Database query failed"}), 500
         
         # Remove current user from results
         if existing_users:
             existing_users = {k: v for k, v in existing_users.items() if k != uid}
             if existing_users:
+                app.logger.warning(f"⚠️ Username already taken: {new_username}")
                 return jsonify({"error": "Username already taken"}), 400
         
         # Update username
-        user_ref = users_ref.child(uid)
-        user_ref.update({'username': new_username})
+        app.logger.info("🔄 Updating username in database...")
+        try:
+            user_ref = users_ref.child(uid)
+            user_ref.update({'username': new_username})
+            app.logger.info(f"✅ Username updated successfully for user {uid}: {new_username}")
+        except Exception as update_error:
+            app.logger.error(f"❌ Database update error: {update_error}")
+            return jsonify({"error": "Database update failed"}), 500
         
-        app.logger.info(f"Username updated for user {uid}: {new_username}")
         return jsonify({"message": "Username updated successfully"}), 200
         
     except Exception as e:
-        app.logger.error(f"Error updating username: {e}")
+        app.logger.error(f"❌ Unexpected error updating username: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
         return jsonify({"error": "Failed to update username"}), 500
 
 # NEW: Update profile picture endpoint
