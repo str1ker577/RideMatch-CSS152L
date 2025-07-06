@@ -1180,56 +1180,6 @@ async function populateBrandsForCompare() {
     }
 }
 
-// FIXED: Improved populateModels function with duplicate removal
-async function populateModels() {
-    const selectedBrand = document.getElementById('brand').value;
-    const modelSelect = document.getElementById('model');
-    const variantSelect = document.getElementById('variant');
-    const yearSelect = document.getElementById('year');
-
-    // Reset dependent dropdowns
-    modelSelect.innerHTML = '<option value="">Select Model</option>';
-    variantSelect.innerHTML = '<option value="">Select Variant</option>';
-    yearSelect.innerHTML = '<option value="">Select Year</option>';
-
-    if (!selectedBrand) {
-        return;
-    }
-
-    try {
-        console.log(`🔍 Fetching models for brand: ${selectedBrand}`);
-        modelSelect.innerHTML = '<option value="">Loading models...</option>';
-        
-        const response = await fetch(`${baseUrl}/get_models?brand=${encodeURIComponent(selectedBrand)}`);
-        
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        
-        const models = await response.json();
-        console.log(`📦 Received ${models.length} models for ${selectedBrand}:`, models);
-        
-        modelSelect.innerHTML = '<option value="">Select Model</option>';
-        
-        // FIXED: Remove duplicates and sort models
-        const uniqueModels = [...new Set(models.map(model => model.trim()))].sort();
-        
-        uniqueModels.forEach(model => {
-            const option = document.createElement('option');
-            option.value = model;
-            option.textContent = model;
-            modelSelect.appendChild(option);
-        });
-        
-        console.log(`✅ Successfully populated ${uniqueModels.length} unique models for ${selectedBrand}`);
-        
-    } catch (error) {
-        console.error('❌ Error fetching models:', error);
-        modelSelect.innerHTML = '<option value="">Error loading models</option>';
-        showCompareErrorMessage('Error fetching models. Please try again.');
-    }
-}
-
 // Function to populate variants based on selected model
 async function populateVariants() {
     const model = document.getElementById('model').value;
@@ -3081,8 +3031,11 @@ function showCompareErrorMessage(message) {
     }, 5000);
 }
 
-// Make functions globally available
+// Main filter page functions
 window.populateModels = populateModels;
+
+// Make functions globally available
+window.populateModelsForCompare = populateModelsForCompare;
 window.populateVariants = populateVariants;
 window.populateYears = populateYears;
 window.compareCars = compareCars;
@@ -3096,10 +3049,97 @@ window.initializeComparePage = initializeComparePage;
 //////////////////////////////
 
 async function populateModels() {
+    console.log('populateModels called');
+    
+    const brandSelect = document.getElementById('brand');
+    const modelSelect = document.getElementById('model');
+    
+    if (!brandSelect || !modelSelect) {
+        console.error('Required elements not found for populateModels');
+        return;
+    }
+    
+    const selectedBrand = brandSelect.value;
+    
+    // Safely get optional elements (they may not exist on all pages)
+    const variantSelect = document.getElementById('variant');
+    const yearSelect = document.getElementById('year');
+
+    // Reset model dropdown
+    modelSelect.innerHTML = '<option value="">Select Model</option>';
+    
+    // Reset variant dropdown only if it exists (compare page)
+    if (variantSelect) {
+        console.log('Resetting variant dropdown');
+        variantSelect.innerHTML = '<option value="">Select Variant</option>';
+    }
+    
+    // Reset year dropdown only if it exists
+    if (yearSelect) {
+        console.log('Resetting year dropdown');
+        yearSelect.innerHTML = '<option value="">Select Year</option>';
+    }
+
+    if (!selectedBrand || selectedBrand === '') {
+        console.log('No brand selected, skipping model population');
+        return;
+    }
+
+    try {
+        console.log(`🔍 Fetching models for brand: ${selectedBrand}`);
+        
+        modelSelect.innerHTML = '<option value="">Loading models...</option>';
+        
+        const response = await fetch(`${baseUrl}/get_models?brand=${encodeURIComponent(selectedBrand)}`);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        
+        const models = await response.json();
+        console.log(`📦 Received ${models.length} models for ${selectedBrand}:`, models);
+        
+        modelSelect.innerHTML = '<option value="">Select Model</option>';
+        
+        // Remove duplicates and sort models
+        const uniqueModels = [...new Set(models.map(model => String(model).trim()))].sort();
+        
+        uniqueModels.forEach(model => {
+            const option = document.createElement('option');
+            option.value = model;
+            option.textContent = model;
+            modelSelect.appendChild(option);
+        });
+        
+        console.log(`✅ Successfully populated ${uniqueModels.length} unique models for ${selectedBrand}`);
+        
+    } catch (error) {
+        console.error('❌ Error fetching models:', error);
+        modelSelect.innerHTML = '<option value="">Error loading models</option>';
+        
+        // Show user-friendly error message
+        if (typeof showCompareErrorMessage === 'function') {
+            showCompareErrorMessage('Error fetching models. Please try again.');
+        } else {
+            console.warn('Error message function not available');
+        }
+    }
+}
+
+// Keep this function separate for compare page
+async function populateModelsForCompare() {
+    console.log('populateModelsForCompare called');
+    
     const selectedBrand = document.getElementById('brand').value;
     const modelSelect = document.getElementById('model');
     const variantSelect = document.getElementById('variant');
     const yearSelect = document.getElementById('year');
+
+    // Verify all required elements exist for compare page
+    if (!modelSelect || !variantSelect || !yearSelect) {
+        console.error('Required compare page elements not found');
+        return;
+    }
 
     // Reset dependent dropdowns
     modelSelect.innerHTML = '<option value="">Select Model</option>';
@@ -3114,7 +3154,7 @@ async function populateModels() {
         console.log(`🔍 Fetching models for brand: ${selectedBrand}`);
         modelSelect.innerHTML = '<option value="">Loading models...</option>';
         
-        const response = await fetch(`${baseUrl}/get_models?brand=${selectedBrand}`);
+        const response = await fetch(`${baseUrl}/get_models?brand=${encodeURIComponent(selectedBrand)}`);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
@@ -3125,22 +3165,24 @@ async function populateModels() {
         
         modelSelect.innerHTML = '<option value="">Select Model</option>';
         
-        models.forEach(model => {
+        // Remove duplicates and sort models
+        const uniqueModels = [...new Set(models.map(model => model.trim()))].sort();
+        
+        uniqueModels.forEach(model => {
             const option = document.createElement('option');
             option.value = model;
             option.textContent = model;
             modelSelect.appendChild(option);
         });
         
-        console.log(`✅ Successfully populated ${models.length} models for ${selectedBrand}`);
+        console.log(`✅ Successfully populated ${uniqueModels.length} unique models for ${selectedBrand}`);
         
     } catch (error) {
         console.error('❌ Error fetching models:', error);
         modelSelect.innerHTML = '<option value="">Error loading models</option>';
-        alert('Error fetching models. Please try again.');
+        showCompareErrorMessage('Error fetching models. Please try again.');
     }
 }
-
 ///////////////////////////////////////////
 // Shows the corresponding variants     //
 // when a specific model is selected   //
