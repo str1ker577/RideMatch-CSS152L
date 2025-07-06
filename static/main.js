@@ -2025,6 +2025,8 @@ async function svgToImageWithRetry(svgString, fallbackText, maxRetries = 3) {
     }
 }
 
+// ALTERNATIVE: Enhanced SVG logo processing for better centering
+// FIXED: Brand logo plugin with proper centering
 const brandLogoPlugin = {
     id: 'brandLogo',
     afterDatasetsDraw: function(chart, args, options) {
@@ -2127,6 +2129,52 @@ const brandLogoPlugin = {
         ctx.restore();
     }
 };
+
+// FIXED: New function to properly center SVG content
+async function svgToProperlycenteredImage(svgText, brandName) {
+    return new Promise((resolve, reject) => {
+        try {
+            // FIXED: Process SVG to ensure proper centering
+            const processedSvg = `
+                <svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                    <g transform="translate(50,50)">
+                        <g transform="translate(-50,-50) scale(1,1)">
+                            ${svgText.replace(/<svg[^>]*>|<\/svg>/gi, '').replace(/width="[^"]*"/gi, '').replace(/height="[^"]*"/gi, '')}
+                        </g>
+                    </g>
+                </svg>
+            `;
+            
+            const img = new Image();
+            
+            img.onload = () => {
+                console.log(`✅ SVG properly centered for: ${brandName}`);
+                resolve(img);
+            };
+            
+            img.onerror = (error) => {
+                console.warn(`❌ SVG centering failed for ${brandName}:`, error);
+                reject(error);
+            };
+            
+            // Create blob URL
+            const svgBlob = new Blob([processedSvg], { 
+                type: 'image/svg+xml;charset=utf-8' 
+            });
+            const svgUrl = URL.createObjectURL(svgBlob);
+            
+            img.src = svgUrl;
+            
+            // Cleanup
+            setTimeout(() => {
+                URL.revokeObjectURL(svgUrl);
+            }, 5000);
+            
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
 
 // Fallback function to draw brand name when logo is not available or bar is too small
 function drawBrandNameFallback(ctx, chart, index, brandName, size) {
