@@ -1035,7 +1035,6 @@ def calculator():
 @app.route('/forum')
 def forum():
     return render_template('forum.html')
-
 #################################
 # Toggle Favorite/Like Function #
 #################################
@@ -2308,3 +2307,27 @@ def debug_session():
         'email': session.get('email'),
         'session_keys': list(session.keys())
     })
+    
+@app.route('/test-db-connection')
+def test_db_connection():
+    """Test database connection"""
+    try:
+        if not realtime_db_ref:
+            return jsonify({"error": "realtime_db_ref is None"}), 500
+        
+        # Try a simple read operation
+        test_ref = realtime_db_ref.child('test')
+        test_data = test_ref.get()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Database connection working",
+            "realtime_db_ref_exists": realtime_db_ref is not None,
+            "test_data": test_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "realtime_db_ref_exists": realtime_db_ref is not None
+        }), 500
