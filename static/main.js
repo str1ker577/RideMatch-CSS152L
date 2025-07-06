@@ -1816,6 +1816,7 @@ async function loadBrandLogo(brandName) {
 }
 
 // Enhanced SVG processing function
+// FIXED: Better SVG processing for problematic brands
 function enhancedProcessSvgForChart(svgText, brandName, config) {
     try {
         console.log(`🔧 Enhanced processing for ${brandName}...`);
@@ -1831,70 +1832,34 @@ function enhancedProcessSvgForChart(svgText, brandName, config) {
             throw new Error('No SVG element found');
         }
         
-        // Set consistent dimensions
+        // FIXED: Set consistent dimensions and viewBox
         svgElement.setAttribute('width', '100');
         svgElement.setAttribute('height', '100');
         svgElement.setAttribute('viewBox', '0 0 100 100');
+        svgElement.setAttribute('preserveAspectRatio', 'xMidYMid meet'); // FIXED: Center the content
         
-        // STEP 1: Aggressive cleanup for complex logos
-        console.log(`🧹 Aggressive cleanup for ${brandName}...`);
-        
-        // Remove all problematic elements
+        // Remove problematic elements
         const problematicElements = svgElement.querySelectorAll(
             'defs, style, script, metadata, title, desc, linearGradient, radialGradient, pattern, filter, mask, clipPath'
         );
         problematicElements.forEach(el => el.remove());
         
-        // STEP 2: Apply brand-specific processing
-        if (config.specialProcessing) {
-            console.log(`🎨 Applying special processing: ${config.specialProcessing}`);
-            applyEnhancedSpecialProcessing(svgElement, config.specialProcessing, themeColor, config);
-        }
-        
-        // STEP 3: Force complete monochrome conversion
-        console.log(`🎨 Forcing monochrome for ${brandName}...`);
-        forceCompleteMonochrome(svgElement, themeColor, config);
-        
-        // STEP 4: Add aggressive override styles
-        const styleElement = doc.createElementNS('http://www.w3.org/2000/svg', 'style');
-        styleElement.textContent = `
-            * {
-                fill: ${themeColor} !important;
-                stroke: ${themeColor} !important;
-                stroke-width: 1 !important;
-                color: ${themeColor} !important;
-                opacity: 1 !important;
-            }
-            text, tspan {
-                fill: ${themeColor} !important;
-                stroke: none !important;
-                font-family: Arial, sans-serif !important;
-                font-weight: bold !important;
-            }
-            path, circle, rect, polygon, ellipse, line, polyline {
-                fill: ${themeColor} !important;
-                stroke: ${themeColor} !important;
-                stroke-width: 1 !important;
-            }
-            g {
-                fill: ${themeColor} !important;
-                stroke: none !important;
-            }
-        `;
-        
-        // Insert style at the beginning
-        if (svgElement.firstChild) {
-            svgElement.insertBefore(styleElement, svgElement.firstChild);
-        } else {
-            svgElement.appendChild(styleElement);
-        }
+        // FIXED: Apply consistent coloring
+        const allElements = svgElement.querySelectorAll('*');
+        allElements.forEach(element => {
+            element.setAttribute('fill', themeColor);
+            element.setAttribute('stroke', 'none');
+            element.style.fill = themeColor;
+            element.style.stroke = 'none';
+        });
         
         console.log(`✅ Enhanced processing completed for ${brandName}`);
         return svgElement.outerHTML;
         
     } catch (error) {
         console.warn(`❌ Enhanced processing failed for ${brandName}:`, error);
-        return createFallbackSvg(config.fallbackText || brandName);
+        // FIXED: Return null instead of fallback to prevent inconsistent display
+        return null;
     }
 }
 
@@ -2061,6 +2026,7 @@ async function svgToImageWithRetry(svgString, fallbackText, maxRetries = 3) {
 }
 
 // ENHANCED: Improved brand logo plugin with proper brand identification
+// FIXED: Brand logo plugin with proper SVG positioning
 const brandLogoPlugin = {
     id: 'brandLogo',
     afterDatasetsDraw: function(chart, args, options) {
@@ -2099,22 +2065,23 @@ const brandLogoPlugin = {
             // FIXED: Proper centerY calculation
             let centerY;
             if (bar.y < bar.base) {
-                // Positive values (bar goes up)
                 centerY = bar.y + (bar.base - bar.y) / 2;
             } else {
-                // Negative values (bar goes down) 
                 centerY = bar.base + (bar.y - bar.base) / 2;
             }
             
-            // Smart logo sizing based on bar dimensions
-            let logoSize = Math.min(barWidth * 0.6, 45); // INCREASED: sizing
-            logoSize = Math.max(25, Math.min(logoSize, 60)); // INCREASED: limits
+            // FIXED: Smart logo sizing - only show if bar is big enough
+            let logoSize = Math.min(barWidth * 0.6, 45);
+            logoSize = Math.max(25, Math.min(logoSize, 60));
             
-            // Only draw if bar is tall enough
-            if (barHeight > logoSize + 10) {
+            // FIXED: Only show logo if bar is tall enough AND wide enough
+            const minBarHeight = logoSize + 20;
+            const minBarWidth = logoSize + 10;
+            
+            if (barHeight > minBarHeight && barWidth > minBarWidth) {
                 if (logo && logo.complete && logo.naturalHeight !== 0) {
                     try {
-                        // FIXED: Draw white circular background with better sizing
+                        // Draw white circular background
                         const backgroundRadius = logoSize / 2 + 5;
                         ctx.beginPath();
                         ctx.arc(centerX, centerY, backgroundRadius, 0, 2 * Math.PI);
@@ -2124,61 +2091,42 @@ const brandLogoPlugin = {
                         ctx.lineWidth = 2;
                         ctx.stroke();
                         
-                        // FIXED: Draw the logo centered with proper positioning
+                        // FIXED: Draw the logo with proper centering
                         const logoX = centerX - logoSize / 2;
                         const logoY = centerY - logoSize / 2;
                         
-                        // Ensure logo stays within canvas bounds
+                        // Ensure we're within canvas bounds
                         if (logoX >= 0 && logoY >= 0 && 
                             logoX + logoSize <= chart.width && 
                             logoY + logoSize <= chart.height) {
+                            
+                            // FIXED: Set proper rendering context for SVGs
+                            ctx.globalCompositeOperation = 'source-over';
+                            ctx.imageSmoothingEnabled = true;
+                            ctx.imageSmoothingQuality = 'high';
+                            
                             ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+                            
+                            console.log(`✅ Drew ${brandName} logo at (${logoX}, ${logoY}) size ${logoSize}`);
                         }
                         
                     } catch (error) {
                         console.warn(`❌ Error drawing logo for ${brandName}:`, error);
-                        drawBrandTextFallback(ctx, centerX, centerY, brandName, logoSize);
+                        // FIXED: Don't show fallback text if logo fails - just skip
                     }
-                } else {
-                    // Draw text fallback if logo not available
-                    drawBrandTextFallback(ctx, centerX, centerY, brandName, logoSize);
                 }
-            } else if (barHeight > 25) {
-                // For smaller bars, just show brand abbreviation
-                drawBrandTextFallback(ctx, centerX, centerY, brandName, Math.min(logoSize, 35));
+                // FIXED: Don't show any fallback text - only show logos that work
             }
+            // FIXED: Don't show anything if bar is too small
         });
         
         ctx.restore();
     }
 };
 function drawBrandTextFallback(ctx, centerX, centerY, brandName, size) {
-    try {
-        const radius = size / 2 + 3;
-        
-        // Background circle
-        ctx.beginPath();
-        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(180, 155, 102, 0.5)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        
-        // Text
-        const fontSize = Math.max(10, size * 0.4);
-        ctx.font = `bold ${fontSize}px Arial`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = '#b49b66';
-        
-        // Get brand abbreviation
-        const text = brandName.length > 6 ? brandName.substring(0, 3).toUpperCase() : brandName.toUpperCase();
-        ctx.fillText(text, centerX, centerY);
-        
-    } catch (error) {
-        console.warn('Error drawing text fallback:', error);
-    }
+    // FIXED: Don't draw any fallback text
+    // This function is now empty to prevent inconsistent text display
+    return;
 }
 
 // Fallback function to draw brand name when logo is not available or bar is too small
@@ -2344,14 +2292,23 @@ function updateHorsepowerChart() {
                     }
                 },
                 x: {
-                    grid: { display: false },
-                    ticks: { 
-                        maxRotation: 45, 
-                        minRotation: 0,
-                        color: '#666',
-                        font: { size: 10 }
-                    }
-                }
+                grid: { display: false },
+                ticks: { 
+                    maxRotation: 0, // FIXED: No rotation, keep horizontal
+                    minRotation: 0, // FIXED: Force horizontal
+                    color: '#666',
+                    font: { size: 10 },
+                    callback: function(value, index) {
+                        // FIXED: Truncate long labels to fit
+                        const label = this.getLabelForValue(value);
+                        const maxLength = 15; // Adjust based on your needs
+                        if (label && label.length > maxLength) {
+                            return label.substring(0, maxLength) + '...';
+                        }
+                        return label;
+        }
+    }
+}
             }
         },
         plugins: [brandLogoPlugin]
@@ -2446,10 +2403,19 @@ function updatePriceChart() {
                 x: {
                     grid: { display: false },
                     ticks: { 
-                        maxRotation: 45, 
-                        minRotation: 0,
+                        maxRotation: 0, // FIXED: No rotation, keep horizontal
+                        minRotation: 0, // FIXED: Force horizontal
                         color: '#666',
-                        font: { size: 10 }
+                        font: { size: 10 },
+                        callback: function(value, index) {
+                            // FIXED: Truncate long labels to fit
+                            const label = this.getLabelForValue(value);
+                            const maxLength = 15; // Adjust based on your needs
+                            if (label && label.length > maxLength) {
+                                return label.substring(0, maxLength) + '...';
+                            }
+                            return label;
+                        }
                     }
                 }
             }
@@ -2540,10 +2506,19 @@ function updateGroundClearanceChart() {
                 x: {
                     grid: { display: false },
                     ticks: { 
-                        maxRotation: 45, 
-                        minRotation: 0,
+                        maxRotation: 0, // FIXED: No rotation, keep horizontal
+                        minRotation: 0, // FIXED: Force horizontal
                         color: '#666',
-                        font: { size: 10 }
+                        font: { size: 10 },
+                        callback: function(value, index) {
+                            // FIXED: Truncate long labels to fit
+                            const label = this.getLabelForValue(value);
+                            const maxLength = 15; // Adjust based on your needs
+                            if (label && label.length > maxLength) {
+                                return label.substring(0, maxLength) + '...';
+                            }
+                            return label;
+                        }
                     }
                 }
             }
@@ -2635,10 +2610,19 @@ function updateSeatingCapacityChart() {
                 x: {
                     grid: { display: false },
                     ticks: { 
-                        maxRotation: 45, 
-                        minRotation: 0,
+                        maxRotation: 0, // FIXED: No rotation, keep horizontal
+                        minRotation: 0, // FIXED: Force horizontal
                         color: '#666',
-                        font: { size: 10 }
+                        font: { size: 10 },
+                        callback: function(value, index) {
+                            // FIXED: Truncate long labels to fit
+                            const label = this.getLabelForValue(value);
+                            const maxLength = 15; // Adjust based on your needs
+                            if (label && label.length > maxLength) {
+                                return label.substring(0, maxLength) + '...';
+                            }
+                            return label;
+                        }
                     }
                 }
             }
@@ -2729,10 +2713,19 @@ function updateCargoSpaceChart() {
                 x: {
                     grid: { display: false },
                     ticks: { 
-                        maxRotation: 45, 
-                        minRotation: 0,
+                        maxRotation: 0, // FIXED: No rotation, keep horizontal
+                        minRotation: 0, // FIXED: Force horizontal
                         color: '#666',
-                        font: { size: 10 }
+                        font: { size: 10 },
+                        callback: function(value, index) {
+                            // FIXED: Truncate long labels to fit
+                            const label = this.getLabelForValue(value);
+                            const maxLength = 15; // Adjust based on your needs
+                            if (label && label.length > maxLength) {
+                                return label.substring(0, maxLength) + '...';
+                            }
+                            return label;
+                        }
                     }
                 }
             }
@@ -2918,7 +2911,7 @@ function addRadarToggleControls() {
         existingToggles.remove();
     }
 
-    // Create new toggle container
+    // Create new toggle container with checkboxes
     const toggleContainer = document.createElement('div');
     toggleContainer.className = 'car-visibility-controls';
     toggleContainer.innerHTML = `
@@ -2934,7 +2927,7 @@ function addRadarToggleControls() {
                                id="visibility-toggle-${index}" 
                                checked 
                                onchange="toggleRadarCarVisibility(${index})"
-                               style="transform: scale(1.2); accent-color: ${chartColors[index % chartColors.length]};">
+                               style="transform: scale(1.3); accent-color: ${chartColors[index % chartColors.length]}; cursor: pointer;">
                         <div style="width: 12px; height: 12px; background: ${chartColors[index % chartColors.length]}; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 3px rgba(0,0,0,0.2);"></div>
                         <label for="visibility-toggle-${index}" 
                                style="color: ${chartColors[index % chartColors.length]}; 

@@ -1301,8 +1301,8 @@ footer {
 
 /* BAR CHARTS SECTION - CONSTRAINED WIDTH */
 .compare-charts-section {
-  width: 90%; /* FIXED: Wider from 75% */
-  max-width: 1200px; /* FIXED: Increased from 1000px */
+  width: 85%; /* FIXED: Exact width from your image */
+  max-width: 1100px; /* FIXED: Slightly smaller max width */
   margin: 3rem auto;
   padding: 3rem;
   background: rgba(255, 255, 255, 0.95);
@@ -1312,7 +1312,6 @@ footer {
   backdrop-filter: blur(10px);
   animation: fadeInUp 0.6s ease-out;
 }
-
 .compare-charts-title {
   text-align: center;
   color: var(--second-color);
