@@ -1290,17 +1290,21 @@ footer {
   }
 }
 
-/* Bar Charts Section - RESTORED ORIGINAL GOOD SPACING */
+/* FIXED: SEPARATE BAR CHARTS WRAPPER - 70-80% WIDTH */
 .compare-wrapper {
-  padding: 0 1rem; /* Reduced padding for wider charts */
-  max-width: 1400px; /* Increased max-width */
+  padding: 0 2rem;
+  width: 100%;
   margin: 0 auto;
+  display: flex;
+  justify-content: center;
 }
 
+/* BAR CHARTS SECTION - CONSTRAINED WIDTH */
 .compare-charts-section {
-  width: 100%;
+  width: 75%; /* EXACTLY what you requested - 70-80% */
+  max-width: 1000px; /* Reasonable max width */
   margin: 3rem auto;
-  padding: 2rem; /* Reduced padding for more space */
+  padding: 3rem;
   background: rgba(255, 255, 255, 0.95);
   border: 2px solid var(--second-color);
   border-radius: 20px;
@@ -1313,7 +1317,7 @@ footer {
   text-align: center;
   color: var(--second-color);
   font-size: 2.5rem;
-  margin-bottom: 3rem; /* RESTORED: Original margin for good spacing */
+  margin-bottom: 3rem;
   text-shadow: 1px 1px 3px rgba(0, 0, 0, 0.1);
   font-weight: bold;
 }
@@ -1321,32 +1325,33 @@ footer {
 .compare-charts-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  grid-template-rows: 500px 500px 500px; /* Increased height for better logos */
-  gap: 2rem; /* Optimal gap */
+  grid-template-rows: 450px 450px 450px;
+  gap: 2.5rem;
   height: auto;
   justify-content: center;
 }
 
 .compare-charts-grid .compare-chart-container:nth-child(5) {
   grid-column: 1 / -1;
-  max-width: 900px; /* Increased width for seating chart */
+  max-width: 800px;
   margin: 0 auto;
   width: 100%;
-  height: 500px;
+  height: 450px;
 }
 
 .compare-chart-container {
   background: white;
   border: 2px solid rgba(180, 155, 102, 0.3);
   border-radius: 15px;
-  padding: 1.5rem; /* Optimal padding */
+  padding: 2rem;
   box-shadow: 0 10px 25px rgba(0,0,0,0.1);
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
-  height: 500px; /* Increased for better logos */
+  height: 450px;
   overflow: hidden;
 }
+
 .compare-chart-container:hover {
   transform: translateY(-8px);
   box-shadow: 0 15px 35px rgba(0,0,0,0.15);
@@ -1357,7 +1362,7 @@ footer {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-bottom: 2rem; /* RESTORED: Original margin */
+  margin-bottom: 2rem;
   gap: 0.5rem;
   flex-shrink: 0;
 }
@@ -1375,26 +1380,23 @@ footer {
 
 .compare-chart-container canvas {
   flex: 1;
-  height: 400px !important; /* Increased for better logo visibility */
-  max-height: 400px !important;
+  height: 350px !important;
+  max-height: 350px !important;
   width: 100% !important;
 }
 
-/* FIXED: Radar Chart Section - Proper Scaling and Proportions */
-.radar-chart-container {
-  width: 80%; /* Increased from 70% */
-  max-width: 800px; /* Increased from 700px */
-  height: 800px; /* Increased from 700px */
-  background: white;
-  border: 2px solid rgba(180, 155, 102, 0.3);
-  border-radius: 15px;
-  padding: 2rem;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-  transition: all 0.3s ease;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  position: relative;
+/* RADAR CHART SECTION - SEPARATE AND LARGER */
+.radar-chart-section {
+  width: 90%; /* SEPARATE from bar charts */
+  max-width: 1200px; /* Larger max width for radar */
+  margin: 3rem auto;
+  padding: 3rem;
+  background: rgba(255, 255, 255, 0.95);
+  border: 2px solid var(--second-color);
+  border-radius: 20px;
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+  backdrop-filter: blur(10px);
+  animation: fadeInUp 0.6s ease-out;
 }
 
 .radar-chart-wrapper {
@@ -1405,11 +1407,10 @@ footer {
   width: 100%;
 }
 
-/* FIXED: Proper radar chart container sizing to prevent stretching */
 .radar-chart-container {
-  width: 70%; /* Reduced from 80% for better proportions */
-  max-width: 700px; /* Reduced from 800px */
-  height: 700px; /* Fixed height instead of aspect-ratio */
+  width: 70%; /* Optimal size for radar */
+  max-width: 700px;
+  height: 700px; /* Fixed height */
   background: white;
   border: 2px solid rgba(180, 155, 102, 0.3);
   border-radius: 15px;
@@ -1428,25 +1429,36 @@ footer {
   border-color: var(--second-color);
 }
 
-/* FIXED: Canvas sizing to maintain proper proportions */
 .radar-chart-container canvas {
   flex: 1;
   width: 100% !important;
   height: 100% !important;
   max-width: 100% !important;
-  max-height: 650px !important; /* Increased for larger chart */
-  min-height: 500px !important; /* Increased minimum */
+  max-height: 600px !important;
+  min-height: 400px !important;
   object-fit: contain;
 }
 
 /* Individual Toggle Controls Styling */
 .individual-toggles {
-  animation: fadeIn 0.5s ease-out;
-  margin-bottom: 2rem; /* Space above radar chart */
+  margin-bottom: 2rem;
   padding: 1.5rem;
   background: rgba(180, 155, 102, 0.1);
   border-radius: 12px;
   border: 1px solid rgba(180, 155, 102, 0.3);
+  animation: fadeIn 0.5s ease-out;
+}
+
+.individual-toggles h4 {
+  text-align: center;
+  color: var(--second-color);
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+}
+
+.individual-toggles input[type="checkbox"] {
+  transform: scale(1.2);
+  margin-right: 0.5rem;
 }
 
 .individual-toggles label {
@@ -1454,17 +1466,6 @@ footer {
   font-size: 0.95rem;
   font-weight: bold;
   transition: all 0.2s ease;
-}
-
-.individual-toggles h4 {
-  margin: 0 0 1rem 0;
-  color: var(--second-color);
-  font-size: 1.2rem;
-}
-
-.individual-toggles input[type="checkbox"] {
-  transform: scale(1.3);
-  margin-right: 0.5rem;
 }
 
 .individual-toggles label:hover {
@@ -1477,11 +1478,11 @@ footer {
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* FIXED: Car Comparison Cards */
+/* Existing Compare Cards Styles */
 .comp_table_frame {
-  width: 95%; /* RESTORED: Original width */
-  margin: 2rem auto; /* RESTORED: Original margin */
-  padding: 2rem; /* RESTORED: Original padding */
+  width: 95%;
+  margin: 2rem auto;
+  padding: 2rem;
   border: 2px solid var(--second-color);
   border-radius: 15px;
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
@@ -1497,7 +1498,6 @@ footer {
   flex-wrap: nowrap;
 }
 
-/* Enhanced car column styling */
 .car-column {
   min-width: 350px;
   max-width: 350px;
@@ -1540,7 +1540,6 @@ footer {
   text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
 }
 
-/* FIXED: Heart icon positioning in compare cards */
 .car-title .heart-container {
   display: flex;
   align-items: center;
@@ -1563,7 +1562,6 @@ footer {
   width: 100%;
 }
 
-/* FIXED: Car image container styling to ensure images display properly */
 .car-image-container {
   display: flex;
   justify-content: center;
@@ -1590,7 +1588,6 @@ footer {
   transform: scale(1.05);
 }
 
-/* Loading state for images */
 .car-image-container::before {
   content: "";
   position: absolute;
@@ -1700,7 +1697,7 @@ footer {
   box-shadow: 0 5px 15px rgba(231, 76, 60, 0.3);
 }
 
-/* FIXED: Error message styling for compare page */
+/* Error message styling */
 .compare-error-message {
   position: fixed;
   top: 20px;
@@ -1727,7 +1724,6 @@ footer {
   }
 }
 
-/* Loading dropdown option styling */
 select option[value="retry"] {
   background-color: #ffe6e6;
   color: #e74c3c;
@@ -1740,7 +1736,6 @@ select option[disabled] {
   font-style: italic;
 }
 
-/* Animation */
 @keyframes fadeInUp {
   from {
     opacity: 0;
@@ -1752,20 +1747,20 @@ select option[disabled] {
   }
 }
 
-@media (max-width: 1400px) {
-  .compare-wrapper {
-    max-width: 1200px;
-    padding: 0 1.5rem;
-  }
-}
-
-/* FIXED: Responsive Design */
+/* RESPONSIVE DESIGN */
 @media (max-width: 1200px) {
+  .compare-charts-section {
+    width: 85%; /* Still constrained */
+  }
+  
+  .radar-chart-section {
+    width: 95%;
+  }
+  
   .compare-charts-grid {
     grid-template-columns: 1fr;
     grid-template-rows: repeat(5, 450px);
     gap: 2rem;
-    height: auto;
   }
 
   .compare-charts-grid .compare-chart-container:nth-child(5) {
@@ -1774,16 +1769,15 @@ select option[disabled] {
 
   .radar-chart-container {
     width: 80%;
-    max-width: 650px;
     height: 650px;
-  }
-  
-  .radar-chart-container canvas {
-    max-height: 550px !important;
   }
 }
 
 @media (max-width: 900px) {
+  .compare-charts-section {
+    width: 95%;
+  }
+  
   .car-column {
     min-width: 300px;
     max-width: 300px;
@@ -1801,34 +1795,24 @@ select option[disabled] {
   .compare-charts-grid {
     grid-template-rows: repeat(5, 400px);
   }
-  
-  .compare-charts-section {
-    padding: 2rem;
-  }
 
   .radar-chart-container {
-    width: 85%;
-    max-width: 600px;
+    width: 90%;
     height: 600px;
   }
-  
-  .radar-chart-container canvas {
-    max-height: 500px !important;
-    min-height: 350px !important;
-  }
-  
-  .radar-chart-section {
-    padding: 2rem;
-  }
 
-  /* Adjust toggle controls for smaller screens */
   .individual-toggles div[style*="flex"] {
     flex-direction: column !important;
-    gap: 0.8rem !important;
+    gap: 1rem !important;
   }
 }
 
 @media (max-width: 768px) {
+  .compare-charts-section {
+    width: 100%;
+    padding: 1.5rem;
+  }
+  
   #comparison-container {
     flex-direction: column;
     align-items: center;
@@ -1839,21 +1823,9 @@ select option[disabled] {
     max-width: 100%;
   }
   
-  .compare-outer-frame {
-    padding: 1rem;
-  }
-  
-  .compare-charts-section {
-    padding: 1.5rem;
-    margin: 2rem auto;
-  }
-  
-  .compare-charts-title {
-    font-size: 2rem;
-  }
-  
   .compare-chart-container {
     height: 350px;
+    padding: 1rem;
   }
   
   .compare-chart-container canvas {
@@ -1863,70 +1835,29 @@ select option[disabled] {
   
   .compare-charts-grid {
     grid-template-rows: repeat(5, 350px);
-  }
-
-  .radar-chart-container {
-    width: 90%;
-    max-width: 500px;
-    height: 550px;
-    padding: 1.5rem;
-  }
-  
-  .radar-chart-container canvas {
-    max-height: 450px !important;
-    min-height: 300px !important;
-  }
-  
-  .radar-chart-section {
-    padding: 1.5rem;
-    margin: 2rem auto;
-  }
-
-  .compare-inner-frame {
-    max-width: 100%;
-    padding: 1.5rem;
-  }
-
-  /* Stack toggle controls on mobile */
-  .individual-toggles div[style*="flex"] {
-    flex-direction: column !important;
-    align-items: stretch !important;
-  }
-  
-  .individual-toggles div[style*="display: flex"] {
-    margin-bottom: 0.5rem;
-    justify-content: flex-start !important;
-  }
-}
-
-@media (max-width: 480px) {
-  .compare-filter-title {
-    font-size: 2rem;
-  }
-  
-  .compare-charts-grid {
-    grid-template-rows: repeat(5, 320px);
+    gap: 1.5rem;
   }
 
   .radar-chart-container {
     width: 95%;
-    max-width: 400px;
-    height: 500px;
-    padding: 1rem;
+    height: 550px;
+    padding: 1.5rem;
   }
-  
-  .radar-chart-container canvas {
-    max-height: 400px !important;
-    min-height: 250px !important;
-  }
-  
-  .radar-chart-section {
+
+  .individual-toggles {
     padding: 1rem;
   }
 
+  .individual-toggles div[style*="flex"] {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+}
+
+@media (max-width: 480px) {
   .compare-chart-container {
-    padding: 1rem;
     height: 300px;
+    padding: 0.75rem;
   }
   
   .compare-chart-container canvas {
@@ -1934,21 +1865,18 @@ select option[disabled] {
     max-height: 200px !important;
   }
   
-  .compare-chart-header h3 {
-    font-size: 1.2rem;
-  }
-  
-  .compare-charts-title {
-    font-size: 1.8rem;
+  .compare-charts-grid {
+    grid-template-rows: repeat(5, 300px);
   }
 
-  /* Smaller toggle controls on very small screens */
-  .individual-toggles {
-    font-size: 0.8rem;
+  .radar-chart-container {
+    width: 95%;
+    height: 500px;
+    padding: 1rem;
   }
-  
-  .individual-toggles label {
-    font-size: 0.8rem !important;
+
+  .individual-toggles {
+    font-size: 0.85rem;
   }
 }
 

@@ -2064,9 +2064,11 @@ async function svgToImageWithRetry(svgString, fallbackText, maxRetries = 3) {
 const brandLogoPlugin = {
     id: 'brandLogo',
     afterDatasetsDraw: function(chart, args, options) {
-        const { ctx, data, chartArea, scales } = chart;
+        const { ctx, data } = chart;
         
-        if (!data.datasets || !data.datasets[0] || !comparedCars) return;
+        if (!data.datasets || !data.datasets[0] || !comparedCars || comparedCars.length === 0) {
+            return;
+        }
         
         ctx.save();
         
@@ -2076,6 +2078,8 @@ const brandLogoPlugin = {
             
             const car = comparedCars[index];
             const brandName = car.specs.Brand;
+            
+            if (!brandName) return;
             
             // Get the correct logo using the brand name
             const logoKey = String(brandName).toLowerCase().replace(/[\s-]/g, '').trim();
@@ -2087,52 +2091,82 @@ const brandLogoPlugin = {
             
             if (!bar) return;
             
-            // FIXED: Better logo sizing calculation
+            // Calculate positions and sizes
             const barWidth = bar.width;
             const barHeight = Math.abs(bar.y - bar.base);
-            
-            // More generous logo sizing
-            let logoSize = Math.min(barWidth * 0.6, barHeight * 0.4);
-            logoSize = Math.max(25, Math.min(logoSize, 60)); // Larger min/max sizes
-            
-            // FIXED: Center positioning
             const centerX = bar.x;
             const centerY = bar.y + (bar.base - bar.y) / 2;
-            const logoX = centerX - logoSize / 2;
-            const logoY = centerY - logoSize / 2;
             
-            if (barHeight > logoSize + 10 && logo) {
-                try {
-                    // Enhanced white circle background
-                    ctx.beginPath();
-                    const circleRadius = logoSize / 2 + 6;
-                    ctx.arc(centerX, centerY, circleRadius, 0, 2 * Math.PI);
-                    
-                    // White background
-                    ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
-                    ctx.fill();
-                    
-                    // Border
-                    ctx.strokeStyle = 'rgba(180, 155, 102, 0.6)';
-                    ctx.lineWidth = 2;
-                    ctx.stroke();
-                    
-                    // FIXED: Draw the logo properly centered
-                    ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
-                    
-                } catch (error) {
-                    console.warn('Error drawing logo for', brandName, ':', error);
-                    drawBrandNameFallback(ctx, chart, index, brandName, logoSize);
+            // Smart logo sizing based on bar dimensions
+            let logoSize = Math.min(barWidth * 0.5, barHeight * 0.3);
+            logoSize = Math.max(20, Math.min(logoSize, 50)); // Constrain size
+            
+            // Only draw if bar is tall enough
+            if (barHeight > logoSize + 15) {
+                if (logo && logo.complete && logo.naturalHeight !== 0) {
+                    try {
+                        // Draw white circular background
+                        const backgroundRadius = logoSize / 2 + 4;
+                        ctx.beginPath();
+                        ctx.arc(centerX, centerY, backgroundRadius, 0, 2 * Math.PI);
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+                        ctx.fill();
+                        ctx.strokeStyle = 'rgba(180, 155, 102, 0.6)';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                        
+                        // Draw the logo centered
+                        const logoX = centerX - logoSize / 2;
+                        const logoY = centerY - logoSize / 2;
+                        ctx.drawImage(logo, logoX, logoY, logoSize, logoSize);
+                        
+                        console.log(`✅ Drew logo for ${brandName} at position (${logoX}, ${logoY}) with size ${logoSize}`);
+                        
+                    } catch (error) {
+                        console.warn(`❌ Error drawing logo for ${brandName}:`, error);
+                        drawBrandTextFallback(ctx, centerX, centerY, brandName, logoSize);
+                    }
+                } else {
+                    // Draw text fallback if logo not available
+                    drawBrandTextFallback(ctx, centerX, centerY, brandName, logoSize);
                 }
-            } else if (barHeight > 30) {
-                // Show brand name for smaller bars
-                drawBrandNameFallback(ctx, chart, index, brandName, Math.min(logoSize, 40));
+            } else if (barHeight > 25) {
+                // For smaller bars, just show brand abbreviation
+                drawBrandTextFallback(ctx, centerX, centerY, brandName, Math.min(logoSize, 30));
             }
         });
         
         ctx.restore();
     }
 };
+function drawBrandTextFallback(ctx, centerX, centerY, brandName, size) {
+    try {
+        const radius = size / 2 + 3;
+        
+        // Background circle
+        ctx.beginPath();
+        ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(180, 155, 102, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        
+        // Text
+        const fontSize = Math.max(10, size * 0.4);
+        ctx.font = `bold ${fontSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#b49b66';
+        
+        // Get brand abbreviation
+        const text = brandName.length > 6 ? brandName.substring(0, 3).toUpperCase() : brandName.toUpperCase();
+        ctx.fillText(text, centerX, centerY);
+        
+    } catch (error) {
+        console.warn('Error drawing text fallback:', error);
+    }
+}
 
 // Fallback function to draw brand name when logo is not available or bar is too small
 function drawBrandNameFallback(ctx, chart, index, brandName, size) {
@@ -2227,7 +2261,6 @@ function updateHorsepowerChart() {
         chartInstances.horsepower.destroy();
     }
 
-    // FIXED: Labels now show "Brand Model" first
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2320,7 +2353,6 @@ function updatePriceChart() {
         chartInstances.price.destroy();
     }
 
-    // FIXED: Labels now show "Brand Model" first
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2419,7 +2451,6 @@ function updateGroundClearanceChart() {
         chartInstances.groundClearance.destroy();
     }
 
-    // FIXED: Labels now show "Brand Model" first
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2512,7 +2543,6 @@ function updateSeatingCapacityChart() {
         chartInstances.seatingCapacity.destroy();
     }
 
-    // FIXED: Labels now show "Brand Model" first
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2606,7 +2636,6 @@ function updateCargoSpaceChart() {
         chartInstances.cargoSpace.destroy();
     }
 
-    // FIXED: Labels now show "Brand Model" first
     const labels = comparedCars.map(car => {
         const brand = car.specs.Brand || 'Unknown';
         const model = car.specs.Model || 'Unknown';
@@ -2689,6 +2718,9 @@ function updateCargoSpaceChart() {
     });
 }
 
+// Make toggle functions globally available
+window.toggleRadarCarVisibility = toggleRadarCarVisibility;
+
 // FIXED: Enhanced updateRadarChart function with better scaling
 function updateRadarChart() {
     const canvas = document.getElementById('radarChart');
@@ -2700,35 +2732,53 @@ function updateRadarChart() {
         chartInstances.radar.destroy();
     }
 
-    // Prepare normalized data for radar chart
+    // Prepare data for radar chart - RESTORED ORIGINAL LOGIC
     const datasets = comparedCars.map((car, index) => {
-        // Normalize values to 0-100 scale for radar chart
-        const horsepower = Math.min((parseFloat(car.specs.Horsepower) || 0) / 10, 100);
-        const price = Math.min((parseFloat(car.specs.Price) || 0) / 50000, 100);
-        const groundClearance = Math.min((parseFloat(car.specs.GroundClearance) || 0) * 5, 100);
-        const cargoSpace = Math.min((parseFloat(car.specs.Cargospace) || 0) / 20, 100);
-        const seatingCapacity = Math.min((parseInt(car.specs.SeatingCapacity) || 0) * 14, 100);
+        // Get actual values
+        const horsepower = parseFloat(car.specs.Horsepower) || 0;
+        const price = parseFloat(car.specs.Price) || 0;
+        const groundClearance = parseFloat(car.specs.GroundClearance) || 0;
+        const cargoSpace = parseFloat(car.specs.Cargospace) || 0;
+        const seatingCapacity = parseInt(car.specs.SeatingCapacity) || 0;
+        
+        // Store max values for dynamic scaling
+        const maxValues = comparedCars.reduce((max, c) => ({
+            hp: Math.max(max.hp, parseFloat(c.specs.Horsepower) || 0),
+            price: Math.max(max.price, parseFloat(c.specs.Price) || 0),
+            gc: Math.max(max.gc, parseFloat(c.specs.GroundClearance) || 0),
+            cargo: Math.max(max.cargo, parseFloat(c.specs.Cargospace) || 0),
+            seating: Math.max(max.seating, parseInt(c.specs.SeatingCapacity) || 0)
+        }), { hp: 0, price: 0, gc: 0, cargo: 0, seating: 0 });
+        
+        // Scale to 0-100 based on max values among compared cars
+        const scaledData = [
+            (horsepower / maxValues.hp) * 100,
+            (price / maxValues.price) * 100,
+            (groundClearance / maxValues.gc) * 100,
+            (cargoSpace / maxValues.cargo) * 100,
+            (seatingCapacity / maxValues.seating) * 100
+        ];
         
         return {
             label: `${car.specs.Brand} ${car.specs.Model} ${car.variant} (${car.year})`,
-            data: [horsepower, price, groundClearance, cargoSpace, seatingCapacity],
+            data: scaledData,
             backgroundColor: chartBackgroundColors[index % chartBackgroundColors.length],
             borderColor: chartColors[index % chartColors.length],
-            borderWidth: 3,
+            borderWidth: 2,
             pointBackgroundColor: chartColors[index % chartColors.length],
             pointBorderColor: '#fff',
             pointBorderWidth: 2,
-            pointRadius: 6,
-            pointHoverRadius: 8,
+            pointRadius: 5,
+            pointHoverRadius: 7,
             fill: true,
-            hidden: false // Start with all visible
+            fillOpacity: 0.1
         };
     });
 
     chartInstances.radar = new Chart(ctx, {
         type: 'radar',
         data: {
-            labels: ['Performance', 'Value', 'Ground Clearance', 'Cargo Space', 'Seating'],
+            labels: ['Power', 'Price', 'Clearance', 'Cargo', 'Seating'],
             datasets: datasets
         },
         options: {
@@ -2738,13 +2788,24 @@ function updateRadarChart() {
                 legend: {
                     position: 'bottom',
                     labels: {
-                        padding: 25,
+                        padding: 20,
                         usePointStyle: true,
+                        pointStyle: 'circle',
                         font: {
-                            size: 13,
+                            size: 12,
                             weight: 'bold'
                         },
-                        color: '#333'
+                        color: '#333',
+                        generateLabels: function(chart) {
+                            const original = Chart.defaults.plugins.legend.labels.generateLabels;
+                            const labels = original.call(this, chart);
+                            return labels.map(label => ({
+                                ...label,
+                                text: label.text.length > 30 ? 
+                                      label.text.substring(0, 30) + '...' : 
+                                      label.text
+                            }));
+                        }
                     }
                 },
                 tooltip: {
@@ -2759,8 +2820,17 @@ function updateRadarChart() {
                             return context[0].dataset.label;
                         },
                         label: function(context) {
-                            const labels = ['Performance Score', 'Value Score', 'Ground Clearance Score', 'Cargo Score', 'Seating Score'];
-                            return `${labels[context.dataIndex]}: ${context.parsed.r.toFixed(1)}`;
+                            const carIndex = context.datasetIndex;
+                            const car = comparedCars[carIndex];
+                            const labels = ['Power', 'Price', 'Clearance', 'Cargo', 'Seating'];
+                            const actualValues = [
+                                car.specs.Horsepower + ' HP',
+                                '₱' + parseInt(car.specs.Price || 0).toLocaleString(),
+                                car.specs.GroundClearance + ' cm',
+                                car.specs.Cargospace + ' L',
+                                car.specs.SeatingCapacity + ' seats'
+                            ];
+                            return `${labels[context.dataIndex]}: ${actualValues[context.dataIndex]}`;
                         }
                     }
                 }
@@ -2774,7 +2844,10 @@ function updateRadarChart() {
                         stepSize: 20,
                         color: '#666',
                         font: {
-                            size: 12
+                            size: 11
+                        },
+                        callback: function(value) {
+                            return value + '%';
                         }
                     },
                     grid: {
@@ -2788,7 +2861,7 @@ function updateRadarChart() {
                     pointLabels: {
                         color: '#b49b66',
                         font: {
-                            size: 14,
+                            size: 13,
                             weight: 'bold'
                         }
                     }
@@ -2796,18 +2869,19 @@ function updateRadarChart() {
             },
             elements: {
                 line: {
-                    borderWidth: 3,
+                    borderWidth: 2,
                     tension: 0.1
                 },
                 point: {
-                    radius: 6,
-                    hoverRadius: 8
+                    radius: 5,
+                    hoverRadius: 7
                 }
             }
         }
     });
 
-    // Add individual toggle controls
+    // Add dynamic scale info and individual toggles
+    addRadarScaleInfo();
     addRadarToggleControls();
 }
 
@@ -2816,48 +2890,61 @@ function addRadarToggleControls() {
     if (!radarSection || comparedCars.length === 0) return;
 
     // Remove existing toggles
-    const existingToggles = radarSection.querySelector('.individual-toggles');
+    const existingToggles = radarSection.querySelector('.car-visibility-controls');
     if (existingToggles) {
         existingToggles.remove();
     }
 
     // Create new toggle container
     const toggleContainer = document.createElement('div');
-    toggleContainer.className = 'individual-toggles';
+    toggleContainer.className = 'car-visibility-controls';
     toggleContainer.innerHTML = `
-        <h4 style="text-align: center; color: #b49b66; margin-bottom: 1rem;">Toggle Individual Cars:</h4>
-        <div style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; align-items: center;">
-            ${comparedCars.map((car, index) => `
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <input type="checkbox" 
-                           id="radar-toggle-${index}" 
-                           checked 
-                           onchange="toggleRadarDataset(${index})"
-                           style="transform: scale(1.2);">
-                    <label for="radar-toggle-${index}" 
-                           style="color: ${chartColors[index % chartColors.length]}; 
-                                  font-weight: bold; 
-                                  font-size: 0.9rem;
-                                  cursor: pointer;">
-                        ${car.specs.Brand} ${car.specs.Model}
-                    </label>
-                </div>
-            `).join('')}
+        <div style="background: rgba(249, 246, 238, 0.8); padding: 1.5rem; border-radius: 12px; border: 1px solid rgba(180, 155, 102, 0.3);">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1rem; justify-content: center;">
+                <i class="bx bx-show" style="color: #b49b66; font-size: 1.2rem;"></i>
+                <h4 style="color: #b49b66; margin: 0; font-size: 1.1rem;">Individual Car Visibility Controls</h4>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 1rem; justify-content: center; align-items: center;">
+                ${comparedCars.map((car, index) => `
+                    <div style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem 1rem; background: white; border-radius: 8px; border: 1px solid rgba(180, 155, 102, 0.2); transition: all 0.2s ease;">
+                        <input type="checkbox" 
+                               id="visibility-toggle-${index}" 
+                               checked 
+                               onchange="toggleRadarCarVisibility(${index})"
+                               style="transform: scale(1.2); accent-color: ${chartColors[index % chartColors.length]};">
+                        <div style="width: 12px; height: 12px; background: ${chartColors[index % chartColors.length]}; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 3px rgba(0,0,0,0.2);"></div>
+                        <label for="visibility-toggle-${index}" 
+                               style="color: ${chartColors[index % chartColors.length]}; 
+                                      font-weight: bold; 
+                                      font-size: 0.85rem;
+                                      cursor: pointer;
+                                      margin: 0;">
+                            ${car.specs.Brand} ${car.specs.Model}
+                        </label>
+                    </div>
+                `).join('')}
+            </div>
         </div>
     `;
 
-    // Insert before the radar chart container
-    const radarWrapper = radarSection.querySelector('.radar-chart-wrapper');
-    radarSection.insertBefore(toggleContainer, radarWrapper);
+    // Append to the end of the radar section
+    radarSection.appendChild(toggleContainer);
 }
 
 // Toggle function for individual radar datasets
-function toggleRadarDataset(index) {
-    if (!chartInstances.radar) return;
+function toggleRadarCarVisibility(index) {
+    if (!chartInstances.radar || !chartInstances.radar.data.datasets[index]) return;
     
     const dataset = chartInstances.radar.data.datasets[index];
-    dataset.hidden = !dataset.hidden;
-    chartInstances.radar.update();
+    const isVisible = !dataset.hidden;
+    
+    // Toggle visibility
+    dataset.hidden = isVisible;
+    
+    // Update the chart
+    chartInstances.radar.update('none'); // No animation for instant feedback
+    
+    console.log(`Toggled visibility for car ${index}: ${isVisible ? 'hidden' : 'visible'}`);
 }
 
 // Make toggle function globally available
