@@ -309,6 +309,7 @@ if (!usernameDisplay && profileContainer) {
     // Insert it as the first child of profile container
     profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
     console.log('✅ Username display element created and added');
+}
 
 /////////////////////////////////////////
 // Denies access to users to the User //
