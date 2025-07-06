@@ -36,17 +36,23 @@
       </div>
     </div>
   
-    <div id="signup-popup" class="popup">
+<div id="signup-popup" class="popup">
       <div class="popup-content">
           <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
           <h1>Sign Up</h1>
           <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+            <input type="text" name="username" id="username_signup" placeholder="Username" required minlength="3" maxlength="20">
+            <small class="username-hint">Username must be 3-20 characters, letters and numbers only</small>
               <input type="email" name="email_signup" placeholder="Email" required>
               <input type="password" name="password_signup" placeholder="Password" required>
+
+              <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="margin: 10px 0;">
+              <small class="file-hint">Profile picture (optional)</small>
               <button type="submit">Sign Up</button>
           </form>
           <p class="success-message"></p>
           <p class="error-message12"></p> <!-- Error message element -->
+          <p class="username-status"></p>
 
           <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
       </div>
