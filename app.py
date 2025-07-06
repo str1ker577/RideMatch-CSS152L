@@ -398,8 +398,6 @@ def get_firebase_config():
     app.logger.info("Firebase config requested")
     return jsonify(client_config)
 
-@app.route('/verify-token', methods=['POST'])
-def verify_token():
     # FIXED: Changed 'db' to 'firestore_db' to match your variable names
     if not firestore_db:
         app.logger.error("Database not available for token verification")
