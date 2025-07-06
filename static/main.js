@@ -294,6 +294,22 @@ function updateUIForAuthState(user = null, userData = null) {
     console.log('🏁 UI update completed');
 }
 
+let usernameDisplay = document.getElementById('username-display');
+
+// If username display doesn't exist, create it
+if (!usernameDisplay && profileContainer) {
+    console.log('🔧 Creating missing username display element');
+    usernameDisplay = document.createElement('span');
+    usernameDisplay.id = 'username-display';
+    usernameDisplay.className = 'username-display';
+    usernameDisplay.style.marginRight = '10px';
+    usernameDisplay.style.color = '#b49b66';
+    usernameDisplay.style.fontWeight = 'bold';
+    
+    // Insert it as the first child of profile container
+    profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
+    console.log('✅ Username display element created and added');
+
 /////////////////////////////////////////
 // Denies access to users to the User //
 // Profile Page, unless signed in    //
