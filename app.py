@@ -400,7 +400,6 @@ def get_firebase_config():
 # UPDATED: Enhanced verify-token route to include username (replace existing)
 @app.route('/verify-token', methods=['POST'])
 def verify_token():
-    """Enhanced token verification with better session management"""
     if not realtime_db_ref:
         app.logger.error("Database not available for token verification")
         return jsonify({"status": "error", "message": "Database not available"}), 500
@@ -432,8 +431,7 @@ def verify_token():
             username = user_data.get('username')
             profile_picture_url = user_data.get('profilePictureUrl')
         
-        # Create comprehensive session
-        session.clear()  # Clear any existing session data first
+        # Set comprehensive session data
         session['user'] = uid
         session['email'] = email
         session['username'] = username
@@ -441,14 +439,12 @@ def verify_token():
         session['idToken'] = id_token
         session['authenticated'] = True
         session['auth_time'] = int(time.time())
-        session['last_activity'] = int(time.time())
         
-        # Make session permanent and set lifetime
+        # Make session permanent (expires in 30 days)
         session.permanent = True
         app.permanent_session_lifetime = timedelta(days=30)
         
-        app.logger.info(f"✅ Session created for user {email} with username: {username}")
-        
+        app.logger.info(f"✅ User {email} logged in successfully with username: {username}")
         return jsonify({
             "status": "success", 
             "message": "Authentication successful",
@@ -463,161 +459,68 @@ def verify_token():
     except Exception as e:
         app.logger.error(f"Token verification failed: {str(e)}")
         return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
+    if not firestore_db:
+        app.logger.error("Database not available for token verification")
+        return jsonify({"status": "error", "message": "Database not available"}), 500
     
-@app.route('/refresh-session', methods=['POST'])
-def refresh_session():
-    """Refresh session activity timestamp"""
-    if 'user' in session and session.get('authenticated'):
-        session['last_activity'] = int(time.time())
-        app.logger.info(f"Session refreshed for user: {session.get('email')}")
-        return jsonify({"status": "success"}), 200
-    else:
-        app.logger.warning("Session refresh attempted without valid session")
-        return jsonify({"status": "error", "message": "No active session"}), 401
-    """Refresh session activity timestamp"""
-    if 'user' in session and session.get('authenticated'):
-        session['last_activity'] = int(time.time())
-        return jsonify({"status": "success"}), 200
-    else:
-        return jsonify({"status": "error", "message": "No active session"}), 401
+    try:
+        data = request.get_json()
+        if not data:
+            app.logger.error("No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+            
+        id_token = data.get('idToken')
+        email = data.get('email')
+        
+        if not id_token:
+            app.logger.error("No token provided in request")
+            return jsonify({"status": "error", "message": "No token provided"}), 400
+        
+        # Verify token with Firebase Admin
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        
+        # Get user profile data including username
+        user_ref = realtime_db_ref.child('users').child(uid)
+        user_data = user_ref.get()
+        
+        username = None
+        if user_data:
+            username = user_data.get('username')
+        
+        # Set enhanced session
+        session['user'] = uid
+        session['email'] = email
+        session['username'] = username  # NEW: Store username in session
+        session['idToken'] = id_token
+        
+        app.logger.info(f"✅ User {email} logged in successfully with username: {username}")
+        return jsonify({
+            "status": "success", 
+            "message": "Authentication successful",
+            "username": username
+        }), 200
+        
+    except firebase_admin.auth.InvalidIdTokenError as e:
+        app.logger.error(f"Invalid token error: {e}")
+        return jsonify({"status": "error", "message": "Invalid token"}), 401
+    except Exception as e:
+        app.logger.error(f"Token verification failed: {str(e)}")
+        return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
     
 @app.route('/check-session', methods=['GET'])
 def check_session():
-    """Enhanced session check with proper validation and profile picture persistence"""
-    try:
-        app.logger.info(f"Session check request from {request.remote_addr}")
-        
-        # Check if user session exists and is valid
-        if 'user' not in session or not session.get('authenticated'):
-            app.logger.info("No valid session found")
-            return jsonify({"authenticated": False}), 200
-        
-        # Check if session has expired
-        auth_time = session.get('auth_time')
-        if auth_time and (int(time.time()) - auth_time > (30 * 24 * 60 * 60)):
-            app.logger.info(f"Session expired for user {session.get('email')}")
-            session.clear()
-            return jsonify({"authenticated": False}), 200
-        
-        # Get user data from database to ensure it's still valid
-        user_id = session.get('user')
-        if user_id and realtime_db_ref:
-            try:
-                user_ref = realtime_db_ref.child('users').child(user_id)
-                user_data = user_ref.get()
-                
-                if user_data:
-                    # FIXED: Always get fresh profile picture URL from database
-                    profile_picture_url = user_data.get('profilePictureUrl')
-                    username = user_data.get('username', session.get('username'))
-                    
-                    # FIXED: Update session with latest profile data
-                    session['username'] = username
-                    session['profile_picture_url'] = profile_picture_url
-                    session['last_activity'] = int(time.time())  # Update activity
-                    
-                    response_data = {
-                        "authenticated": True,
-                        "user": session.get('user'),
-                        "email": session.get('email'),
-                        "username": username,
-                        "profile_picture_url": profile_picture_url  # This ensures persistence
-                    }
-                    
-                    app.logger.info(f"Valid session found for user: {session.get('email')}")
-                    app.logger.info(f"Profile picture URL: {profile_picture_url}")
-                    return jsonify(response_data), 200
-                else:
-                    app.logger.warning(f"User data not found for user ID: {user_id}")
-                    session.clear()
-                    return jsonify({"authenticated": False}), 200
-                    
-            except Exception as db_error:
-                app.logger.error(f"Database error during session check: {db_error}")
-                # Don't clear session for database errors, just return current session data
-                pass
-        
-        # Fallback: return session data even if database check failed
-        response_data = {
+    """Check if user has a valid session"""
+    if 'user' in session and session.get('authenticated'):
+        return jsonify({
             "authenticated": True,
             "user": session.get('user'),
             "email": session.get('email'),
             "username": session.get('username'),
             "profile_picture_url": session.get('profile_picture_url')
-        }
-        
-        return jsonify(response_data), 200
-        
-    except Exception as e:
-        app.logger.error(f"Error in session check: {e}")
-        return jsonify({"authenticated": False, "error": "Session check failed"}), 500
-    """Enhanced session check with proper validation and profile picture persistence"""
-    try:
-        app.logger.info(f"Session check request from {request.remote_addr}")
-        
-        # Check if user session exists and is valid
-        if 'user' not in session or not session.get('authenticated'):
-            app.logger.info("No valid session found")
-            return jsonify({"authenticated": False}), 200
-        
-        # Check if session has expired
-        auth_time = session.get('auth_time')
-        if auth_time and (int(time.time()) - auth_time > (30 * 24 * 60 * 60)):
-            app.logger.info(f"Session expired for user {session.get('email')}")
-            session.clear()
-            return jsonify({"authenticated": False}), 200
-        
-        # Get user data from database to ensure it's still valid
-        user_id = session.get('user')
-        if user_id and realtime_db_ref:
-            try:
-                user_ref = realtime_db_ref.child('users').child(user_id)
-                user_data = user_ref.get()
-                
-                if user_data:
-                    # FIXED: Always get fresh profile picture URL from database
-                    profile_picture_url = user_data.get('profilePictureUrl')
-                    username = user_data.get('username', session.get('username'))
-                    
-                    # FIXED: Update session with latest profile data
-                    session['username'] = username
-                    session['profile_picture_url'] = profile_picture_url
-                    
-                    response_data = {
-                        "authenticated": True,
-                        "user": session.get('user'),
-                        "email": session.get('email'),
-                        "username": username,
-                        "profile_picture_url": profile_picture_url  # This ensures persistence
-                    }
-                    
-                    app.logger.info(f"Valid session found for user: {session.get('email')}")
-                    app.logger.info(f"Profile picture URL: {profile_picture_url}")
-                    return jsonify(response_data), 200
-                else:
-                    app.logger.warning(f"User data not found for user ID: {user_id}")
-                    session.clear()
-                    return jsonify({"authenticated": False}), 200
-                    
-            except Exception as db_error:
-                app.logger.error(f"Database error during session check: {db_error}")
-                # Don't clear session for database errors, just return current session data
-                pass
-        
-        # Fallback: return session data even if database check failed
-        response_data = {
-            "authenticated": True,
-            "user": session.get('user'),
-            "email": session.get('email'),
-            "username": session.get('username'),
-            "profile_picture_url": session.get('profile_picture_url')
-        }
-        
-        return jsonify(response_data), 200
-        
-    except Exception as e:
-        app.logger.error(f"Error in session check: {e}")
-        return jsonify({"authenticated": False, "error": "Session check failed"}), 500
+        }), 200
+    else:
+        return jsonify({"authenticated": False}), 200
     
 ###################
 # Signup Function #
@@ -625,7 +528,6 @@ def check_session():
 
 @app.route('/signup', methods=['POST'])
 def signup():
-    
     if not realtime_db_ref:
         app.logger.error("Database not available for signup")
         return jsonify({"status": "error", "message": "Database not available"}), 500
@@ -784,21 +686,6 @@ def login():
 
 @app.route('/logout', methods=['POST'])
 def logout():
-    """Enhanced logout with proper session cleanup"""
-    user_email = session.get('email', 'Unknown')
-    app.logger.info(f"User {user_email} logging out")
-    
-    # Clear all session data
-    session.clear()
-    
-    # Make sure session is properly cleared
-    session.permanent = False
-    
-    return jsonify({
-        "status": "success", 
-        "message": "Logged out successfully",
-        "redirect": "/"
-    }), 200
     """Enhanced logout with proper session cleanup"""
     user_email = session.get('email', 'Unknown')
     app.logger.info(f"User {user_email} logging out")
@@ -1071,72 +958,6 @@ def update_username():
 @app.route('/update-profile-picture', methods=['POST'])
 def update_profile_picture():
     """Update user's profile picture"""
-    if 'user' not in session or not session.get('authenticated'):
-        return jsonify({"error": "Not authenticated"}), 401
-        
-    if not realtime_db_ref:
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        if 'profile_picture' not in request.files:
-            return jsonify({"error": "No file provided"}), 400
-        
-        file = request.files['profile_picture']
-        uid = request.form.get('uid') or session.get('user')
-        
-        if not uid:
-            return jsonify({"error": "User ID required"}), 400
-        
-        if file.filename == '':
-            return jsonify({"error": "No file selected"}), 400
-        
-        if not allowed_file(file.filename):
-            return jsonify({"error": "File type not allowed"}), 400
-        
-        # Check file size
-        if len(file.read()) > MAX_FILE_SIZE:
-            return jsonify({"error": "File too large (max 5MB)"}), 400
-        
-        file.seek(0)  # Reset file pointer
-        
-        # Remove old profile picture
-        user_ref = realtime_db_ref.child('users').child(uid)
-        user_data = user_ref.get()
-        
-        if user_data and user_data.get('profilePictureUrl'):
-            old_url = user_data['profilePictureUrl']
-            if old_url.startswith('/static/profile_pictures/'):
-                old_filename = old_url.split('/')[-1]
-                old_filepath = os.path.join(UPLOAD_FOLDER, old_filename)
-                if os.path.exists(old_filepath):
-                    os.remove(old_filepath)
-        
-        # Generate unique filename
-        file_extension = file.filename.rsplit('.', 1)[1].lower()
-        filename = f"{uid}_{uuid.uuid4().hex}.{file_extension}"
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        
-        # Save and resize image
-        file.save(filepath)
-        
-        if not resize_image(filepath):
-            os.remove(filepath)
-            return jsonify({"error": "Failed to process image"}), 500
-        
-        # Update database
-        file_url = f"/static/profile_pictures/{filename}"
-        user_ref.update({'profilePictureUrl': file_url})
-        
-        # FIXED: Update session with new profile picture URL
-        session['profile_picture_url'] = file_url
-        
-        app.logger.info(f"Profile picture updated for user {uid}: {filename}")
-        return jsonify({"url": file_url}), 200
-        
-    except Exception as e:
-        app.logger.error(f"Error updating profile picture: {e}")
-        return jsonify({"error": "Failed to update profile picture"}), 500
-    """Update user's profile picture"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
     
@@ -1360,88 +1181,6 @@ def unsanitize_firebase_key(key):
 @app.route('/toggle-fave', methods=['POST'])
 def toggle_fave():
     """Toggle favorite status using Firebase Realtime Database"""
-    if 'user' not in session or not session.get('authenticated'):
-        app.logger.warning("Unauthorized access to toggle-fave")
-        return jsonify({"error": "User not logged in"}), 401
-    
-    if not realtime_db_ref:
-        app.logger.error("Database not available for toggle-fave")
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        user_id = session['user']
-        data = request.get_json()
-        
-        app.logger.info(f"Toggle fave request from user {user_id}: {data}")
-        
-        if not data:
-            app.logger.error("No JSON data received for toggle-fave")
-            return jsonify({"error": "No data provided"}), 400
-            
-        variant = data.get('variant')
-        liked = data.get('liked')
-
-        if not variant:
-            app.logger.error("No variant specified for toggle-fave")
-            return jsonify({"error": "Variant required"}), 400
-
-        # Sanitize the variant for Firebase path
-        sanitized_variant = sanitize_firebase_key(variant)
-        app.logger.info(f"Processing variant: {variant} -> {sanitized_variant}")
-
-        # Use Firebase Realtime Database
-        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
-        existing_fave = favorites_ref.child(sanitized_variant).get()
-
-        app.logger.info(f"Existing favorite check for {sanitized_variant}: {existing_fave}")
-
-        if liked:
-            # Add to favorites
-            favorite_data = {
-                'variant': variant,  # Store original variant name
-                'sanitized_key': sanitized_variant,  # Store sanitized key for reference
-                'timestamp': int(time.time() * 1000),
-                'dateAdded': datetime.utcnow().isoformat() + 'Z',
-                'userEmail': session.get('email', 'Unknown')
-            }
-            
-            # Set the favorite data
-            favorites_ref.child(sanitized_variant).set(favorite_data)
-            app.logger.info(f"✅ Added favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
-            
-            return jsonify({
-                "status": "added", 
-                "variant": variant, 
-                "liked": True,
-                "message": "Added to favorites"
-            }), 200
-        else:
-            # Remove from favorites
-            if existing_fave:
-                favorites_ref.child(sanitized_variant).delete()
-                app.logger.info(f"✅ Removed favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
-                
-                return jsonify({
-                    "status": "removed", 
-                    "variant": variant, 
-                    "liked": False,
-                    "message": "Removed from favorites"
-                }), 200
-            else:
-                app.logger.info(f"Favorite not found for removal: {variant}")
-                return jsonify({
-                    "status": "not_found", 
-                    "variant": variant, 
-                    "liked": False,
-                    "message": "Favorite not found"
-                }), 200
-            
-    except Exception as e:
-        app.logger.error(f"Error toggling favorite: {e}")
-        import traceback
-        app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
-    """Toggle favorite status using Firebase Realtime Database"""
     if 'user' not in session:
         app.logger.warning("Unauthorized access to toggle-fave")
         return jsonify({"error": "User not logged in"}), 401
@@ -1526,55 +1265,6 @@ def toggle_fave():
 
 @app.route('/get-faves', methods=['POST'])
 def get_faves():
-    """Get user's favorites using Firebase Realtime Database"""
-    if 'user' not in session or not session.get('authenticated'):
-        app.logger.warning("Unauthorized access to favorites")
-        return jsonify({"error": "Not logged in"}), 401
-    
-    if not realtime_db_ref:
-        app.logger.error("Database not available for get-faves")
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        user_id = session['user']
-        app.logger.info(f"Getting favorites for user: {user_id}")
-        
-        # Get favorites from Firebase Realtime Database
-        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
-        favorites_data = favorites_ref.get() or {}
-        
-        app.logger.info(f"Raw favorites data for {user_id}: {favorites_data}")
-
-        # Convert to list format
-        favorite_variants = []
-        for sanitized_key, variant_data in favorites_data.items():
-            if isinstance(variant_data, dict):
-                # Use the original variant name from the stored data
-                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
-                
-                # Ensure we have the complete variant data
-                complete_variant_data = {
-                    'variant': original_variant,
-                    'sanitized_key': sanitized_key,
-                    'timestamp': variant_data.get('timestamp', int(time.time() * 1000)),
-                    'dateAdded': variant_data.get('dateAdded', datetime.utcnow().isoformat() + 'Z'),
-                    'userEmail': variant_data.get('userEmail', session.get('email', 'Unknown'))
-                }
-                
-                favorite_variants.append(complete_variant_data)
-
-        app.logger.info(f"✅ Retrieved {len(favorite_variants)} favorites for user {user_id}")
-        
-        # Sort by timestamp (newest first)
-        favorite_variants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
-        
-        return jsonify(favorite_variants), 200
-        
-    except Exception as e:
-        app.logger.error(f"Error retrieving favorites: {e}")
-        import traceback
-        app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": f"Failed to retrieve favorites: {str(e)}"}), 500
     """Get user's favorites using Firebase Realtime Database"""
     if 'user' not in session:
         app.logger.warning("Unauthorized access to favorites")
