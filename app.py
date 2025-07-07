@@ -47,17 +47,40 @@ except Exception as e:
 ##############################
 
 firestore_db = None
-realtime_db_ref = None  # Changed variable name to avoid confusion
+realtime_db_ref = None
 
-app.logger.info("🚀 Starting enhanced Firebase initialization...")
-firebase_initialized = initialize_firebase_safely()
-
-if not firebase_initialized:
-    app.logger.error("❌ CRITICAL: Firebase initialization failed!")
+try:
+    # Load serviceAccountKey.json
+    if 'SERVICE_ACCOUNT_KEY_JSON' in os.environ:
+        service_account = json.loads(os.environ['SERVICE_ACCOUNT_KEY_JSON'])
+        cred = credentials.Certificate(service_account)
+        app.logger.info("✅ Firebase credentials loaded from environment")
+    else:
+        cred = credentials.Certificate('serviceAccountKey.json')
+        app.logger.info("✅ Firebase credentials loaded from file")
+    
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app/'  
+    })
+    
+    realtime_db_ref = realtime_db.reference()
+    firestore_db = firestore.client()
+    app.logger.info("✅ Firebase initialized successfully")
+    
+    # Test database connection
+    try:
+        test_ref = realtime_db_ref.child('test_connection')
+        test_value = {'timestamp': int(time.time()), 'status': 'testing'}
+        test_ref.set(test_value)
+        app.logger.info("✅ Database connection test successful")
+        test_ref.delete()
+    except Exception as db_test_error:
+        app.logger.error(f"❌ Database connection test failed: {db_test_error}")
+    
+except Exception as e:
+    app.logger.error(f"❌ Firebase initialization failed: {e}")
     realtime_db_ref = None
     firestore_db = None
-else:
-    app.logger.info("✅ Firebase initialization completed successfully")
     app.logger.error(f"❌ Firebase initialization failed: {e}")
     realtime_db_ref = None
     firestore_db = None
