@@ -1213,17 +1213,51 @@ function ensureUsernameDisplay() {
 // NEW: Function to check username availability
 async function checkUsernameAvailability(username) {
   try {
+    console.log(`🔍 API call: Checking username availability for: ${username}`);
+    
     const response = await fetch(`${baseUrl}/check-username`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
       body: JSON.stringify({ username: username })
     });
     
+    console.log(`📡 API response status: ${response.status}`);
+    
+    if (!response.ok) {
+      console.error(`❌ API call failed with status: ${response.status}`);
+      
+      // Try to get error details
+      let errorMessage = 'Connection error';
+      try {
+        const errorText = await response.text();
+        console.error(`❌ Error response: ${errorText}`);
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.message || errorMessage;
+      } catch (parseError) {
+        console.error('❌ Could not parse error response');
+      }
+      
+      return { 
+        available: false, 
+        error: errorMessage,
+        canContinue: response.status === 500 // Allow continuation on server errors
+      };
+    }
+    
     const result = await response.json();
+    console.log(`📊 API result:`, result);
     return result;
+    
   } catch (error) {
-    console.error('Error checking username availability:', error);
-    return { available: false, error: 'Connection error' };
+    console.error('❌ Network error checking username availability:', error);
+    return { 
+      available: false, 
+      error: 'Network connection error',
+      canContinue: true // Allow continuation on network errors
+    };
   }
 }
 
@@ -1231,7 +1265,12 @@ function setupUsernameValidation() {
   const usernameInput = document.getElementById('username_signup');
   const statusElement = document.querySelector('.username-status');
   
-  if (!usernameInput || !statusElement) return;
+  if (!usernameInput || !statusElement) {
+    console.log('Username validation elements not found on this page');
+    return;
+  }
+  
+  console.log('Setting up enhanced username validation');
   
   let checkTimeout;
   
@@ -1243,7 +1282,11 @@ function setupUsernameValidation() {
     statusElement.textContent = '';
     statusElement.className = 'username-status';
     
-    // Basic validation
+    // Basic client-side validation first
+    if (username.length === 0) {
+      return; // Don't show error for empty field
+    }
+    
     if (username.length < 3) {
       statusElement.textContent = 'Username must be at least 3 characters';
       statusElement.className = 'username-status unavailable';
@@ -1262,20 +1305,23 @@ function setupUsernameValidation() {
       return;
     }
     
-    // Check availability after 500ms delay
+    if (username.startsWith('_') || username.endsWith('_')) {
+      statusElement.textContent = 'Username cannot start or end with underscore';
+      statusElement.className = 'username-status unavailable';
+      return;
+    }
+    
+    // Check for reserved usernames
+    const reservedUsernames = ['admin', 'administrator', 'root', 'system', 'anonymous', 'null', 'undefined'];
+    if (reservedUsernames.includes(username.toLowerCase())) {
+      statusElement.textContent = 'This username is reserved and cannot be used';
+      statusElement.className = 'username-status unavailable';
+      return;
+    }
+    
+    // All client-side validations passed, check availability after delay
     checkTimeout = setTimeout(async () => {
-      statusElement.textContent = 'Checking availability...';
-      statusElement.className = 'username-status';
-      
-      const result = await checkUsernameAvailability(username);
-      
-      if (result.available) {
-        statusElement.textContent = '✓ Username available';
-        statusElement.className = 'username-status available';
-      } else {
-        statusElement.textContent = result.message || 'Username not available';
-        statusElement.className = 'username-status unavailable';
-      }
+      await checkUsernameAvailabilityEnhanced(username, statusElement);
     }, 500);
   });
 }
@@ -1318,6 +1364,125 @@ function clearUserData() {
     }
     updateUIForAuthState(null, null);
 }
+
+// UPDATED: Enhanced username validation with better error handling
+// This replaces the existing setupUsernameValidation function in main.js
+
+function setupUsernameValidation() {
+  const usernameInput = document.getElementById('username_signup');
+  const statusElement = document.querySelector('.username-status');
+  
+  if (!usernameInput || !statusElement) {
+    console.log('Username validation elements not found on this page');
+    return;
+  }
+  
+  console.log('Setting up enhanced username validation');
+  
+  let checkTimeout;
+  
+  usernameInput.addEventListener('input', function() {
+    const username = this.value.trim();
+    
+    // Clear previous timeout
+    clearTimeout(checkTimeout);
+    statusElement.textContent = '';
+    statusElement.className = 'username-status';
+    
+    // Basic client-side validation first
+    if (username.length === 0) {
+      return; // Don't show error for empty field
+    }
+    
+    if (username.length < 3) {
+      statusElement.textContent = 'Username must be at least 3 characters';
+      statusElement.className = 'username-status unavailable';
+      return;
+    }
+    
+    if (username.length > 20) {
+      statusElement.textContent = 'Username must be less than 20 characters';
+      statusElement.className = 'username-status unavailable';
+      return;
+    }
+    
+    if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+      statusElement.textContent = 'Username can only contain letters, numbers, and underscores';
+      statusElement.className = 'username-status unavailable';
+      return;
+    }
+    
+    if (username.startsWith('_') || username.endsWith('_')) {
+      statusElement.textContent = 'Username cannot start or end with underscore';
+      statusElement.className = 'username-status unavailable';
+      return;
+    }
+    
+    // Check for reserved usernames
+    const reservedUsernames = ['admin', 'administrator', 'root', 'system', 'anonymous', 'null', 'undefined'];
+    if (reservedUsernames.includes(username.toLowerCase())) {
+      statusElement.textContent = 'This username is reserved and cannot be used';
+      statusElement.className = 'username-status unavailable';
+      return;
+    }
+    
+    // All client-side validations passed, check availability after delay
+    checkTimeout = setTimeout(async () => {
+      await checkUsernameAvailabilityEnhanced(username, statusElement);
+    }, 500);
+  });
+}
+
+// UPDATED: Enhanced username availability check with better error handling
+async function checkUsernameAvailabilityEnhanced(username, statusElement) {
+  try {
+    console.log(`🔍 Checking availability for username: ${username}`);
+    
+    statusElement.textContent = 'Checking availability...';
+    statusElement.className = 'username-status checking';
+    
+    const response = await fetch(`${baseUrl}/check-username`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ username: username })
+    });
+    
+    console.log(`📡 Username check response status: ${response.status}`);
+    
+    if (!response.ok) {
+      console.error(`❌ Username check failed with status: ${response.status}`);
+      
+      if (response.status === 500) {
+        statusElement.textContent = 'Unable to check availability. You can still continue.';
+        statusElement.className = 'username-status warning';
+      } else {
+        statusElement.textContent = 'Error checking availability. Please try again.';
+        statusElement.className = 'username-status unavailable';
+      }
+      return;
+    }
+    
+    const result = await response.json();
+    console.log(`📊 Username check result:`, result);
+    
+    if (result.available) {
+      statusElement.textContent = '✓ Username available';
+      statusElement.className = 'username-status available';
+    } else {
+      statusElement.textContent = result.message || 'Username not available';
+      statusElement.className = 'username-status unavailable';
+    }
+    
+  } catch (error) {
+    console.error('❌ Error checking username availability:', error);
+    statusElement.textContent = 'Unable to verify availability. You can still continue.';
+    statusElement.className = 'username-status warning';
+  }
+}
+
 /////////////////////////////////
 // Profile Page Functionality //
 ///////////////////////////////

@@ -49,25 +49,15 @@ except Exception as e:
 firestore_db = None
 realtime_db_ref = None  # Changed variable name to avoid confusion
 
-try:
-    # Load serviceAccountKey.json
-    if 'SERVICE_ACCOUNT_KEY_JSON' in os.environ:
-        service_account = json.loads(os.environ['SERVICE_ACCOUNT_KEY_JSON'])
-        cred = credentials.Certificate(service_account)
-        app.logger.info("✅ Firebase credentials loaded from environment")
-    else:
-        cred = credentials.Certificate('serviceAccountKey.json')
-        app.logger.info("✅ Firebase credentials loaded from file")
-    
-    firebase_admin.initialize_app(cred, {
-        'databaseURL': 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app/'  
-    })
-    
-    realtime_db_ref = realtime_db.reference()  # Use the imported realtime_db module
-    firestore_db = firestore.client()
-    app.logger.info("✅ Firebase initialized successfully")
-    
-except Exception as e:
+app.logger.info("🚀 Starting enhanced Firebase initialization...")
+firebase_initialized = initialize_firebase_safely()
+
+if not firebase_initialized:
+    app.logger.error("❌ CRITICAL: Firebase initialization failed!")
+    realtime_db_ref = None
+    firestore_db = None
+else:
+    app.logger.info("✅ Firebase initialization completed successfully")
     app.logger.error(f"❌ Firebase initialization failed: {e}")
     realtime_db_ref = None
     firestore_db = None
@@ -313,26 +303,65 @@ def find_car_image(model):
 # Health check endpoint
 @app.route('/health')
 def health():
-    global df
+    """Enhanced health check with database connectivity test"""
+    global df, realtime_db_ref
     
     status = {
-        "status": "healthy" if not df.empty else "unhealthy",
-        "firebase_initialized": realtime_db_ref is not None,
+        "status": "checking",
+        "timestamp": datetime.utcnow().isoformat() + 'Z',
         "csv_loaded": not df.empty,
         "csv_records": len(df) if not df.empty else 0,
         "firebase_config_loaded": bool(firebase_config),
         "api_key_available": api_key is not None,
-        "csv_columns": list(df.columns) if not df.empty else [],
-        "csv_file_exists": any(os.path.exists(path) for path in [
-            'car_data.csv', './car_data.csv', 'static/car_data.csv', 'data/car_data.csv'
-        ]),
-        "brand_count": len(df['Brand'].unique()) if not df.empty and 'Brand' in df.columns else 0,
-        "model_count": len(df['Model'].unique()) if not df.empty and 'Model' in df.columns else 0,
-        "variant_count": len(df['Variant'].unique()) if not df.empty and 'Variant' in df.columns else 0
+        "database_reference_exists": realtime_db_ref is not None,
+        "database_connection": "unknown"
     }
     
-    app.logger.info(f"Health check: {status}")
-    return jsonify(status)
+    # Test database connection
+    if realtime_db_ref:
+        try:
+            # Try a simple read operation
+            test_ref = realtime_db_ref.child('health_check')
+            test_data = {'timestamp': int(time.time()), 'status': 'health_check'}
+            
+            # Try to write
+            test_ref.set(test_data)
+            
+            # Try to read back
+            result = test_ref.get()
+            
+            # Clean up
+            test_ref.delete()
+            
+            status["database_connection"] = "working"
+            status["database_test_result"] = "success"
+            
+        except Exception as db_error:
+            status["database_connection"] = "failed"
+            status["database_error"] = str(db_error)
+            app.logger.error(f"Database health check failed: {db_error}")
+    else:
+        status["database_connection"] = "not_initialized"
+    
+    # Set overall status
+    if status["csv_loaded"] and status["database_connection"] == "working":
+        status["status"] = "healthy"
+    else:
+        status["status"] = "unhealthy"
+    
+    app.logger.info(f"Health check result: {status}")
+    
+    http_status = 200 if status["status"] == "healthy" else 503
+    return jsonify(status), http_status
+
+# Call the enhanced initialization
+app.logger.info("🚀 Starting enhanced Firebase initialization...")
+firebase_initialized = initialize_firebase_safely()
+
+if not firebase_initialized:
+    app.logger.error("❌ CRITICAL: Firebase initialization failed!")
+else:
+    app.logger.info("✅ Firebase initialization completed successfully")
 
 @app.route('/')
 def home():
@@ -667,6 +696,172 @@ def signup():
     
 @app.route('/complete-signup', methods=['POST'])
 def complete_signup():
+    """Complete user signup with enhanced database handling"""
+    app.logger.info("🔄 Starting enhanced complete-signup process...")
+    
+    # Check database availability first
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available - attempting to reinitialize...")
+        
+        # Try to reinitialize Firebase
+        if initialize_firebase_safely():
+            app.logger.info("✅ Database reinitialized successfully")
+        else:
+            app.logger.error("❌ Database reinitialization failed")
+            return jsonify({
+                "status": "error", 
+                "message": "Database temporarily unavailable. Please try again later."
+            }), 500
+    
+    try:
+        # Get and validate request data
+        data = request.get_json()
+        app.logger.info(f"📥 Received signup data: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+        
+        uid = data.get('uid')
+        email = data.get('email')
+        username = data.get('username', '').strip()
+        profile_picture_url = data.get('profilePictureUrl')
+        
+        # Log all received data
+        app.logger.info(f"📋 Processing signup for:")
+        app.logger.info(f"   UID: {uid}")
+        app.logger.info(f"   Email: {email}")
+        app.logger.info(f"   Username: {username}")
+        app.logger.info(f"   Profile Picture: {profile_picture_url}")
+        
+        # Validate required fields
+        if not uid or not email or not username:
+            missing_fields = []
+            if not uid: missing_fields.append("User ID")
+            if not email: missing_fields.append("Email")
+            if not username: missing_fields.append("Username")
+            
+            error_msg = f"Missing required fields: {', '.join(missing_fields)}"
+            app.logger.error(f"❌ {error_msg}")
+            return jsonify({"status": "error", "message": error_msg}), 400
+        
+        # Validate username format
+        app.logger.info("🔍 Validating username...")
+        is_valid, message = validate_username(username)
+        if not is_valid:
+            app.logger.error(f"❌ Username validation failed: {message}")
+            return jsonify({"status": "error", "message": message}), 400
+        
+        app.logger.info("✅ Username validation passed")
+        
+        # Check username availability with enhanced error handling
+        app.logger.info("🔍 Checking username availability...")
+        try:
+            users_ref = realtime_db_ref.child('users')
+            
+            # Try the database query with timeout handling
+            app.logger.info("📡 Querying database for existing users...")
+            existing_users = users_ref.order_by_child('username').equal_to(username).get()
+            
+            app.logger.info(f"📊 Username availability check result: {existing_users}")
+            
+            if existing_users:
+                # Check if any of the existing users have a different UID
+                for existing_uid, existing_data in existing_users.items():
+                    if existing_uid != uid:
+                        app.logger.error(f"❌ Username '{username}' already taken by user {existing_uid}")
+                        return jsonify({
+                            "status": "error", 
+                            "message": "Username already taken. Please choose another one."
+                        }), 400
+                
+                app.logger.info("✅ Username belongs to current user (re-signup case)")
+            else:
+                app.logger.info("✅ Username is available")
+                
+        except Exception as db_error:
+            app.logger.error(f"❌ Database query error during username check: {db_error}")
+            # Try to continue anyway, but log the issue
+            app.logger.warning("⚠️ Continuing with signup despite database query error")
+        
+        # Process profile picture URL
+        if profile_picture_url:
+            if not profile_picture_url.startswith('/') and not profile_picture_url.startswith('http'):
+                profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
+            app.logger.info(f"📸 Profile picture URL processed: {profile_picture_url}")
+        
+        # Create user profile data
+        app.logger.info("📝 Creating user profile data...")
+        user_data = {
+            'uid': uid,
+            'email': email,
+            'username': username,
+            'profilePictureUrl': profile_picture_url,
+            'memberSince': datetime.utcnow().isoformat() + 'Z',
+            'favoriteCount': 0,
+            'createdAt': int(time.time() * 1000),
+            'lastUpdated': int(time.time() * 1000),
+            'accountStatus': 'active'
+        }
+        
+        app.logger.info(f"📄 User data to be stored: {user_data}")
+        
+        # Store user data with retry logic
+        app.logger.info("💾 Storing user data in database...")
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                app.logger.info(f"💾 Storage attempt {attempt + 1}/{max_retries}")
+                users_ref.child(uid).set(user_data)
+                app.logger.info("✅ User data stored successfully")
+                break
+            except Exception as store_error:
+                app.logger.error(f"❌ Storage attempt {attempt + 1} failed: {store_error}")
+                if attempt == max_retries - 1:
+                    app.logger.error("❌ All storage attempts failed")
+                    return jsonify({
+                        "status": "error", 
+                        "message": "Failed to save user data. Please try again."
+                    }), 500
+                else:
+                    app.logger.info(f"🔄 Retrying in 1 second...")
+                    time.sleep(1)
+        
+        # Verify the data was stored
+        app.logger.info("🔍 Verifying stored data...")
+        try:
+            stored_data = users_ref.child(uid).get()
+            if stored_data and stored_data.get('username') == username:
+                app.logger.info("✅ Data verification successful")
+            else:
+                app.logger.warning("⚠️ Data verification unclear, but continuing")
+        except Exception as verify_error:
+            app.logger.warning(f"⚠️ Data verification failed: {verify_error}")
+            # Continue anyway since the main storage succeeded
+        
+        app.logger.info(f"🎉 User profile created successfully for {email} with username '{username}'")
+        
+        return jsonify({
+            "status": "success", 
+            "message": "Profile created successfully",
+            "user": {
+                "uid": uid,
+                "email": email,
+                "username": username,
+                "profilePictureUrl": profile_picture_url
+            }
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error in complete_signup: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({
+            "status": "error", 
+            "message": "An unexpected error occurred. Please try again."
+        }), 500
+        
     """Complete user signup with username and profile data - Enhanced version"""
     app.logger.info("🔄 Starting complete-signup process...")
     
@@ -1085,6 +1280,163 @@ def resize_image(image_path, max_size=(300, 300)):
 # NEW: Check username availability endpoint
 @app.route('/check-username', methods=['POST'])
 def check_username():
+    """Check if username is available - Enhanced with better error handling"""
+    app.logger.info("🔍 Username availability check requested")
+    
+    # Check if database is available
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available for username check")
+        return jsonify({"available": False, "message": "Database temporarily unavailable"}), 500
+    
+    try:
+        # Get request data with validation
+        data = request.get_json()
+        app.logger.info(f"📥 Username check data received: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received for username check")
+            return jsonify({"available": False, "message": "No data provided"}), 400
+        
+        username = data.get('username', '').strip()
+        app.logger.info(f"🔍 Checking availability for username: '{username}'")
+        
+        if not username:
+            app.logger.error("❌ Empty username provided")
+            return jsonify({"available": False, "message": "Username is required"}), 400
+        
+        # Validate username format first (before checking database)
+        app.logger.info("🔍 Validating username format...")
+        is_valid, message = validate_username(username)
+        if not is_valid:
+            app.logger.info(f"❌ Username format invalid: {message}")
+            return jsonify({"available": False, "message": message}), 400
+        
+        app.logger.info("✅ Username format is valid")
+        
+        # Check if username exists in database
+        app.logger.info("🔍 Checking database for existing username...")
+        try:
+            users_ref = realtime_db_ref.child('users')
+            
+            # Use a more reliable query method
+            app.logger.info("📡 Querying database...")
+            existing_users = users_ref.order_by_child('username').equal_to(username).get()
+            
+            app.logger.info(f"📊 Database query result: {existing_users}")
+            
+            if existing_users:
+                app.logger.info(f"❌ Username '{username}' is already taken")
+                return jsonify({
+                    "available": False, 
+                    "message": "Username already taken"
+                }), 200
+            else:
+                app.logger.info(f"✅ Username '{username}' is available")
+                return jsonify({
+                    "available": True, 
+                    "message": "Username available"
+                }), 200
+            
+        except Exception as db_error:
+            app.logger.error(f"❌ Database query error: {db_error}")
+            app.logger.error(f"❌ Error type: {type(db_error)}")
+            import traceback
+            app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            
+            # Return a more user-friendly error
+            return jsonify({
+                "available": False, 
+                "message": "Unable to check username availability. Please try again."
+            }), 500
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error in username check: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({
+            "available": False, 
+            "message": "Error checking username availability"
+        }), 500
+
+    """Check if username is available - Enhanced with better error handling"""
+    app.logger.info("🔍 Username availability check requested")
+    
+    # Check if database is available
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available for username check")
+        return jsonify({"available": False, "message": "Database temporarily unavailable"}), 500
+    
+    try:
+        # Get request data with validation
+        data = request.get_json()
+        app.logger.info(f"📥 Username check data received: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received for username check")
+            return jsonify({"available": False, "message": "No data provided"}), 400
+        
+        username = data.get('username', '').strip()
+        app.logger.info(f"🔍 Checking availability for username: '{username}'")
+        
+        if not username:
+            app.logger.error("❌ Empty username provided")
+            return jsonify({"available": False, "message": "Username is required"}), 400
+        
+        # Validate username format first (before checking database)
+        app.logger.info("🔍 Validating username format...")
+        is_valid, message = validate_username(username)
+        if not is_valid:
+            app.logger.info(f"❌ Username format invalid: {message}")
+            return jsonify({"available": False, "message": message}), 400
+        
+        app.logger.info("✅ Username format is valid")
+        
+        # Check if username exists in database
+        app.logger.info("🔍 Checking database for existing username...")
+        try:
+            users_ref = realtime_db_ref.child('users')
+            
+            # Use a more reliable query method
+            app.logger.info("📡 Querying database...")
+            existing_users = users_ref.order_by_child('username').equal_to(username).get()
+            
+            app.logger.info(f"📊 Database query result: {existing_users}")
+            
+            if existing_users:
+                app.logger.info(f"❌ Username '{username}' is already taken")
+                return jsonify({
+                    "available": False, 
+                    "message": "Username already taken"
+                }), 200
+            else:
+                app.logger.info(f"✅ Username '{username}' is available")
+                return jsonify({
+                    "available": True, 
+                    "message": "Username available"
+                }), 200
+            
+        except Exception as db_error:
+            app.logger.error(f"❌ Database query error: {db_error}")
+            app.logger.error(f"❌ Error type: {type(db_error)}")
+            import traceback
+            app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            
+            # Return a more user-friendly error
+            return jsonify({
+                "available": False, 
+                "message": "Unable to check username availability. Please try again."
+            }), 500
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error in username check: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({
+            "available": False, 
+            "message": "Error checking username availability"
+        }), 500
     """Check if username is available"""
     if not realtime_db_ref:
         return jsonify({"available": False, "message": "Database not available"}), 500
@@ -1930,6 +2282,81 @@ def get_faves():
         import traceback
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to retrieve favorites: {str(e)}"}), 500
+    
+def initialize_firebase_safely():
+    """Initialize Firebase with comprehensive error handling"""
+    global realtime_db_ref, firestore_db
+    
+    try:
+        app.logger.info("🔄 Starting enhanced Firebase initialization...")
+        
+        # Load service account credentials
+        if 'SERVICE_ACCOUNT_KEY_JSON' in os.environ:
+            app.logger.info("📱 Loading credentials from environment variable")
+            service_account = json.loads(os.environ['SERVICE_ACCOUNT_KEY_JSON'])
+            cred = credentials.Certificate(service_account)
+        else:
+            app.logger.info("📁 Loading credentials from file")
+            cred = credentials.Certificate('serviceAccountKey.json')
+        
+        app.logger.info("✅ Firebase credentials loaded successfully")
+        
+        # Initialize Firebase app with database URL
+        database_url = 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app/'
+        
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': database_url
+        })
+        
+        app.logger.info("✅ Firebase app initialized successfully")
+        
+        # Get database reference
+        realtime_db_ref = realtime_db.reference()
+        app.logger.info("✅ Realtime database reference obtained")
+        
+        # Test database connection with a simple operation
+        try:
+            # Try to read from a test path (this should work with proper permissions)
+            test_ref = realtime_db_ref.child('test_connection')
+            test_value = {'timestamp': int(time.time()), 'status': 'testing'}
+            
+            # Try to write test data
+            test_ref.set(test_value)
+            app.logger.info("✅ Database write test successful")
+            
+            # Try to read it back
+            read_result = test_ref.get()
+            app.logger.info(f"✅ Database read test successful: {read_result}")
+            
+            # Clean up test data
+            test_ref.delete()
+            app.logger.info("✅ Database cleanup successful")
+            
+        except Exception as db_test_error:
+            app.logger.error(f"❌ Database connection test failed: {db_test_error}")
+            # Don't fail completely, but log the issue
+            realtime_db_ref = None
+        
+        # Initialize Firestore (optional)
+        try:
+            firestore_db = firestore.client()
+            app.logger.info("✅ Firestore client initialized")
+        except Exception as firestore_error:
+            app.logger.warning(f"⚠️ Firestore initialization failed: {firestore_error}")
+            firestore_db = None
+        
+        app.logger.info("🎉 Firebase initialization completed successfully")
+        return True
+        
+    except Exception as e:
+        app.logger.error(f"❌ Firebase initialization failed: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        
+        realtime_db_ref = None
+        firestore_db = None
+        return False
     
 #########################
 # Filter Function Logic #
