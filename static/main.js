@@ -1010,6 +1010,9 @@ function showSuccessMessage(message) {
 // ✅ FIXED: Enhanced DOMContentLoaded with Firebase initialization
 document.addEventListener("DOMContentLoaded", function () {
     console.log('🔄 DOM loaded, initializing...');
+
+    // STEP 0: Hide results frame initially (NEW)
+    hideResultsFrameInitially();
     
     // STEP 1: First check session, then initialize Firebase
     checkSessionAndInitialize();
