@@ -4146,38 +4146,52 @@ textarea:focus, input[type="text"]:focus {
   gap: 10px;
 }
 
-/* UPDATED: Remove "Profile Picture" text from above image */
 .current-picture {
   margin-bottom: 25px;
   position: relative;
   display: flex;
   justify-content: center;
-  /* Remove any text content */
+  align-items: center;
+  width: 140px;
+  height: 140px;
+  margin: 0 auto 25px;
 }
 
 /* UPDATED: Profile picture and default icon styling */
 .current-picture img {
-  width: 140px;
-  height: 140px;
-  border-radius: 50%;
   object-fit: cover;
   border: 4px solid var(--second-color);
   box-shadow: 0 8px 20px rgba(180, 155, 102, 0.3);
+  z-index: 2; /* Higher z-index when visible */
 }
 
 /* UPDATED: Default icon in gold color */
 .current-picture i {
-  width: 140px;
-  height: 140px;
-  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #f8f9fa, #e9ecef);
   border: 4px solid var(--second-color);
   box-shadow: 0 8px 20px rgba(180, 155, 102, 0.3);
-  color: #b49b66; /* Gold color */
+  color: #b49b66;
+  font-size: 80px; /* Reduced from 120px to fit better */
+  z-index: 1; /* Lower z-index than image */
 }
+
+.current-picture img,
+.current-picture i {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+}
+.current-picture img[style*="display: block"] + i,
+.current-picture img:not([style*="display: none"]) + i {
+  display: none !important;
+}
+
 
 .picture-controls {
   display: flex;
