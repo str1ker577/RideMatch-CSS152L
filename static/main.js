@@ -1044,12 +1044,9 @@ function setupFilterPage() {
         populateYearsForFilter();
     }
     
-    // Load default cars if user hasn't applied filters
-    setTimeout(() => {
-        if (!defaultCarsLoaded && typeof loadDefaultCars === 'function') {
-            loadDefaultCars();
-        }
-    }, 1000);
+    // REMOVED: Auto-loading of default cars
+    // The results should only show when user clicks "Apply Filters"
+    console.log('✅ Filter page setup completed - results will show only when filters are applied');
 }
 
 // Enhanced ensureUsernameDisplay with better error handling
