@@ -196,37 +196,42 @@ function updateUIForAuthState(user = null, userData = null) {
             welcomeText.textContent = `Welcome, ${displayName}!`;
         }
         
-        // FIXED: Enhanced profile picture handling with proper fallback
+        // FIXED: Handle profile icon immediately with proper content
+        if (profileIcon) {
+            profileIcon.style.display = 'block';
+            profileIcon.innerHTML = '<i class="fas fa-user-circle"></i>'; // FIXED: Set proper icon immediately
+        }
+        if (profilePic) {
+            profilePic.style.display = 'none'; // Start with hidden
+        }
+        
+        // Then try to load profile picture
         const profilePictureUrl = currentUserData?.profilePictureUrl || currentUser.photoURL;
         
         console.log('🖼️ Profile picture URL:', profilePictureUrl);
         
         if (profilePictureUrl && profilePictureUrl !== 'null' && profilePictureUrl !== 'undefined') {
-            // Show profile picture
-            if (profilePic) {
-                profilePic.src = profilePictureUrl;
-                profilePic.style.display = 'block';
-                profilePic.onerror = function() {
-                    console.warn('❌ Profile picture failed to load, showing default icon');
-                    this.style.display = 'none';
-                    if (profileIcon) {
-                        profileIcon.style.display = 'block';
-                    }
-                };
-            }
-            if (profileIcon) {
-                profileIcon.style.display = 'none';
-            }
-        } else {
-            // Show default icon
-            console.log('📷 No profile picture, showing default icon');
-            if (profilePic) {
-                profilePic.style.display = 'none';
-                profilePic.src = '';
-            }
-            if (profileIcon) {
-                profileIcon.style.display = 'block';
-            }
+            // Test image loading before showing
+            const testImg = new Image();
+            
+            testImg.onload = function() {
+                if (profilePic && profileIcon) {
+                    profilePic.src = profilePictureUrl;
+                    profilePic.style.display = 'block';
+                    profileIcon.style.display = 'none';
+                }
+            };
+            
+            testImg.onerror = function() {
+                console.warn('❌ Profile picture failed to load in header');
+                if (profilePic && profileIcon) {
+                    profilePic.style.display = 'none';
+                    profileIcon.style.display = 'block';
+                    profileIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
+                }
+            };
+            
+            testImg.src = profilePictureUrl;
         }
         
         // Load user favorites for duplicate checking (only if function exists)
@@ -253,6 +258,7 @@ function updateUIForAuthState(user = null, userData = null) {
         }
         if (profileIcon) {
             profileIcon.style.display = 'block';
+            profileIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
         }
         
         // Clear favorites when logged out
@@ -263,7 +269,6 @@ function updateUIForAuthState(user = null, userData = null) {
     
     console.log('🏁 UI update completed');
 }
-
 function setupAuthStateListener() {
     if (!auth) {
         console.error('❌ Auth not available for listener setup');
@@ -1038,28 +1043,44 @@ function showSuccessMessage(message) {
 document.addEventListener("DOMContentLoaded", function () {
     console.log('🔄 DOM loaded, initializing...');
     
-    // STEP 1: First check session, then initialize Firebase
+    // STEP 1: Immediately fix any profile icons that might show text
+    const headerProfileIcon = document.getElementById('profile-icon');
+    const profilePageDefaultIcon = document.getElementById('default-profile-icon');
+    
+    if (headerProfileIcon) {
+        headerProfileIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
+    }
+    
+    if (profilePageDefaultIcon) {
+        profilePageDefaultIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
+        profilePageDefaultIcon.style.display = 'block';
+    }
+    
+    // Continue with existing initialization...
     checkSessionAndInitialize();
     
-    // STEP 2: Setup page-specific features after a delay
     setTimeout(() => {
         setupPageSpecificFeatures();
     }, 1000);
     
-    // STEP 3: Setup slider values only if sliders exist
     setTimeout(() => {
         setupSliders();
     }, 500);
     
-    // STEP 4: Setup other features
     setTimeout(() => {
         setupAdditionalFeatures();
     }, 1500);
     
-    // STEP 5: Start session management
     setTimeout(() => {
         startSessionManagement();
     }, 2000);
+    
+    // STEP 6: Initialize profile page if we're on it
+    setTimeout(() => {
+        if (window.location.pathname === '/profile') {
+            initializeProfilePage();
+        }
+    }, 100);
 });
 
 // Setup filter page specific features
@@ -1221,6 +1242,29 @@ function clearUserData() {
 // Profile Page Functionality //
 ///////////////////////////////
 
+function initializeProfilePage() {
+    console.log('🔧 Initializing profile page...');
+    
+    // Immediately set default icons to prevent text from showing
+    const defaultIcon = document.getElementById('default-profile-icon');
+    const currentPic = document.getElementById('current-profile-pic');
+    
+    if (defaultIcon) {
+        defaultIcon.style.display = 'block';
+        defaultIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
+    }
+    
+    if (currentPic) {
+        currentPic.style.display = 'none';
+        currentPic.src = '';
+    }
+    
+    // Then load the actual profile data
+    if (typeof loadUserProfile === 'function') {
+        loadUserProfile();
+    }
+}
+
 function handleProfilePageAccess() {
     console.log('🔒 Checking profile page access...');
     
@@ -1257,6 +1301,21 @@ async function loadUserProfile() {
     
     console.log('🔄 Loading user profile data...');
 
+    // FIXED: Immediately show default icon while loading
+    const currentPic = document.getElementById('current-profile-pic');
+    const defaultIcon = document.getElementById('default-profile-icon');
+    
+    // Set default state immediately
+    if (currentPic) {
+        currentPic.style.display = 'none';
+        currentPic.src = '';
+    }
+    if (defaultIcon) {
+        defaultIcon.style.display = 'block';
+        // FIXED: Ensure it has proper icon content
+        defaultIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
+    }
+
     try {
         const response = await fetch(`${baseUrl}/get-user-profile`, {
             method: 'POST',
@@ -1287,53 +1346,47 @@ async function loadUserProfile() {
                 totalFavoritesElement.textContent = profile.favoriteCount || '0';
             }
             
-            // FIXED: Enhanced profile picture handling in profile page
-            const currentPic = document.getElementById('current-profile-pic');
-            const defaultIcon = document.getElementById('default-profile-icon');
+            // FIXED: Handle profile picture with proper icon fallback
+            console.log('🖼️ Profile picture URL:', profile.profilePictureUrl);
             
-            console.log('🖼️ Profile page picture elements:', {
-                currentPic: !!currentPic,
-                defaultIcon: !!defaultIcon,
-                profilePictureUrl: profile.profilePictureUrl
-            });
-            
-            if (profile.profilePictureUrl && profile.profilePictureUrl !== 'null') {
-                console.log('✅ Showing profile picture:', profile.profilePictureUrl);
+            if (profile.profilePictureUrl && profile.profilePictureUrl !== 'null' && profile.profilePictureUrl !== 'undefined') {
+                console.log('✅ Loading profile picture:', profile.profilePictureUrl);
                 
                 if (currentPic) {
-                    currentPic.src = profile.profilePictureUrl;
-                    currentPic.style.display = 'block';
+                    // Create a new image to test if it loads
+                    const testImg = new Image();
                     
-                    // FIXED: Add error handling to prevent text fallback
-                    currentPic.onerror = function() {
-                        console.warn('❌ Profile picture failed to load in profile page');
-                        this.style.display = 'none';
-                        if (defaultIcon) {
-                            defaultIcon.style.display = 'block';
-                        }
-                    };
-                    
-                    // Ensure it loaded successfully
-                    currentPic.onload = function() {
-                        console.log('✅ Profile picture loaded successfully in profile page');
+                    testImg.onload = function() {
+                        console.log('✅ Profile picture loaded successfully');
+                        currentPic.src = profile.profilePictureUrl;
+                        currentPic.style.display = 'block';
                         if (defaultIcon) {
                             defaultIcon.style.display = 'none';
                         }
                     };
-                }
-                
-                if (defaultIcon) {
-                    defaultIcon.style.display = 'none';
+                    
+                    testImg.onerror = function() {
+                        console.warn('❌ Profile picture failed to load, keeping default icon');
+                        currentPic.style.display = 'none';
+                        if (defaultIcon) {
+                            defaultIcon.style.display = 'block';
+                            defaultIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
+                        }
+                    };
+                    
+                    testImg.src = profile.profilePictureUrl;
                 }
             } else {
-                console.log('📷 No profile picture, showing default icon in profile page');
+                console.log('📷 No profile picture, showing default icon');
                 
+                // Ensure default icon is properly displayed
                 if (currentPic) {
                     currentPic.style.display = 'none';
                     currentPic.src = '';
                 }
                 if (defaultIcon) {
                     defaultIcon.style.display = 'block';
+                    defaultIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
                 }
             }
             
@@ -1342,26 +1395,27 @@ async function loadUserProfile() {
                 userProfilePictureUrl = profile.profilePictureUrl;
                 
                 // Update header profile picture as well
-                const headerProfilePic = document.getElementById('profile-pic');
-                const headerProfileIcon = document.getElementById('profile-icon');
-                
-                if (headerProfilePic && headerProfileIcon) {
-                    headerProfilePic.src = profile.profilePictureUrl;
-                    headerProfilePic.style.display = 'block';
-                    headerProfileIcon.style.display = 'none';
-                    
-                    headerProfilePic.onerror = function() {
-                        this.style.display = 'none';
-                        headerProfileIcon.style.display = 'block';
-                    };
-                }
+                updateHeaderProfilePicture(profile.profilePictureUrl);
+            } else {
+                userProfilePictureUrl = null;
+                updateHeaderProfilePicture(null);
             }
             
         } else {
             console.error('❌ Failed to load profile data');
+            // Ensure default icon is shown on error
+            if (defaultIcon) {
+                defaultIcon.style.display = 'block';
+                defaultIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
+            }
         }
     } catch (error) {
         console.error('❌ Error loading profile:', error);
+        // Ensure default icon is shown on error
+        if (defaultIcon) {
+            defaultIcon.style.display = 'block';
+            defaultIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
+        }
     }
 }
 
@@ -1476,35 +1530,31 @@ async function updateProfilePicture() {
             // Update global variable
             userProfilePictureUrl = result.url;
             
-            // FIXED: Update both profile page and header immediately
+            // FIXED: Update profile page immediately
             const currentPic = document.getElementById('current-profile-pic');
             const defaultIcon = document.getElementById('default-profile-icon');
-            const headerProfilePic = document.getElementById('profile-pic');
-            const headerProfileIcon = document.getElementById('profile-icon');
             
-            // Update profile page
             if (currentPic && defaultIcon) {
-                currentPic.src = result.url;
-                currentPic.style.display = 'block';
-                defaultIcon.style.display = 'none';
+                // Test image loading before showing
+                const testImg = new Image();
                 
-                currentPic.onerror = function() {
-                    this.style.display = 'none';
-                    defaultIcon.style.display = 'block';
+                testImg.onload = function() {
+                    currentPic.src = result.url;
+                    currentPic.style.display = 'block';
+                    defaultIcon.style.display = 'none';
                 };
+                
+                testImg.onerror = function() {
+                    currentPic.style.display = 'none';
+                    defaultIcon.style.display = 'block';
+                    defaultIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
+                };
+                
+                testImg.src = result.url;
             }
             
             // Update header
-            if (headerProfilePic && headerProfileIcon) {
-                headerProfilePic.src = result.url;
-                headerProfilePic.style.display = 'block';
-                headerProfileIcon.style.display = 'none';
-                
-                headerProfilePic.onerror = function() {
-                    this.style.display = 'none';
-                    headerProfileIcon.style.display = 'block';
-                };
-            }
+            updateHeaderProfilePicture(result.url);
             
             alert('Profile picture updated successfully!');
         } else {
@@ -1538,25 +1588,19 @@ async function removeProfilePicture() {
             // Clear global variable
             userProfilePictureUrl = null;
             
-            // FIXED: Update both profile page and header immediately
+            // FIXED: Update profile page immediately with proper icon
             const currentPic = document.getElementById('current-profile-pic');
             const defaultIcon = document.getElementById('default-profile-icon');
-            const headerProfilePic = document.getElementById('profile-pic');
-            const headerProfileIcon = document.getElementById('profile-icon');
             
-            // Update profile page
             if (currentPic && defaultIcon) {
                 currentPic.style.display = 'none';
                 currentPic.src = '';
                 defaultIcon.style.display = 'block';
+                defaultIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
             }
             
             // Update header
-            if (headerProfilePic && headerProfileIcon) {
-                headerProfilePic.style.display = 'none';
-                headerProfilePic.src = '';
-                headerProfileIcon.style.display = 'block';
-            }
+            updateHeaderProfilePicture(null);
             
             alert('Profile picture removed successfully!');
         } else {
@@ -1566,6 +1610,48 @@ async function removeProfilePicture() {
     } catch (error) {
         console.error('Error removing profile picture:', error);
         alert('Error removing profile picture');
+    }
+}
+
+function updateHeaderProfilePicture(profilePictureUrl) {
+    const headerProfilePic = document.getElementById('profile-pic');
+    const headerProfileIcon = document.getElementById('profile-icon');
+    
+    if (!headerProfilePic || !headerProfileIcon) {
+        console.log('Header profile elements not found');
+        return;
+    }
+    
+    if (profilePictureUrl && profilePictureUrl !== 'null' && profilePictureUrl !== 'undefined') {
+        // Test if image loads before showing it
+        const testImg = new Image();
+        
+        testImg.onload = function() {
+            console.log('✅ Header profile picture loaded successfully');
+            headerProfilePic.src = profilePictureUrl;
+            headerProfilePic.style.display = 'block';
+            headerProfileIcon.style.display = 'none';
+            
+            // FIXED: Remove any "Profile Picture" text that might appear
+            headerProfileIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
+        };
+        
+        testImg.onerror = function() {
+            console.warn('❌ Header profile picture failed to load');
+            headerProfilePic.style.display = 'none';
+            headerProfileIcon.style.display = 'block';
+            headerProfileIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
+        };
+        
+        testImg.src = profilePictureUrl;
+    } else {
+        console.log('📷 No header profile picture, showing default icon');
+        headerProfilePic.style.display = 'none';
+        headerProfilePic.src = '';
+        headerProfileIcon.style.display = 'block';
+        
+        // FIXED: Ensure proper icon content without text
+        headerProfileIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
     }
 }
 
