@@ -9,7 +9,7 @@ import numpy as np
 import os
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 import os
 from werkzeug.utils import secure_filename
 from PIL import Image
@@ -400,6 +400,65 @@ def get_firebase_config():
 # UPDATED: Enhanced verify-token route to include username (replace existing)
 @app.route('/verify-token', methods=['POST'])
 def verify_token():
+    if not realtime_db_ref:
+        app.logger.error("Database not available for token verification")
+        return jsonify({"status": "error", "message": "Database not available"}), 500
+    
+    try:
+        data = request.get_json()
+        if not data:
+            app.logger.error("No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+            
+        id_token = data.get('idToken')
+        email = data.get('email')
+        
+        if not id_token:
+            app.logger.error("No token provided in request")
+            return jsonify({"status": "error", "message": "No token provided"}), 400
+        
+        # Verify token with Firebase Admin
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        
+        # Get user profile data including username
+        user_ref = realtime_db_ref.child('users').child(uid)
+        user_data = user_ref.get()
+        
+        username = None
+        profile_picture_url = None
+        if user_data:
+            username = user_data.get('username')
+            profile_picture_url = user_data.get('profilePictureUrl')
+        
+        # Set comprehensive session data
+        session['user'] = uid
+        session['email'] = email
+        session['username'] = username
+        session['profile_picture_url'] = profile_picture_url
+        session['idToken'] = id_token
+        session['authenticated'] = True
+        session['auth_time'] = int(time.time())
+        
+        # Make session permanent (expires in 30 days)
+        session.permanent = True
+        app.permanent_session_lifetime = timedelta(days=30)
+        
+        app.logger.info(f"✅ User {email} logged in successfully with username: {username}")
+        return jsonify({
+            "status": "success", 
+            "message": "Authentication successful",
+            "username": username,
+            "profile_picture_url": profile_picture_url,
+            "uid": uid
+        }), 200
+        
+    except firebase_admin.auth.InvalidIdTokenError as e:
+        app.logger.error(f"Invalid token error: {e}")
+        return jsonify({"status": "error", "message": "Invalid token"}), 401
+    except Exception as e:
+        app.logger.error(f"Token verification failed: {str(e)}")
+        return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
     if not firestore_db:
         app.logger.error("Database not available for token verification")
         return jsonify({"status": "error", "message": "Database not available"}), 500
@@ -448,6 +507,20 @@ def verify_token():
     except Exception as e:
         app.logger.error(f"Token verification failed: {str(e)}")
         return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
+    
+@app.route('/check-session', methods=['GET'])
+def check_session():
+    """Check if user has a valid session"""
+    if 'user' in session and session.get('authenticated'):
+        return jsonify({
+            "authenticated": True,
+            "user": session.get('user'),
+            "email": session.get('email'),
+            "username": session.get('username'),
+            "profile_picture_url": session.get('profile_picture_url')
+        }), 200
+    else:
+        return jsonify({"authenticated": False}), 200
     
 ###################
 # Signup Function #

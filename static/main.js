@@ -95,9 +95,10 @@ async function initializeFirebase() {
         console.log('🔄 Starting Firebase initialization...');
         
         // Check if Firebase is already initialized
-        if (firebase.apps.length > 0) {
+        if (firebase.apps && firebase.apps.length > 0) {
             console.log('✅ Firebase already initialized');
             auth = firebase.auth();
+            setupAuthStateListener(); // Always set up listener
             return;
         }
         
@@ -134,44 +135,7 @@ async function initializeFirebase() {
         }
         
         // Set up auth state listener
-        auth.onAuthStateChanged(async (user) => {
-            console.log('🔄 Auth state changed:', user ? user.email : 'signed out');
-            
-            if (user) {
-                currentUser = user;
-                userName = user.email;
-                
-                try {
-                    const profileResponse = await fetch(`${baseUrl}/get-user-profile`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ uid: user.uid })
-                    });
-                    
-                    if (profileResponse.ok) {
-                        const profileData = await profileResponse.json();
-                        userDisplayName = profileData.username || user.displayName || user.email;
-                        console.log('✅ User profile loaded:', profileData);
-                        updateUIForAuthState(user, profileData);
-                    } else {
-                        userDisplayName = user.displayName || user.email;
-                        updateUIForAuthState(user, { username: userDisplayName });
-                    }
-                } catch (error) {
-                    console.error('Error fetching user profile:', error);
-                    userDisplayName = user.displayName || user.email;
-                    updateUIForAuthState(user, { username: userDisplayName });
-                }
-                
-                console.log('✅ User is signed in:', user.email, 'Username:', userDisplayName);
-            } else {
-                currentUser = null;
-                userName = null;
-                userDisplayName = null;
-                updateUIForAuthState(null, null);
-                console.log('✅ User is signed out');
-            }
-        });
+        setupAuthStateListener();
         
         console.log('✅ Firebase initialization completed successfully');
         
@@ -180,35 +144,16 @@ async function initializeFirebase() {
         console.error('Error details:', error.message);
         
         // Show user-friendly error
-        const errorDiv = document.createElement('div');
-        errorDiv.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: #e74c3c;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 8px;
-            z-index: 10000;
-            font-size: 14px;
-        `;
-        errorDiv.textContent = 'Authentication system failed to load. Please refresh the page.';
-        document.body.appendChild(errorDiv);
-        
-        setTimeout(() => {
-            if (errorDiv.parentNode) {
-                errorDiv.parentNode.removeChild(errorDiv);
-            }
-        }, 5000);
+        showFirebaseError();
     }
 }
 
 function updateUIForAuthState(user = null, userData = null) {
     console.log('🔄 Updating UI for auth state:', user ? 'logged in' : 'logged out');
     
-    // ✅ FIXED: Safely get DOM elements with null checks
+    // ✅ SAFELY get DOM elements with proper null checks
     const loginButton = document.getElementById('login-button');
-    const profileContainer = document.getElementById('profile-container'); // ✅ FIXED: Proper element reference
+    const profileContainer = document.getElementById('profile-container');
     const welcomeText = document.getElementById('welcome-text');
     const profileIcon = document.getElementById('profile-icon');
     const profilePic = document.getElementById('profile-pic');
@@ -223,12 +168,20 @@ function updateUIForAuthState(user = null, userData = null) {
         usernameDisplay: !!usernameDisplay
     });
 
+    // Use current user if not provided
     const currentUser = user || (auth && auth.currentUser);
     const currentUserData = userData || { username: userDisplayName };
+
+    console.log('👤 User data:', {
+        hasCurrentUser: !!currentUser,
+        userDisplayName: userDisplayName,
+        userEmail: currentUser ? currentUser.email : 'none'
+    });
 
     if (currentUser && (userDisplayName || currentUser.email)) {
         console.log('✅ User is logged in - updating UI');
         
+        // User is logged in
         if (loginButton) {
             loginButton.style.display = 'none';
         }
@@ -237,15 +190,18 @@ function updateUIForAuthState(user = null, userData = null) {
             profileContainer.style.display = 'flex';
         }
         
+        // Update welcome text with username
         const displayName = userDisplayName || currentUser.displayName || currentUser.email;
         if (welcomeText) {
             welcomeText.textContent = `Welcome, ${displayName}!`;
         }
         
+        // Update username display if it exists
         if (usernameDisplay) {
             usernameDisplay.textContent = displayName;
         }
         
+        // Handle profile picture
         const profilePictureUrl = currentUser.photoURL || currentUserData.profilePictureUrl;
         if (profilePictureUrl) {
             if (profilePic) {
@@ -264,7 +220,7 @@ function updateUIForAuthState(user = null, userData = null) {
             }
         }
         
-        // ✅ FIXED: Load user favorites with proper error handling
+        // Load user favorites for duplicate checking (only if function exists)
         if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
             loadUserFavoritesForDuplicateCheck();
         }
@@ -272,6 +228,7 @@ function updateUIForAuthState(user = null, userData = null) {
     } else {
         console.log('❌ User is logged out - updating UI');
         
+        // User is logged out
         if (loginButton) {
             loginButton.style.display = 'block';
         }
@@ -292,13 +249,86 @@ function updateUIForAuthState(user = null, userData = null) {
             profileIcon.style.display = 'block';
         }
         
-        // ✅ FIXED: Clear favorites safely
-        if (userFavorites) {
+        // Clear favorites when logged out
+        if (typeof userFavorites !== 'undefined' && userFavorites) {
             userFavorites.clear();
         }
     }
     
     console.log('🏁 UI update completed');
+}
+
+function setupAuthStateListener() {
+    if (!auth) {
+        console.error('❌ Auth not available for listener setup');
+        return;
+    }
+    
+    console.log('🔄 Setting up auth state listener...');
+    
+    auth.onAuthStateChanged(async (user) => {
+        console.log('🔄 Auth state changed:', user ? user.email : 'signed out');
+        
+        if (user) {
+            currentUser = user;
+            userName = user.email;
+            
+            try {
+                // Get user profile data including username
+                const profileResponse = await fetch(`${baseUrl}/get-user-profile`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid: user.uid })
+                });
+                
+                if (profileResponse.ok) {
+                    const profileData = await profileResponse.json();
+                    userDisplayName = profileData.username || user.displayName || user.email;
+                    console.log('✅ User profile loaded:', profileData);
+                    updateUIForAuthState(user, profileData);
+                } else {
+                    userDisplayName = user.displayName || user.email;
+                    updateUIForAuthState(user, { username: userDisplayName });
+                }
+            } catch (error) {
+                console.error('Error fetching user profile:', error);
+                userDisplayName = user.displayName || user.email;
+                updateUIForAuthState(user, { username: userDisplayName });
+            }
+            
+            console.log('✅ User is signed in:', user.email, 'Username:', userDisplayName);
+        } else {
+            currentUser = null;
+            userName = null;
+            userDisplayName = null;
+            updateUIForAuthState(null, null);
+            console.log('✅ User is signed out');
+        }
+    });
+}
+
+function showFirebaseError() {
+    const errorDiv = document.createElement('div');
+    errorDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #e74c3c;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        z-index: 10000;
+        font-size: 14px;
+        max-width: 300px;
+    `;
+    errorDiv.textContent = 'Authentication system failed to load. Please refresh the page.';
+    document.body.appendChild(errorDiv);
+    
+    setTimeout(() => {
+        if (errorDiv.parentNode) {
+            errorDiv.parentNode.removeChild(errorDiv);
+        }
+    }, 5000);
 }
 
 let usernameDisplay = document.getElementById('username-display');
@@ -316,6 +346,80 @@ if (!usernameDisplay && profileContainer) {
     // Insert it as the first child of profile container
     profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
     console.log('✅ Username display element created and added');
+}
+
+async function checkSessionStatus() {
+    try {
+        console.log('🔍 Checking session status...');
+        
+        const response = await fetch('/check-session', {
+            method: 'GET',
+            credentials: 'same-origin'
+        });
+        
+        if (response.ok) {
+            const sessionData = await response.json();
+            console.log('📋 Session data:', sessionData);
+            
+            if (sessionData.authenticated) {
+                // User has valid session, update global variables
+                userName = sessionData.email;
+                userDisplayName = sessionData.username || sessionData.email;
+                currentUser = {
+                    uid: sessionData.user,
+                    email: sessionData.email,
+                    displayName: sessionData.username,
+                    photoURL: sessionData.profile_picture_url
+                };
+                
+                console.log('✅ Session is valid, user is logged in');
+                
+                // Update UI immediately
+                updateUIForAuthState(currentUser, {
+                    username: userDisplayName,
+                    profilePictureUrl: sessionData.profile_picture_url
+                });
+                
+                return true;
+            } else {
+                console.log('❌ No valid session found');
+                return false;
+            }
+        } else {
+            console.log('⚠️ Session check failed');
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ Error checking session:', error);
+        return false;
+    }
+}
+
+async function initializeFirebaseWithSession() {
+    try {
+        console.log('🔄 Starting Firebase initialization with session check...');
+        
+        // First check if user has a valid session
+        const hasValidSession = await checkSessionStatus();
+        
+        // Then initialize Firebase
+        await initializeFirebase();
+        
+        // If we have a valid session but Firebase auth hasn't loaded yet, 
+        // make sure UI is updated correctly
+        if (hasValidSession && currentUser) {
+            setTimeout(() => {
+                updateUIForAuthState(currentUser, {
+                    username: userDisplayName
+                });
+            }, 500);
+        }
+        
+        console.log('✅ Firebase and session initialization completed');
+        
+    } catch (error) {
+        console.error('❌ Firebase and session initialization failed:', error);
+    }
 }
 
 /////////////////////////////////////////
@@ -576,8 +680,10 @@ function handleLogin(event) {
                 if (data.status === 'success') {
                     console.log('✅ Backend session created successfully');
                     
+                    // Update global variables
                     userName = user.email;
                     currentUser = user;
+                    userDisplayName = data.username || user.displayName || user.email;
                     
                     const errorMsg = document.querySelector('.error-message');
                     const errorMsg12 = document.querySelector('.error-message12');
@@ -595,9 +701,16 @@ function handleLogin(event) {
                     if (menuButton) menuButton.style.display = 'block';
                     if (closeButton) closeButton.style.display = 'none';
                     
+                    // Update UI with complete user data
                     setTimeout(() => {
-                        updateUIForAuthState(user, { username: data.username });
+                        updateUIForAuthState(user, { 
+                            username: data.username,
+                            profilePictureUrl: data.profile_picture_url
+                        });
                     }, 100);
+                    
+                    // Show success message
+                    showSuccessMessage('Login successful! Welcome back.');
                     
                 } else {
                     console.error('❌ Backend authentication failed:', data);
@@ -611,7 +724,9 @@ function handleLogin(event) {
             const errorElement = document.querySelector('.error-message');
             
             if (successElement) successElement.textContent = '';
-            if (errorElement) errorElement.textContent = getFirebaseErrorMessage(error.code) || error.message;
+            if (errorElement) {
+                errorElement.textContent = getFirebaseErrorMessage(error.code) || error.message;
+            }
         })
         .finally(() => {
             if (submitButton) {
@@ -621,38 +736,164 @@ function handleLogin(event) {
         });
 }
 
+// Helper function to show success messages
+function showSuccessMessage(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'success-notification';
+    messageDiv.innerHTML = `
+        <i class="fas fa-check-circle"></i>
+        <span>${message}</span>
+    `;
+    messageDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #27ae60;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        animation: slideInRight 0.3s ease;
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 300);
+        }
+    }, 3000);
+}
+
 // ✅ FIXED: Enhanced DOMContentLoaded with Firebase initialization
 document.addEventListener("DOMContentLoaded", function () {
     console.log('🔄 DOM loaded, initializing...');
     
-    // Initialize Firebase IMMEDIATELY
-    initializeFirebase().then(() => {
-        console.log('✅ Firebase initialization completed');
+    // Initialize Firebase AND check session status
+    initializeFirebaseWithSession().then(() => {
+        console.log('✅ Firebase and session initialization completed');
+        
+        // Check if we're on a specific page that needs special handling
+        const isFilterPage = document.getElementById('year') !== null;
+        const isComparePage = document.getElementById('compare-charts-section') !== null;
+        const isProfilePage = window.location.pathname === '/profile';
+        
+        console.log('🔍 Page detection:', {
+            isFilterPage,
+            isComparePage,
+            isProfilePage,
+            pathname: window.location.pathname
+        });
+        
+        // Initialize page-specific features
+        if (isFilterPage) {
+            // Setup filter page features
+            setupFilterPage();
+        }
+        
+        if (isComparePage) {
+            // Initialize compare page
+            initializeComparePage();
+        }
+        
+        if (isProfilePage) {
+            // Load profile page if we're on it
+            setTimeout(() => {
+                if (currentUser) {
+                    loadProfilePage();
+                } else {
+                    // Check again after auth state is loaded
+                    setTimeout(() => {
+                        if (currentUser) {
+                            loadProfilePage();
+                        } else {
+                            window.location.href = '/';
+                        }
+                    }, 2000);
+                }
+            }, 1000);
+        }
+        
     }).catch(error => {
-        console.error('❌ Firebase initialization failed in DOMContentLoaded:', error);
+        console.error('❌ Firebase and session initialization failed in DOMContentLoaded:', error);
     });
     
-    // Setup slider values
+    // Setup slider values only if sliders exist
     setTimeout(() => {
-        updateSliderValue("price", "", true);
-        updateSliderValue("horsepower", "HP", false);
-        updateSliderValue("seating", "seats", false);
-        updateSliderValue("cargo-space", "L", false);
-        updateSliderValue("ground-clearance", "cm", false);
+        if (document.getElementById('price')) {
+            updateSliderValue("price", "", true);
+        }
+        if (document.getElementById('horsepower')) {
+            updateSliderValue("horsepower", "HP", false);
+        }
+        if (document.getElementById('seating')) {
+            updateSliderValue("seating", "seats", false);
+        }
+        if (document.getElementById('cargo-space')) {
+            updateSliderValue("cargo-space", "L", false);
+        }
+        if (document.getElementById('ground-clearance')) {
+            updateSliderValue("ground-clearance", "cm", false);
+        }
     }, 500);
     
-    // Ensure username display element exists
+    // Ensure username display element exists (only on pages that need it)
     setTimeout(() => {
         ensureUsernameDisplay();
     }, 1000);
+    
+    // Setup username validation for signup (only if signup form exists)
+    if (document.getElementById('username_signup')) {
+        setupUsernameValidation();
+    }
+    
+    // Setup profile picture change handler (only if element exists)
+    const profilePictureInput = document.getElementById('new-profile-picture');
+    if (profilePictureInput) {
+        profilePictureInput.addEventListener('change', updateProfilePicture);
+    }
 });
 
-// ✅ FIXED: Add ensureUsernameDisplay function if missing
+// Setup filter page specific features
+function setupFilterPage() {
+    console.log('🔧 Setting up filter page features...');
+    
+    // Populate years for filter page
+    if (typeof populateYearsForFilter === 'function') {
+        populateYearsForFilter();
+    }
+    
+    // Load default cars if user hasn't applied filters
+    setTimeout(() => {
+        if (!defaultCarsLoaded && typeof loadDefaultCars === 'function') {
+            loadDefaultCars();
+        }
+    }, 1000);
+}
+
+// Enhanced ensureUsernameDisplay with better error handling
 function ensureUsernameDisplay() {
-    let usernameDisplay = document.getElementById('username-display');
     const profileContainer = document.getElementById('profile-container');
     
-    if (!usernameDisplay && profileContainer) {
+    // Only create username display if profile container exists and we don't have it already
+    if (!profileContainer) {
+        console.log('📝 Profile container not found - skipping username display creation');
+        return;
+    }
+    
+    let usernameDisplay = document.getElementById('username-display');
+    
+    if (!usernameDisplay) {
         console.log('🔧 Creating missing username display element');
         usernameDisplay = document.createElement('span');
         usernameDisplay.id = 'username-display';
@@ -661,28 +902,35 @@ function ensureUsernameDisplay() {
         usernameDisplay.style.color = '#b49b66';
         usernameDisplay.style.fontWeight = 'bold';
         
+        // Insert it as the first child of profile container
         profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
         console.log('✅ Username display element created and added');
     }
 }
 
-// Helper function for user-friendly error messages (keep your existing one)
-function getFirebaseErrorMessage(errorCode) {
-    switch (errorCode) {
-        case 'auth/user-not-found':
-            return 'No account found with this email address.';
-        case 'auth/wrong-password':
-            return 'Incorrect password.';
-        case 'auth/email-already-in-use':
-            return 'Email address already in use.';
-        case 'auth/weak-password':
-            return 'Password should be at least 6 characters.';
-        case 'auth/invalid-email':
-            return 'Invalid email address.';
-        case 'auth/too-many-requests':
-            return 'Too many failed attempts. Please try again later.';
-        default:
-            return 'Authentication failed. Please try again.';
+function ensureUsernameDisplay() {
+    const profileContainer = document.getElementById('profile-container');
+    
+    // Only create username display if profile container exists and we don't have it already
+    if (!profileContainer) {
+        console.log('📝 Profile container not found - skipping username display creation');
+        return;
+    }
+    
+    let usernameDisplay = document.getElementById('username-display');
+    
+    if (!usernameDisplay) {
+        console.log('🔧 Creating missing username display element');
+        usernameDisplay = document.createElement('span');
+        usernameDisplay.id = 'username-display';
+        usernameDisplay.className = 'username-display';
+        usernameDisplay.style.marginRight = '10px';
+        usernameDisplay.style.color = '#b49b66';
+        usernameDisplay.style.fontWeight = 'bold';
+        
+        // Insert it as the first child of profile container
+        profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
+        console.log('✅ Username display element created and added');
     }
 }
 
