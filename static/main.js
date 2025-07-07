@@ -333,21 +333,6 @@ function showFirebaseError() {
 
 let usernameDisplay = document.getElementById('username-display');
 
-// If username display doesn't exist, create it
-if (!usernameDisplay && profileContainer) {
-    console.log('🔧 Creating missing username display element');
-    usernameDisplay = document.createElement('span');
-    usernameDisplay.id = 'username-display';
-    usernameDisplay.className = 'username-display';
-    usernameDisplay.style.marginRight = '10px';
-    usernameDisplay.style.color = '#b49b66';
-    usernameDisplay.style.fontWeight = 'bold';
-    
-    // Insert it as the first child of profile container
-    profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
-    console.log('✅ Username display element created and added');
-}
-
 async function checkSessionStatus() {
     try {
         console.log('🔍 Checking session status...');
@@ -1076,50 +1061,30 @@ function setupFilterPage() {
 
 // Enhanced ensureUsernameDisplay with better error handling
 function ensureUsernameDisplay() {
+    // Don't do anything if we're not on a page that needs this
     try {
-        console.log('🔧 Ensuring username display element exists...');
-        
-        // Safely get the profile container
         const profileContainer = document.getElementById('profile-container');
-        
-        // Only proceed if profile container exists
         if (!profileContainer) {
-            console.log('📝 Profile container not found - skipping username display creation');
+            console.log('📝 Profile container not found - skipping username display');
             return;
         }
         
-        // Check if username display already exists
         let usernameDisplay = document.getElementById('username-display');
-        
         if (!usernameDisplay) {
-            console.log('🔧 Creating missing username display element');
+            console.log('🔧 Creating username display element');
+            usernameDisplay = document.createElement('span');
+            usernameDisplay.id = 'username-display';
+            usernameDisplay.className = 'username-display';
+            usernameDisplay.style.marginRight = '10px';
+            usernameDisplay.style.color = '#b49b66';
+            usernameDisplay.style.fontWeight = 'bold';
             
-            try {
-                usernameDisplay = document.createElement('span');
-                usernameDisplay.id = 'username-display';
-                usernameDisplay.className = 'username-display';
-                usernameDisplay.style.marginRight = '10px';
-                usernameDisplay.style.color = '#b49b66';
-                usernameDisplay.style.fontWeight = 'bold';
-                
-                // Safely insert it as the first child of profile container
-                if (profileContainer.firstChild) {
-                    profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
-                } else {
-                    profileContainer.appendChild(usernameDisplay);
-                }
-                
-                console.log('✅ Username display element created and added successfully');
-            } catch (createError) {
-                console.error('❌ Error creating username display element:', createError);
-            }
-        } else {
-            console.log('✅ Username display element already exists');
+            profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
+            console.log('✅ Username display created');
         }
-        
     } catch (error) {
         console.error('❌ Error in ensureUsernameDisplay:', error);
-        // Don't throw the error, just log it to prevent crashes
+        // Don't throw - just continue
     }
 }
 
