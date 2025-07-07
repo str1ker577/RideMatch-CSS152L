@@ -152,36 +152,18 @@ async function initializeFirebase() {
 function updateUIForAuthState(user = null, userData = null) {
     console.log('🔄 Updating UI for auth state:', user ? 'logged in' : 'logged out');
     
-    // ✅ SAFELY get DOM elements with proper null checks
     const loginButton = document.getElementById('login-button');
     const profileContainer = document.getElementById('profile-container');
     const welcomeText = document.getElementById('welcome-text');
     const profileIcon = document.getElementById('profile-icon');
     const profilePic = document.getElementById('profile-pic');
 
-    console.log('🔍 DOM Elements found:', {
-        loginButton: !!loginButton,
-        profileContainer: !!profileContainer,
-        welcomeText: !!welcomeText,
-        profileIcon: !!profileIcon,
-        profilePic: !!profilePic
-    });
-
-    // Use current user if not provided
-    const currentUserAuth = user || (auth && auth.currentUser);
+    const currentUser = user || (auth && auth.currentUser);
     const currentUserData = userData || { username: userDisplayName };
 
-    console.log('👤 User data:', {
-        hasCurrentUser: !!currentUserAuth,
-        userDisplayName: userDisplayName,
-        userEmail: currentUserAuth ? currentUserAuth.email : 'none',
-        profilePictureUrl: currentUserData?.profilePictureUrl || 'none'
-    });
-
-    if (currentUserAuth && (userDisplayName || currentUserAuth.email)) {
+    if (currentUser && (userDisplayName || currentUser.email)) {
         console.log('✅ User is logged in - updating UI');
         
-        // User is logged in
         if (loginButton) {
             loginButton.style.display = 'none';
         }
@@ -190,16 +172,32 @@ function updateUIForAuthState(user = null, userData = null) {
             profileContainer.style.display = 'flex';
         }
         
-        // Update welcome text with username
-        const displayName = userDisplayName || currentUserAuth.displayName || currentUserAuth.email;
+        const displayName = userDisplayName || currentUser.displayName || currentUser.email;
         if (welcomeText) {
             welcomeText.textContent = `Welcome, ${displayName}!`;
         }
         
-        // FIXED: Handle header profile picture carefully (don't create duplicates)
-        updateHeaderProfilePicture(currentUserData?.profilePictureUrl || currentUserAuth.photoURL);
+        // SIMPLE: Handle header profile picture
+        const profilePictureUrl = currentUserData?.profilePictureUrl || currentUser.photoURL;
         
-        // Load user favorites for duplicate checking (only if function exists)
+        if (profilePictureUrl && profilePictureUrl !== 'null') {
+            if (profilePic) {
+                profilePic.src = profilePictureUrl;
+                profilePic.style.display = 'block';
+            }
+            if (profileIcon) {
+                profileIcon.style.display = 'none';
+            }
+        } else {
+            if (profilePic) {
+                profilePic.style.display = 'none';
+                profilePic.src = '';
+            }
+            if (profileIcon) {
+                profileIcon.style.display = 'block';
+            }
+        }
+        
         if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
             loadUserFavoritesForDuplicateCheck();
         }
@@ -207,7 +205,6 @@ function updateUIForAuthState(user = null, userData = null) {
     } else {
         console.log('❌ User is logged out - updating UI');
         
-        // User is logged out
         if (loginButton) {
             loginButton.style.display = 'block';
         }
@@ -217,11 +214,14 @@ function updateUIForAuthState(user = null, userData = null) {
         if (welcomeText) {
             welcomeText.textContent = 'Welcome!';
         }
+        if (profilePic) {
+            profilePic.style.display = 'none';
+            profilePic.src = '';
+        }
+        if (profileIcon) {
+            profileIcon.style.display = 'block';
+        }
         
-        // Reset header profile picture
-        updateHeaderProfilePicture(null);
-        
-        // Clear favorites when logged out
         if (typeof userFavorites !== 'undefined' && userFavorites) {
             userFavorites.clear();
         }
@@ -229,7 +229,6 @@ function updateUIForAuthState(user = null, userData = null) {
     
     console.log('🏁 UI update completed');
 }
-
 function setupAuthStateListener() {
     if (!auth) {
         console.error('❌ Auth not available for listener setup');
@@ -1013,20 +1012,7 @@ function showSuccessMessage(message) {
 document.addEventListener("DOMContentLoaded", function () {
     console.log('🔄 DOM loaded, initializing...');
     
-    // STEP 1: Immediately fix any profile icons that might show text
-    const headerProfileIcon = document.getElementById('profile-icon');
-    const profilePageDefaultIcon = document.getElementById('default-profile-icon');
-    
-    if (headerProfileIcon) {
-        headerProfileIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
-    }
-    
-    if (profilePageDefaultIcon) {
-        profilePageDefaultIcon.innerHTML = '<i class="fas fa-user-circle"></i>';
-        profilePageDefaultIcon.style.display = 'block';
-    }
-    
-    // Continue with existing initialization...
+    // Continue with existing initialization without complex profile fixes
     checkSessionAndInitialize();
     
     setTimeout(() => {
@@ -1044,13 +1030,6 @@ document.addEventListener("DOMContentLoaded", function () {
     setTimeout(() => {
         startSessionManagement();
     }, 2000);
-    
-    // STEP 6: Initialize profile page if we're on it
-    setTimeout(() => {
-        if (window.location.pathname === '/profile') {
-            initializeProfilePage();
-        }
-    }, 100);
 });
 
 // Setup filter page specific features
@@ -1237,23 +1216,9 @@ function initializeProfilePage() {
 
 function handleProfilePageAccess() {
     console.log('🔒 Checking profile page access...');
-    console.log('Current auth state:', {
-        currentUser: !!currentUser,
-        userName: !!userName,
-        userDisplayName: !!userDisplayName,
-        sessionUser: !!session?.user
-    });
     
-    // Give more time for session/auth to load
+    // Give time for auth to load, but don't be too aggressive
     setTimeout(() => {
-        console.log('🔍 Final auth check for profile page...');
-        console.log('Auth status:', {
-            currentUser: !!currentUser,
-            userName: !!userName,
-            userDisplayName: !!userDisplayName
-        });
-        
-        // FIXED: More lenient check - only redirect if definitely not authenticated
         if (!currentUser && !userName && !userDisplayName) {
             console.log('❌ User not authenticated, redirecting to home');
             alert('Please sign in to access your profile.');
@@ -1265,7 +1230,7 @@ function handleProfilePageAccess() {
         if (typeof loadUserProfile === 'function') {
             loadUserProfile();
         }
-    }, 2500); // Increased wait time to 2.5 seconds
+    }, 1500); // Shorter wait time
 }
 
 function loadProfilePage() {
@@ -1278,17 +1243,14 @@ function loadProfilePage() {
 }
 
 async function loadUserProfile() {
-    // FIXED: Don't redirect if already on profile page
     if (!currentUser && !userName) {
         console.warn('⚠️ User data not available yet, but staying on profile page');
-        // Don't redirect, just wait
         return;
     }
     
     console.log('🔄 Loading user profile data...');
 
     try {
-        // Use whichever auth method is available
         const uid = currentUser?.uid || session?.user;
         if (!uid) {
             console.warn('⚠️ No UID available for profile loading');
@@ -1324,8 +1286,53 @@ async function loadUserProfile() {
                 totalFavoritesElement.textContent = profile.favoriteCount || '0';
             }
             
-            // FIXED: Handle profile picture without creating duplicates
-            updateProfilePagePicture(profile.profilePictureUrl);
+            // SIMPLE: Handle profile picture - just find existing elements and update them
+            const currentPic = document.getElementById('current-profile-pic');
+            const defaultIcon = document.getElementById('default-profile-icon');
+            
+            if (profile.profilePictureUrl && profile.profilePictureUrl !== 'null') {
+                console.log('✅ Setting profile picture:', profile.profilePictureUrl);
+                
+                if (currentPic) {
+                    currentPic.src = profile.profilePictureUrl;
+                    currentPic.style.display = 'block';
+                }
+                if (defaultIcon) {
+                    defaultIcon.style.display = 'none';
+                }
+            } else {
+                console.log('📷 No profile picture, showing default icon');
+                
+                if (currentPic) {
+                    currentPic.style.display = 'none';
+                    currentPic.src = '';
+                }
+                if (defaultIcon) {
+                    defaultIcon.style.display = 'block';
+                }
+            }
+            
+            // Update header profile picture too
+            const headerProfilePic = document.getElementById('profile-pic');
+            const headerProfileIcon = document.getElementById('profile-icon');
+            
+            if (profile.profilePictureUrl && profile.profilePictureUrl !== 'null') {
+                if (headerProfilePic) {
+                    headerProfilePic.src = profile.profilePictureUrl;
+                    headerProfilePic.style.display = 'block';
+                }
+                if (headerProfileIcon) {
+                    headerProfileIcon.style.display = 'none';
+                }
+            } else {
+                if (headerProfilePic) {
+                    headerProfilePic.style.display = 'none';
+                    headerProfilePic.src = '';
+                }
+                if (headerProfileIcon) {
+                    headerProfileIcon.style.display = 'block';
+                }
+            }
             
         } else {
             console.error('❌ Failed to load profile data');
@@ -1440,17 +1447,29 @@ async function updateProfilePicture() {
             const result = await response.json();
             console.log('✅ Profile picture uploaded:', result.url);
             
-            // Update Firebase user profile
-            if (currentUser && currentUser.updateProfile) {
-                await currentUser.updateProfile({ photoURL: result.url });
+            // Update profile page
+            const currentPic = document.getElementById('current-profile-pic');
+            const defaultIcon = document.getElementById('default-profile-icon');
+            
+            if (currentPic) {
+                currentPic.src = result.url;
+                currentPic.style.display = 'block';
+            }
+            if (defaultIcon) {
+                defaultIcon.style.display = 'none';
             }
             
-            // Update global variable
-            userProfilePictureUrl = result.url;
+            // Update header
+            const headerProfilePic = document.getElementById('profile-pic');
+            const headerProfileIcon = document.getElementById('profile-icon');
             
-            // Update both header and profile page
-            updateHeaderProfilePicture(result.url);
-            updateProfilePagePicture(result.url);
+            if (headerProfilePic) {
+                headerProfilePic.src = result.url;
+                headerProfilePic.style.display = 'block';
+            }
+            if (headerProfileIcon) {
+                headerProfileIcon.style.display = 'none';
+            }
             
             alert('Profile picture updated successfully!');
         } else {
@@ -1478,17 +1497,29 @@ async function removeProfilePicture() {
         if (response.ok) {
             console.log('✅ Profile picture removed');
             
-            // Update Firebase user profile
-            if (currentUser && currentUser.updateProfile) {
-                await currentUser.updateProfile({ photoURL: null });
+            // Update profile page
+            const currentPic = document.getElementById('current-profile-pic');
+            const defaultIcon = document.getElementById('default-profile-icon');
+            
+            if (currentPic) {
+                currentPic.style.display = 'none';
+                currentPic.src = '';
+            }
+            if (defaultIcon) {
+                defaultIcon.style.display = 'block';
             }
             
-            // Clear global variable
-            userProfilePictureUrl = null;
+            // Update header
+            const headerProfilePic = document.getElementById('profile-pic');
+            const headerProfileIcon = document.getElementById('profile-icon');
             
-            // Update both header and profile page
-            updateHeaderProfilePicture(null);
-            updateProfilePagePicture(null);
+            if (headerProfilePic) {
+                headerProfilePic.style.display = 'none';
+                headerProfilePic.src = '';
+            }
+            if (headerProfileIcon) {
+                headerProfileIcon.style.display = 'block';
+            }
             
             alert('Profile picture removed successfully!');
         } else {
@@ -1498,42 +1529,6 @@ async function removeProfilePicture() {
     } catch (error) {
         console.error('Error removing profile picture:', error);
         alert('Error removing profile picture');
-    }
-}
-
-
-function updateHeaderProfilePicture(profilePictureUrl) {
-    const headerProfilePic = document.getElementById('profile-pic');
-    const headerProfileIcon = document.getElementById('profile-icon');
-    
-    if (!headerProfilePic || !headerProfileIcon) {
-        console.log('Header profile elements not found');
-        return;
-    }
-    
-    if (profilePictureUrl && profilePictureUrl !== 'null' && profilePictureUrl !== 'undefined') {
-        // Test if image loads before showing it
-        const testImg = new Image();
-        
-        testImg.onload = function() {
-            console.log('✅ Header profile picture loaded successfully');
-            headerProfilePic.src = profilePictureUrl;
-            headerProfilePic.style.display = 'block';
-            headerProfileIcon.style.display = 'none';
-        };
-        
-        testImg.onerror = function() {
-            console.warn('❌ Header profile picture failed to load');
-            headerProfilePic.style.display = 'none';
-            headerProfileIcon.style.display = 'block';
-        };
-        
-        testImg.src = profilePictureUrl;
-    } else {
-        console.log('📷 No header profile picture, showing default icon');
-        headerProfilePic.style.display = 'none';
-        headerProfilePic.src = '';
-        headerProfileIcon.style.display = 'block';
     }
 }
 
