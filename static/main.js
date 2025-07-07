@@ -89,149 +89,124 @@ document.addEventListener('click', function(event) {
 // Firebase Related Code //
 //////////////////////////
 
-async function initializeFirebase() {
-    try {
-        console.log('🔄 Starting Firebase initialization...');
-        
-        // Check if Firebase is already loaded
-        if (typeof firebase === 'undefined') {
-            console.error('❌ Firebase library not loaded');
-            return false;
-        }
-        
-        // Get Firebase config from backend
-        const configResponse = await fetch('/firebase-config');
-        if (!configResponse.ok) {
-            throw new Error('Failed to get Firebase config');
-        }
-        
-        const firebaseConfig = await configResponse.json();
-        console.log('✅ Firebase config received');
-        
-        // Initialize Firebase app if not already initialized
-        if (firebase.apps.length === 0) {
-            firebaseApp = firebase.initializeApp(firebaseConfig);
-            console.log('✅ Firebase app initialized');
-        } else {
-            firebaseApp = firebase.apps[0];
-            console.log('✅ Using existing Firebase app');
-        }
-        
-        // Initialize Firebase Auth
-        auth = firebase.auth();
-        console.log('✅ Firebase Auth initialized');
-        
-        // Setup auth state listener
-        setupAuthStateListener();
-        
-        return true;
-        
-    } catch (error) {
-        console.error('❌ Firebase initialization failed:', error);
-        showFirebaseError();
-        return false;
-    }
-}
-
+// Initialize Firebase when the page loads
 function updateUIForAuthState(user = null, userData = null) {
     console.log('🔄 Updating UI for auth state:', user ? 'logged in' : 'logged out');
     
-    try {
-        const loginButton = document.getElementById('login-button');
-        const profileContainer = document.getElementById('profile-container');
-        const welcomeText = document.getElementById('welcome-text');
-        const profileIcon = document.getElementById('profile-icon');
-        const profilePic = document.getElementById('profile-pic');
+    const loginButton = document.getElementById('login-button');
+    const profileContainer = document.getElementById('profile-container');
+    const welcomeText = document.getElementById('welcome-text');
+    const profileIcon = document.getElementById('profile-icon');
+    const profilePic = document.getElementById('profile-pic');
 
-        console.log('🔍 DOM Elements found:', {
-            loginButton: !!loginButton,
-            profileContainer: !!profileContainer,
-            welcomeText: !!welcomeText,
-            profileIcon: !!profileIcon,
-            profilePic: !!profilePic
-        });
+    console.log('🔍 DOM Elements found:', {
+        loginButton: !!loginButton,
+        profileContainer: !!profileContainer,
+        welcomeText: !!welcomeText,
+        profileIcon: !!profileIcon,
+        profilePic: !!profilePic
+    });
 
-        const currentUser = user || (auth && auth.currentUser);
-        const currentUserData = userData || { username: userDisplayName };
+    // Use current user if not provided
+    const currentUser = user || (auth && auth.currentUser);
+    const currentUserData = userData || { username: userDisplayName };
 
-        console.log('👤 User data:', {
-            hasCurrentUser: !!currentUser,
-            userDisplayName: userDisplayName,
-            userEmail: currentUser ? currentUser.email : 'none'
-        });
+    console.log('👤 User data:', {
+        hasCurrentUser: !!currentUser,
+        userDisplayName: userDisplayName,
+        userEmail: currentUser ? currentUser.email : 'none'
+    });
 
-        if (currentUser && (userDisplayName || currentUser.email)) {
-            console.log('✅ User is logged in - updating UI');
+    if (currentUser && (userDisplayName || currentUser.email)) {
+        console.log('✅ User is logged in - updating UI');
+        
+        // User is logged in
+        if (loginButton) {
+            loginButton.style.display = 'none';
+        }
+        
+        if (profileContainer) {
+            profileContainer.style.display = 'flex';
+        }
+        
+        // Update welcome text with username
+        const displayName = userDisplayName || currentUser.displayName || currentUser.email;
+        if (welcomeText) {
+            welcomeText.textContent = `Welcome, ${displayName}!`;
+        }
+        
+        // FIXED: Handle profile picture with proper fallback to icon
+        const profilePictureUrl = currentUser.photoURL || currentUserData.profilePictureUrl;
+        
+        console.log('🖼️ Profile picture URL:', profilePictureUrl);
+        
+        if (profilePictureUrl && 
+            profilePictureUrl !== '' && 
+            !profilePictureUrl.includes('data:image/svg+xml') && // Exclude SVG placeholders
+            !profilePictureUrl.includes('Car Image')) { // Exclude car image placeholders
             
-            // User is logged in
-            if (loginButton) loginButton.style.display = 'none';
-            if (profileContainer) profileContainer.style.display = 'flex';
-            
-            // Update welcome text
-            const displayName = userDisplayName || currentUser.displayName || currentUser.email;
-            if (welcomeText) {
-                welcomeText.textContent = `Welcome, ${displayName}!`;
-            }
-            
-            // Handle profile picture
-            const profilePictureUrl = currentUser.photoURL || currentUserData.profilePictureUrl;
-            
-            console.log('🖼️ Profile picture URL:', profilePictureUrl);
-            
-            if (profilePictureUrl && 
-                profilePictureUrl !== '' && 
-                !profilePictureUrl.includes('data:image/svg+xml')) {
+            console.log('✅ Valid profile picture found, showing image');
+            if (profilePic) {
+                profilePic.src = profilePictureUrl;
+                profilePic.style.display = 'block';
                 
-                console.log('✅ Valid profile picture found, showing image');
-                if (profilePic) {
-                    profilePic.src = profilePictureUrl;
-                    profilePic.style.display = 'block';
-                    
-                    profilePic.onerror = function() {
-                        console.log('❌ Profile picture failed to load, showing default icon');
-                        this.style.display = 'none';
-                        if (profileIcon) profileIcon.style.display = 'block';
-                    };
-                }
-                if (profileIcon) profileIcon.style.display = 'none';
-            } else {
-                console.log('📷 No valid profile picture, showing default icon');
-                if (profilePic) {
-                    profilePic.style.display = 'none';
-                    profilePic.src = '';
-                }
-                if (profileIcon) profileIcon.style.display = 'block';
+                // Hide the image if it fails to load and show icon instead
+                profilePic.onerror = function() {
+                    console.log('❌ Profile picture failed to load, showing default icon');
+                    this.style.display = 'none';
+                    if (profileIcon) {
+                        profileIcon.style.display = 'block';
+                    }
+                };
             }
-            
-            // Load user favorites
-            if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
-                setTimeout(loadUserFavoritesForDuplicateCheck, 500);
+            if (profileIcon) {
+                profileIcon.style.display = 'none';
             }
-            
         } else {
-            console.log('❌ User is logged out - updating UI');
-            
-            // User is logged out
-            if (loginButton) loginButton.style.display = 'block';
-            if (profileContainer) profileContainer.style.display = 'none';
-            if (welcomeText) welcomeText.textContent = 'Welcome!';
+            console.log('📷 No valid profile picture, showing default icon');
+            // No valid profile picture - show default icon
             if (profilePic) {
                 profilePic.style.display = 'none';
                 profilePic.src = '';
             }
-            if (profileIcon) profileIcon.style.display = 'block';
-            
-            // Clear favorites
-            if (typeof userFavorites !== 'undefined' && userFavorites) {
-                userFavorites.clear();
+            if (profileIcon) {
+                profileIcon.style.display = 'block';
             }
         }
         
-        console.log('🏁 UI update completed');
+        // Load user favorites for duplicate checking
+        if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
+            loadUserFavoritesForDuplicateCheck();
+        }
         
-    } catch (error) {
-        console.error('❌ Error updating UI:', error);
+    } else {
+        console.log('❌ User is logged out - updating UI');
+        
+        // User is logged out
+        if (loginButton) {
+            loginButton.style.display = 'block';
+        }
+        if (profileContainer) {
+            profileContainer.style.display = 'none';
+        }
+        if (welcomeText) {
+            welcomeText.textContent = 'Welcome!';
+        }
+        if (profilePic) {
+            profilePic.style.display = 'none';
+            profilePic.src = '';
+        }
+        if (profileIcon) {
+            profileIcon.style.display = 'block';
+        }
+        
+        // Clear favorites when logged out
+        if (typeof userFavorites !== 'undefined' && userFavorites) {
+            userFavorites.clear();
+        }
     }
+    
+    console.log('🏁 UI update completed');
 }
 
 function updateUIForAuthState(user = null, userData = null) {
@@ -345,29 +320,57 @@ function setupAuthStateListener() {
         return;
     }
     
-    console.log('🔄 Setting up enhanced auth state listener...');
+    console.log('🔄 Setting up auth state listener...');
     
-    auth.onAuthStateChanged(async (firebaseUser) => {
-        console.log('🔄 Firebase auth state changed:', firebaseUser ? firebaseUser.email : 'signed out');
+    auth.onAuthStateChanged(async (user) => {
+        console.log('🔄 Auth state changed:', user ? user.email : 'signed out');
         
-        if (firebaseUser) {
-            // Firebase user is signed in, sync with session
-            await syncFirebaseWithSession(firebaseUser);
-        } else {
-            // Firebase user is signed out, check session
-            const hasValidSession = await checkSessionStatus();
-            if (hasValidSession) {
-                // Session exists but Firebase user doesn't - try to restore Firebase auth
-                console.log('🔄 Session exists but Firebase user missing, attempting restoration...');
-                await restoreFirebaseFromSession();
-            } else {
-                // Clear everything
-                clearUserData();
+        if (user) {
+            currentUser = user;
+            userName = user.email;
+            
+            try {
+                // Get user profile data including username and profile picture
+                const profileResponse = await fetch(`${baseUrl}/get-user-profile`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ uid: user.uid })
+                });
+                
+                if (profileResponse.ok) {
+                    const profileData = await profileResponse.json();
+                    userDisplayName = profileData.username || user.displayName || user.email;
+                    
+                    // FIXED: Update Firebase user object with database profile picture
+                    if (profileData.profilePictureUrl) {
+                        // Update the currentUser object to include the profile picture
+                        currentUser.photoURL = profileData.profilePictureUrl;
+                    }
+                    
+                    console.log('✅ User profile loaded:', profileData);
+                    console.log('🖼️ Profile picture URL:', profileData.profilePictureUrl);
+                    
+                    updateUIForAuthState(currentUser, profileData);
+                } else {
+                    userDisplayName = user.displayName || user.email;
+                    updateUIForAuthState(user, { username: userDisplayName });
+                }
+            } catch (error) {
+                console.error('Error fetching user profile:', error);
+                userDisplayName = user.displayName || user.email;
+                updateUIForAuthState(user, { username: userDisplayName });
             }
+            
+            console.log('✅ User is signed in:', user.email, 'Username:', userDisplayName);
+        } else {
+            currentUser = null;
+            userName = null;
+            userDisplayName = null;
+            updateUIForAuthState(null, null);
+            console.log('✅ User is signed out');
         }
     });
 }
-
 function showFirebaseError() {
     const errorDiv = document.createElement('div');
     errorDiv.style.cssText = `
@@ -412,47 +415,41 @@ async function checkSessionStatus() {
             console.log('📋 Session data received:', sessionData);
             
             if (sessionData.authenticated) {
+                // User has valid session, update global variables
+                userName = sessionData.email;
+                userDisplayName = sessionData.username || sessionData.email;
+                
+                // FIXED: Create a proper user object with all profile data
+                currentUser = {
+                    uid: sessionData.user,
+                    email: sessionData.email,
+                    displayName: sessionData.username,
+                    photoURL: sessionData.profile_picture_url || null // Ensure this is set correctly
+                };
+                
                 console.log('✅ Session is valid, user is logged in:', sessionData.email);
                 console.log('🖼️ Profile picture URL from session:', sessionData.profile_picture_url);
-                return sessionData;
+                
+                // FIXED: Update UI with complete profile data including profile picture
+                updateUIForAuthState(currentUser, {
+                    username: userDisplayName,
+                    profilePictureUrl: sessionData.profile_picture_url
+                });
+                
+                return true;
             } else {
                 console.log('❌ No valid session found');
-                return null;
+                clearUserData();
+                return false;
             }
         } else {
             console.log('⚠️ Session check request failed');
-            return null;
+            clearUserData();
+            return false;
         }
     } catch (error) {
         console.error('❌ Error checking session:', error);
-        return null;
-    }
-}
-
-async function initializeAuthAndFirebase() {
-    try {
-        console.log('🔄 Starting complete auth initialization...');
-        
-        // Step 1: Check if user has a valid session
-        const sessionData = await checkSessionStatus();
-        
-        // Step 2: Initialize Firebase
-        const firebaseInitialized = await initializeFirebase();
-        
-        if (!firebaseInitialized) {
-            console.warn('⚠️ Firebase initialization failed, using session-only mode');
-            
-            // Fallback to session-only mode
-            if (sessionData && sessionData.authenticated) {
-                await restoreFirebaseFromSession();
-            }
-        }
-        
-        console.log('✅ Auth initialization completed');
-        return true;
-        
-    } catch (error) {
-        console.error('❌ Auth initialization failed:', error);
+        clearUserData();
         return false;
     }
 }
@@ -560,183 +557,6 @@ function setupAdditionalFeatures() {
     }
 }
 
-async function syncFirebaseWithSession(firebaseUser) {
-    try {
-        currentUser = firebaseUser;
-        userName = firebaseUser.email;
-        
-        // Get user profile data from session/backend
-        const sessionData = await checkSessionStatus();
-        if (sessionData && sessionData.authenticated) {
-            userDisplayName = sessionData.username || firebaseUser.displayName || firebaseUser.email;
-            
-            // FIXED: Create a proper user object with session data
-            currentUser = {
-                uid: firebaseUser.uid,
-                email: firebaseUser.email,
-                displayName: userDisplayName,
-                photoURL: sessionData.profile_picture_url || firebaseUser.photoURL,
-                // FIXED: Add missing methods that were causing errors
-                updateProfile: async function(profileData) {
-                    try {
-                        // Update Firebase profile
-                        await firebaseUser.updateProfile(profileData);
-                        
-                        // Update our extended object
-                        if (profileData.displayName) this.displayName = profileData.displayName;
-                        if (profileData.photoURL) this.photoURL = profileData.photoURL;
-                        
-                        console.log('✅ Profile updated successfully');
-                        return true;
-                    } catch (error) {
-                        console.error('❌ Error updating profile:', error);
-                        throw error;
-                    }
-                },
-                getIdToken: () => firebaseUser.getIdToken(),
-                // Add other Firebase user methods as needed
-                delete: () => firebaseUser.delete(),
-                reload: () => firebaseUser.reload()
-            };
-            
-            console.log('✅ Firebase user synced with session data');
-            updateUIForAuthState(currentUser, sessionData);
-            
-            // Load user favorites
-            if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
-                loadUserFavoritesForDuplicateCheck();
-            }
-        } else {
-            // Firebase user exists but no session - create session
-            await createSessionFromFirebase(firebaseUser);
-        }
-        
-    } catch (error) {
-        console.error('❌ Error syncing Firebase with session:', error);
-    }
-}
-
-async function restoreFirebaseFromSession() {
-    try {
-        const sessionData = await checkSessionStatus();
-        if (sessionData && sessionData.authenticated) {
-            console.log('🔄 Attempting to restore Firebase auth from session...');
-            
-            // Create a user object from session data
-            currentUser = {
-                uid: sessionData.user,
-                email: sessionData.email,
-                displayName: sessionData.username,
-                photoURL: sessionData.profile_picture_url,
-                // FIXED: Add the missing updateProfile method
-                updateProfile: async function(profileData) {
-                    try {
-                        console.log('🔄 Updating profile via backend API...');
-                        
-                        // Since we don't have Firebase user, update via backend
-                        if (profileData.displayName) {
-                            const response = await fetch(`${baseUrl}/update-username`, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ 
-                                    uid: this.uid,
-                                    newUsername: profileData.displayName 
-                                })
-                            });
-                            
-                            if (response.ok) {
-                                this.displayName = profileData.displayName;
-                                userDisplayName = profileData.displayName;
-                            }
-                        }
-                        
-                        if (profileData.photoURL) {
-                            this.photoURL = profileData.photoURL;
-                        }
-                        
-                        console.log('✅ Profile updated via backend');
-                        return true;
-                    } catch (error) {
-                        console.error('❌ Error updating profile via backend:', error);
-                        throw error;
-                    }
-                },
-                getIdToken: async () => {
-                    console.log('⚠️ getIdToken called on session-based user');
-                    return null;
-                }
-            };
-            
-            userName = sessionData.email;
-            userDisplayName = sessionData.username;
-            
-            updateUIForAuthState(currentUser, sessionData);
-            
-            // Load user favorites
-            if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
-                loadUserFavoritesForDuplicateCheck();
-            }
-            
-            console.log('✅ User restored from session data');
-            return true;
-        }
-        
-        return false;
-    } catch (error) {
-        console.error('❌ Error restoring Firebase from session:', error);
-        return false;
-    }
-}
-
-async function createSessionFromFirebase(firebaseUser) {
-    try {
-        console.log('🔄 Creating session from Firebase user...');
-        
-        const idToken = await firebaseUser.getIdToken();
-        
-        const response = await fetch('/verify-token', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                idToken: idToken,
-                email: firebaseUser.email
-            })
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            console.log('✅ Session created from Firebase user');
-            
-            userDisplayName = data.username || firebaseUser.displayName || firebaseUser.email;
-            updateUIForAuthState(firebaseUser, data);
-        } else {
-            console.error('❌ Failed to create session from Firebase user');
-        }
-        
-    } catch (error) {
-        console.error('❌ Error creating session from Firebase:', error);
-    }
-}
-
-function getFirebaseErrorMessage(errorCode) {
-    switch (errorCode) {
-        case 'auth/user-not-found':
-            return 'No account found with this email address.';
-        case 'auth/wrong-password':
-            return 'Incorrect password.';
-        case 'auth/invalid-email':
-            return 'Invalid email address.';
-        case 'auth/user-disabled':
-            return 'This account has been disabled.';
-        case 'auth/too-many-requests':
-            return 'Too many failed attempts. Please try again later.';
-        case 'auth/network-request-failed':
-            return 'Network error. Please check your connection.';
-        default:
-            return 'Login failed. Please try again.';
-    }
-}
-
 /////////////////////////////////////////
 // Denies access to users to the User //
 // Profile Page, unless signed in    //
@@ -760,47 +580,75 @@ function toggleLogoutDropdown() {
 function handleLogout() {
     console.log('🔄 Logout initiated');
     
-    const logout = async () => {
-        try {
-            // Sign out from Firebase if available
-            if (auth && auth.currentUser) {
-                await auth.signOut();
-                console.log('✅ User signed out from Firebase');
+    if (auth) {
+        // Sign out from Firebase first
+        auth.signOut().then(() => {
+            console.log('✅ User signed out from Firebase');
+            
+            // Clear frontend variables
+            currentUser = null;
+            userName = null;
+            userDisplayName = null;
+            if (typeof userFavorites !== 'undefined') {
+                userFavorites.clear();
             }
             
-            // Clear backend session
-            const response = await fetch('/logout', { 
+            // Tell the backend to clear session
+            return fetch('/logout', { 
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json'
+                },
                 credentials: 'same-origin'
             });
-            
+        }).then(response => {
             if (response.ok) {
-                console.log('✅ Backend session cleared successfully');
+                return response.json();
             }
+            throw new Error('Logout request failed');
+        }).then(data => {
+            console.log('✅ Backend session cleared successfully');
             
-            // Clear frontend state
-            clearUserData();
+            // Hide logout dropdown
+            const dropdown = document.getElementById('logout-dropdown');
+            if (dropdown) dropdown.style.display = 'none';
+            
+            // Update UI to logged out state
+            updateUIForAuthState(null, null);
             
             // Show success message
             showLogoutMessage('Successfully logged out');
             
-            // Redirect to home
+            // Redirect to home page after a short delay
             setTimeout(() => {
                 window.location.href = '/';
             }, 1000);
             
-        } catch (error) {
+        }).catch(error => {
             console.error('❌ Logout error:', error);
-            // Force clear and redirect even on error
-            clearUserData();
+            
+            // Even if backend logout fails, clear frontend state
+            updateUIForAuthState(null, null);
+            
+            // Force redirect to home
             setTimeout(() => {
                 window.location.href = '/';
             }, 1000);
-        }
-    };
-    
-    logout();
+        });
+    } else {
+        console.log('⚠️ Auth not available, clearing frontend state only');
+        
+        // Clear frontend state
+        currentUser = null;
+        userName = null;
+        userDisplayName = null;
+        
+        // Update UI
+        updateUIForAuthState(null, null);
+        
+        // Redirect to home
+        window.location.href = '/';
+    }
 }
 
 async function refreshSession() {
@@ -871,28 +719,6 @@ function showLogoutMessage(message) {
         }
     }, 2000);
 }
-
-// Initialize everything when DOM is loaded
-document.addEventListener("DOMContentLoaded", function () {
-    console.log('🔄 DOM loaded, initializing complete auth system...');
-    
-    // Initialize auth and Firebase
-    initializeAuthAndFirebase();
-    
-    // Setup other features after a delay
-    setTimeout(() => {
-        setupPageSpecificFeatures();
-        setupSliders();
-        setupAdditionalFeatures();
-        startSessionManagement();
-    }, 1500);
-});
-
-// Export functions for global use
-window.handleLogin = handleLogin;
-window.handleLogout = handleLogout;
-window.initializeFirebase = initializeFirebase;
-window.checkSessionStatus = checkSessionStatus;
 
 // ENHANCED: Check session status on page focus
 window.addEventListener('focus', () => {
@@ -1059,6 +885,8 @@ function handleLogin(event) {
     event.preventDefault();
     
     console.log('🔄 Login attempt started');
+    console.log('🔍 Firebase available:', typeof firebase !== 'undefined');
+    console.log('🔍 Auth object available:', typeof auth !== 'undefined' && auth !== null);
     
     const email = document.querySelector('input[name="email"]').value;
     const password = document.querySelector('input[name="password"]').value;
@@ -1066,11 +894,54 @@ function handleLogin(event) {
     console.log('📧 Email:', email);
     
     // Check if Firebase is available
-    if (typeof firebase === 'undefined' || !auth) {
-        console.error('❌ Firebase not ready, attempting fallback login...');
-        handleFallbackLogin(email, password);
+    if (typeof firebase === 'undefined') {
+        console.error('❌ Firebase library not loaded');
+        const errorElement = document.querySelector('.error-message');
+        if (errorElement) {
+            errorElement.textContent = 'Authentication system not ready. Please refresh the page and try again.';
+        }
         return;
     }
+    
+    // Check if Firebase is initialized
+    if (firebase.apps.length === 0) {
+        console.error('❌ Firebase not initialized, attempting to initialize...');
+        
+        // Try to initialize Firebase
+        initializeFirebase().then(() => {
+            console.log('🔄 Firebase initialized, retrying login...');
+            // Retry login after initialization
+            setTimeout(() => {
+                handleLogin(event);
+            }, 1000);
+        }).catch(error => {
+            console.error('❌ Failed to initialize Firebase:', error);
+            const errorElement = document.querySelector('.error-message');
+            if (errorElement) {
+                errorElement.textContent = 'Authentication system failed to initialize. Please refresh the page.';
+            }
+        });
+        return;
+    }
+    
+    // Check if auth is available
+    if (!auth) {
+        console.error('❌ Firebase auth not available, attempting to get auth...');
+        
+        try {
+            auth = firebase.auth();
+            console.log('✅ Auth object created successfully');
+        } catch (initError) {
+            console.error('❌ Failed to create auth object:', initError);
+            const errorElement = document.querySelector('.error-message');
+            if (errorElement) {
+                errorElement.textContent = 'Authentication not ready. Please refresh the page and try again.';
+            }
+            return;
+        }
+    }
+    
+    console.log('✅ Firebase auth ready, proceeding with login');
     
     const submitButton = event.target.querySelector('button[type="submit"]');
     const originalText = submitButton ? submitButton.textContent : '';
@@ -1080,44 +951,82 @@ function handleLogin(event) {
     }
     
     auth.signInWithEmailAndPassword(email, password)
-        .then(async (userCredential) => {
+        .then((userCredential) => {
             const user = userCredential.user;
-            console.log('✅ Firebase user logged in:', user.email);
+            console.log('✅ User logged in:', user.email);
             
-            // Create session
-            const idToken = await user.getIdToken();
-            const response = await fetch('/verify-token', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    idToken: idToken,
-                    email: user.email
-                })
+            return user.getIdToken().then((idToken) => {
+                console.log('🔄 Sending token to backend for session creation...');
+                
+                return fetch('/verify-token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        idToken: idToken,
+                        email: user.email
+                    })
+                });
+            }).then(response => {
+                console.log('📥 Backend response status:', response.status);
+                
+                if (!response.ok) {
+                    throw new Error(`Backend authentication failed: ${response.status}`);
+                }
+                
+                return response.json();
+            })
+            .then(data => {
+                console.log('📥 Backend response data:', data);
+                
+                if (data.status === 'success') {
+                    console.log('✅ Backend session created successfully');
+                    
+                    // Update global variables
+                    userName = user.email;
+                    currentUser = user;
+                    userDisplayName = data.username || user.displayName || user.email;
+                    
+                    const errorMsg = document.querySelector('.error-message');
+                    const errorMsg12 = document.querySelector('.error-message12');
+                    if (errorMsg) errorMsg.textContent = '';
+                    if (errorMsg12) errorMsg12.textContent = '';
+                    
+                    togglePopup('login-popup');
+                    
+                    // Update sidebar safely
+                    const sidebar = document.getElementById('sidebar');
+                    const menuButton = document.getElementById('menu-button');
+                    const closeButton = document.getElementById('close-button');
+                    
+                    if (sidebar) sidebar.classList.remove('open');
+                    if (menuButton) menuButton.style.display = 'block';
+                    if (closeButton) closeButton.style.display = 'none';
+                    
+                    // Update UI with complete user data
+                    setTimeout(() => {
+                        updateUIForAuthState(user, { 
+                            username: data.username,
+                            profilePictureUrl: data.profile_picture_url
+                        });
+                    }, 100);
+                    
+                    // Show success message
+                    showSuccessMessage('Login successful! Welcome back.');
+                    
+                } else {
+                    console.error('❌ Backend authentication failed:', data);
+                    throw new Error(data.message || 'Backend authentication failed');
+                }
             });
-            
-            if (response.ok) {
-                const data = await response.json();
-                console.log('✅ Session created successfully');
-                
-                // Clear error messages
-                const errorMsg = document.querySelector('.error-message');
-                if (errorMsg) errorMsg.textContent = '';
-                
-                // Close popup
-                togglePopup('login-popup');
-                
-                // Show success message
-                showSuccessMessage('Login successful! Welcome back.');
-                
-                // The auth state listener will handle UI updates
-                
-            } else {
-                throw new Error('Failed to create session');
-            }
         })
         .catch((error) => {
             console.error('❌ Login error:', error);
+            const successElement = document.querySelector('.success-message');
             const errorElement = document.querySelector('.error-message');
+            
+            if (successElement) successElement.textContent = '';
             if (errorElement) {
                 errorElement.textContent = getFirebaseErrorMessage(error.code) || error.message;
             }
@@ -1243,42 +1152,6 @@ function ensureUsernameDisplay() {
     }
 }
 
-async function handleFallbackLogin(email, password) {
-    try {
-        console.log('🔄 Attempting fallback login...');
-        
-        const response = await fetch('/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: new URLSearchParams({
-                'email': email,
-                'password': password
-            })
-        });
-        
-        if (response.ok) {
-            const data = await response.json();
-            if (data.status) {
-                console.log('✅ Fallback login successful');
-                
-                // Reload page to get fresh session
-                window.location.reload();
-            } else {
-                throw new Error(data.message || 'Login failed');
-            }
-        } else {
-            throw new Error('Login request failed');
-        }
-        
-    } catch (error) {
-        console.error('❌ Fallback login error:', error);
-        const errorElement = document.querySelector('.error-message');
-        if (errorElement) {
-            errorElement.textContent = error.message || 'Login failed. Please try again.';
-        }
-    }
-}
-
 /////////////////////////////
 // Username Functionality //
 ///////////////////////////
@@ -1382,9 +1255,9 @@ function elementExists(elementId) {
 }
 
 function clearUserData() {
-    currentUser = null;
     userName = null;
     userDisplayName = null;
+    currentUser = null;
     if (typeof userFavorites !== 'undefined') {
         userFavorites.clear();
     }
