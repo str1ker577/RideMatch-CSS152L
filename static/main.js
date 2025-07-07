@@ -177,18 +177,44 @@ function updateUIForAuthState(user = null, userData = null) {
             welcomeText.textContent = `Welcome, ${displayName}!`;
         }
         
-        // SIMPLE: Handle header profile picture
+        // FIXED: Handle header profile picture with proper icon initialization
         const profilePictureUrl = currentUserData?.profilePictureUrl || currentUser.photoURL;
         
-        if (profilePictureUrl && profilePictureUrl !== 'null') {
-            if (profilePic) {
-                profilePic.src = profilePictureUrl;
-                profilePic.style.display = 'block';
-            }
-            if (profileIcon) {
-                profileIcon.style.display = 'none';
-            }
+        // First ensure the icon is properly set up
+        if (profileIcon) {
+            profileIcon.style.display = 'block';
+            // Don't change innerHTML - your HTML already has the correct Boxicon classes
+        }
+        
+        if (profilePictureUrl && profilePictureUrl !== 'null' && profilePictureUrl !== 'undefined') {
+            // Test if image loads before showing it
+            const testImg = new Image();
+            
+            testImg.onload = function() {
+                console.log('✅ Header profile picture loaded');
+                if (profilePic) {
+                    profilePic.src = profilePictureUrl;
+                    profilePic.style.display = 'block';
+                }
+                if (profileIcon) {
+                    profileIcon.style.display = 'none';
+                }
+            };
+            
+            testImg.onerror = function() {
+                console.warn('❌ Header profile picture failed to load');
+                if (profilePic) {
+                    profilePic.style.display = 'none';
+                    profilePic.src = '';
+                }
+                if (profileIcon) {
+                    profileIcon.style.display = 'block';
+                }
+            };
+            
+            testImg.src = profilePictureUrl;
         } else {
+            console.log('📷 No profile picture, showing icon');
             if (profilePic) {
                 profilePic.style.display = 'none';
                 profilePic.src = '';
@@ -229,6 +255,7 @@ function updateUIForAuthState(user = null, userData = null) {
     
     console.log('🏁 UI update completed');
 }
+
 function setupAuthStateListener() {
     if (!auth) {
         console.error('❌ Auth not available for listener setup');
@@ -240,12 +267,14 @@ function setupAuthStateListener() {
     auth.onAuthStateChanged(async (user) => {
         console.log('🔄 Auth state changed:', user ? user.email : 'signed out');
         
+        // FIXED: Initialize header icon immediately on auth state change
+        initializeHeaderProfileIcon();
+        
         if (user) {
             currentUser = user;
             userName = user.email;
             
             try {
-                // Get user profile data including username AND profile picture
                 const profileResponse = await fetch(`${baseUrl}/get-user-profile`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -255,8 +284,6 @@ function setupAuthStateListener() {
                 if (profileResponse.ok) {
                     const profileData = await profileResponse.json();
                     userDisplayName = profileData.username || user.displayName || user.email;
-                    
-                    // FIXED: Store profile picture URL globally
                     userProfilePictureUrl = profileData.profilePictureUrl;
                     
                     console.log('✅ User profile loaded:', {
@@ -264,7 +291,6 @@ function setupAuthStateListener() {
                         profilePictureUrl: userProfilePictureUrl
                     });
                     
-                    // Update UI with complete profile data
                     updateUIForAuthState(user, {
                         username: userDisplayName,
                         profilePictureUrl: userProfilePictureUrl
@@ -284,13 +310,15 @@ function setupAuthStateListener() {
             currentUser = null;
             userName = null;
             userDisplayName = null;
-            userProfilePictureUrl = null; // Clear profile picture URL
+            userProfilePictureUrl = null;
+            
+            // Initialize icon when logged out too
+            initializeHeaderProfileIcon();
             updateUIForAuthState(null, null);
             console.log('✅ User is signed out');
         }
     });
 }
-
 
 function showFirebaseError() {
     const errorDiv = document.createElement('div');
@@ -322,6 +350,9 @@ async function checkSessionStatus() {
     try {
         console.log('🔍 Checking session status...');
         
+        // Initialize header icon immediately
+        initializeHeaderProfileIcon();
+        
         const response = await fetch('/check-session', {
             method: 'GET',
             credentials: 'same-origin',
@@ -336,10 +367,9 @@ async function checkSessionStatus() {
             console.log('📋 Session data received:', sessionData);
             
             if (sessionData.authenticated) {
-                // User has valid session, update global variables
                 userName = sessionData.email;
                 userDisplayName = sessionData.username || sessionData.email;
-                userProfilePictureUrl = sessionData.profile_picture_url; // Store profile picture URL
+                userProfilePictureUrl = sessionData.profile_picture_url;
                 
                 currentUser = {
                     uid: sessionData.user,
@@ -349,9 +379,7 @@ async function checkSessionStatus() {
                 };
                 
                 console.log('✅ Session is valid, user is logged in:', sessionData.email);
-                console.log('🖼️ Profile picture URL from session:', userProfilePictureUrl);
                 
-                // Update UI immediately with complete data
                 updateUIForAuthState(currentUser, {
                     username: userDisplayName,
                     profilePictureUrl: userProfilePictureUrl
@@ -360,7 +388,6 @@ async function checkSessionStatus() {
                 return true;
             } else {
                 console.log('❌ No valid session found');
-                // Clear any existing user data
                 clearUserData();
                 return false;
             }
@@ -375,6 +402,7 @@ async function checkSessionStatus() {
         return false;
     }
 }
+
 async function initializeFirebaseWithSession() {
     try {
         console.log('🔄 Starting Firebase initialization with session check...');
@@ -1012,7 +1040,12 @@ function showSuccessMessage(message) {
 document.addEventListener("DOMContentLoaded", function () {
     console.log('🔄 DOM loaded, initializing...');
     
-    // Continue with existing initialization without complex profile fixes
+    // IMMEDIATE: Fix header profile icon to prevent text from showing
+    setTimeout(() => {
+        initializeHeaderProfileIcon();
+    }, 50);
+    
+    // Continue with existing initialization
     checkSessionAndInitialize();
     
     setTimeout(() => {
@@ -1030,6 +1063,11 @@ document.addEventListener("DOMContentLoaded", function () {
     setTimeout(() => {
         startSessionManagement();
     }, 2000);
+    
+    // ADDITIONAL: Fix header icon again after auth loads
+    setTimeout(() => {
+        initializeHeaderProfileIcon();
+    }, 3000);
 });
 
 // Setup filter page specific features
@@ -1572,6 +1610,24 @@ function updateProfilePagePicture(profilePictureUrl) {
         currentPic.style.display = 'none';
         currentPic.src = '';
         defaultIcon.style.display = 'block';
+    }
+}
+
+function initializeHeaderProfileIcon() {
+    console.log('🔧 Initializing header profile icon...');
+    
+    const headerProfileIcon = document.getElementById('profile-icon');
+    const headerProfilePic = document.getElementById('profile-pic');
+    
+    if (headerProfileIcon) {
+        headerProfileIcon.innerHTML = ''; // Clear any existing content
+        headerProfileIcon.style.display = 'block';
+        console.log('✅ Header profile icon initialized');
+    }
+    
+    if (headerProfilePic) {
+        headerProfilePic.style.display = 'none';
+        headerProfilePic.src = '';
     }
 }
 
