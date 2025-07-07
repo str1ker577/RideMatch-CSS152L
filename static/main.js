@@ -89,6 +89,50 @@ document.addEventListener('click', function(event) {
 // Firebase Related Code //
 //////////////////////////
 
+async function initializeFirebase() {
+    try {
+        console.log('🔄 Starting Firebase initialization...');
+        
+        // Check if Firebase is already loaded
+        if (typeof firebase === 'undefined') {
+            console.error('❌ Firebase library not loaded');
+            return false;
+        }
+        
+        // Get Firebase config from backend
+        const configResponse = await fetch('/firebase-config');
+        if (!configResponse.ok) {
+            throw new Error('Failed to get Firebase config');
+        }
+        
+        const firebaseConfig = await configResponse.json();
+        console.log('✅ Firebase config received');
+        
+        // Initialize Firebase app if not already initialized
+        if (firebase.apps.length === 0) {
+            firebaseApp = firebase.initializeApp(firebaseConfig);
+            console.log('✅ Firebase app initialized');
+        } else {
+            firebaseApp = firebase.apps[0];
+            console.log('✅ Using existing Firebase app');
+        }
+        
+        // Initialize Firebase Auth
+        auth = firebase.auth();
+        console.log('✅ Firebase Auth initialized');
+        
+        // Setup auth state listener
+        setupAuthStateListener();
+        
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Firebase initialization failed:', error);
+        showFirebaseError();
+        return false;
+    }
+}
+
 // Initialize Firebase when the page loads
 function updateUIForAuthState(user = null, userData = null) {
     console.log('🔄 Updating UI for auth state:', user ? 'logged in' : 'logged out');
