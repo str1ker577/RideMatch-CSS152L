@@ -12,6 +12,7 @@ let userName = null; // Keep your existing userName variable
 let currentUser = null;
 let userDisplayName = null; // NEW: For storing username
 let userFavorites = new Set();
+let userProfilePictureUrl = null;
 
 // Function to get current user name
 function getCurrentUserName() {
@@ -157,7 +158,6 @@ function updateUIForAuthState(user = null, userData = null) {
     const welcomeText = document.getElementById('welcome-text');
     const profileIcon = document.getElementById('profile-icon');
     const profilePic = document.getElementById('profile-pic');
-    // REMOVED: usernameDisplay - we don't want a separate username display
 
     console.log('🔍 DOM Elements found:', {
         loginButton: !!loginButton,
@@ -165,7 +165,6 @@ function updateUIForAuthState(user = null, userData = null) {
         welcomeText: !!welcomeText,
         profileIcon: !!profileIcon,
         profilePic: !!profilePic
-        // REMOVED: usernameDisplay from debug
     });
 
     // Use current user if not provided
@@ -175,7 +174,8 @@ function updateUIForAuthState(user = null, userData = null) {
     console.log('👤 User data:', {
         hasCurrentUser: !!currentUser,
         userDisplayName: userDisplayName,
-        userEmail: currentUser ? currentUser.email : 'none'
+        userEmail: currentUser ? currentUser.email : 'none',
+        profilePictureUrl: currentUserData?.profilePictureUrl || 'none'
     });
 
     if (currentUser && (userDisplayName || currentUser.email)) {
@@ -190,27 +190,39 @@ function updateUIForAuthState(user = null, userData = null) {
             profileContainer.style.display = 'flex';
         }
         
-        // Update welcome text with username (this is the only place we show the name)
+        // Update welcome text with username
         const displayName = userDisplayName || currentUser.displayName || currentUser.email;
         if (welcomeText) {
             welcomeText.textContent = `Welcome, ${displayName}!`;
         }
         
-        // REMOVED: Username display update - we don't want separate username text
+        // FIXED: Enhanced profile picture handling with proper fallback
+        const profilePictureUrl = currentUserData?.profilePictureUrl || currentUser.photoURL;
         
-        // Handle profile picture
-        const profilePictureUrl = currentUser.photoURL || currentUserData.profilePictureUrl;
-        if (profilePictureUrl) {
+        console.log('🖼️ Profile picture URL:', profilePictureUrl);
+        
+        if (profilePictureUrl && profilePictureUrl !== 'null' && profilePictureUrl !== 'undefined') {
+            // Show profile picture
             if (profilePic) {
                 profilePic.src = profilePictureUrl;
                 profilePic.style.display = 'block';
+                profilePic.onerror = function() {
+                    console.warn('❌ Profile picture failed to load, showing default icon');
+                    this.style.display = 'none';
+                    if (profileIcon) {
+                        profileIcon.style.display = 'block';
+                    }
+                };
             }
             if (profileIcon) {
                 profileIcon.style.display = 'none';
             }
         } else {
+            // Show default icon
+            console.log('📷 No profile picture, showing default icon');
             if (profilePic) {
                 profilePic.style.display = 'none';
+                profilePic.src = '';
             }
             if (profileIcon) {
                 profileIcon.style.display = 'block';
@@ -235,7 +247,6 @@ function updateUIForAuthState(user = null, userData = null) {
         if (welcomeText) {
             welcomeText.textContent = 'Welcome!';
         }
-        // REMOVED: Clear username display - we don't have it anymore
         if (profilePic) {
             profilePic.style.display = 'none';
             profilePic.src = '';
@@ -269,7 +280,7 @@ function setupAuthStateListener() {
             userName = user.email;
             
             try {
-                // Get user profile data including username
+                // Get user profile data including username AND profile picture
                 const profileResponse = await fetch(`${baseUrl}/get-user-profile`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -279,8 +290,20 @@ function setupAuthStateListener() {
                 if (profileResponse.ok) {
                     const profileData = await profileResponse.json();
                     userDisplayName = profileData.username || user.displayName || user.email;
-                    console.log('✅ User profile loaded:', profileData);
-                    updateUIForAuthState(user, profileData);
+                    
+                    // FIXED: Store profile picture URL globally
+                    userProfilePictureUrl = profileData.profilePictureUrl;
+                    
+                    console.log('✅ User profile loaded:', {
+                        username: userDisplayName,
+                        profilePictureUrl: userProfilePictureUrl
+                    });
+                    
+                    // Update UI with complete profile data
+                    updateUIForAuthState(user, {
+                        username: userDisplayName,
+                        profilePictureUrl: userProfilePictureUrl
+                    });
                 } else {
                     userDisplayName = user.displayName || user.email;
                     updateUIForAuthState(user, { username: userDisplayName });
@@ -296,11 +319,13 @@ function setupAuthStateListener() {
             currentUser = null;
             userName = null;
             userDisplayName = null;
+            userProfilePictureUrl = null; // Clear profile picture URL
             updateUIForAuthState(null, null);
             console.log('✅ User is signed out');
         }
     });
 }
+
 
 function showFirebaseError() {
     const errorDiv = document.createElement('div');
@@ -349,6 +374,8 @@ async function checkSessionStatus() {
                 // User has valid session, update global variables
                 userName = sessionData.email;
                 userDisplayName = sessionData.username || sessionData.email;
+                userProfilePictureUrl = sessionData.profile_picture_url; // Store profile picture URL
+                
                 currentUser = {
                     uid: sessionData.user,
                     email: sessionData.email,
@@ -357,11 +384,12 @@ async function checkSessionStatus() {
                 };
                 
                 console.log('✅ Session is valid, user is logged in:', sessionData.email);
+                console.log('🖼️ Profile picture URL from session:', userProfilePictureUrl);
                 
-                // Update UI immediately
+                // Update UI immediately with complete data
                 updateUIForAuthState(currentUser, {
                     username: userDisplayName,
-                    profilePictureUrl: sessionData.profile_picture_url
+                    profilePictureUrl: userProfilePictureUrl
                 });
                 
                 return true;
@@ -382,7 +410,6 @@ async function checkSessionStatus() {
         return false;
     }
 }
-
 async function initializeFirebaseWithSession() {
     try {
         console.log('🔄 Starting Firebase initialization with session check...');
@@ -1183,13 +1210,13 @@ function elementExists(elementId) {
 function clearUserData() {
     userName = null;
     userDisplayName = null;
+    userProfilePictureUrl = null; // Clear profile picture URL
     currentUser = null;
     if (typeof userFavorites !== 'undefined') {
         userFavorites.clear();
     }
     updateUIForAuthState(null, null);
 }
-
 /////////////////////////////////
 // Profile Page Functionality //
 ///////////////////////////////
@@ -1223,6 +1250,13 @@ function loadProfilePage() {
 }
 
 async function loadUserProfile() {
+    if (!currentUser) {
+        window.location.href = '/';
+        return;
+    }
+    
+    console.log('🔄 Loading user profile data...');
+
     try {
         const response = await fetch(`${baseUrl}/get-user-profile`, {
             method: 'POST',
@@ -1232,28 +1266,102 @@ async function loadUserProfile() {
         
         if (response.ok) {
             const profile = await response.json();
+            console.log('📥 Profile data received:', profile);
             
             // Update profile display
-            document.getElementById('current-username').value = profile.username || '';
-            document.getElementById('current-email').value = profile.email || '';
-            document.getElementById('member-since').textContent = new Date(profile.memberSince).toLocaleDateString() || 'Unknown';
-            document.getElementById('total-favorites').textContent = profile.favoriteCount || '0';
+            const currentUsernameElement = document.getElementById('current-username');
+            const currentEmailElement = document.getElementById('current-email');
+            const memberSinceElement = document.getElementById('member-since');
+            const totalFavoritesElement = document.getElementById('total-favorites');
             
-            // Update profile picture
+            if (currentUsernameElement) {
+                currentUsernameElement.value = profile.username || '';
+            }
+            if (currentEmailElement) {
+                currentEmailElement.value = profile.email || '';
+            }
+            if (memberSinceElement) {
+                memberSinceElement.textContent = new Date(profile.memberSince).toLocaleDateString() || 'Unknown';
+            }
+            if (totalFavoritesElement) {
+                totalFavoritesElement.textContent = profile.favoriteCount || '0';
+            }
+            
+            // FIXED: Enhanced profile picture handling in profile page
             const currentPic = document.getElementById('current-profile-pic');
             const defaultIcon = document.getElementById('default-profile-icon');
             
-            if (profile.profilePictureUrl) {
-                currentPic.src = profile.profilePictureUrl;
-                currentPic.style.display = 'block';
-                defaultIcon.style.display = 'none';
+            console.log('🖼️ Profile page picture elements:', {
+                currentPic: !!currentPic,
+                defaultIcon: !!defaultIcon,
+                profilePictureUrl: profile.profilePictureUrl
+            });
+            
+            if (profile.profilePictureUrl && profile.profilePictureUrl !== 'null') {
+                console.log('✅ Showing profile picture:', profile.profilePictureUrl);
+                
+                if (currentPic) {
+                    currentPic.src = profile.profilePictureUrl;
+                    currentPic.style.display = 'block';
+                    
+                    // FIXED: Add error handling to prevent text fallback
+                    currentPic.onerror = function() {
+                        console.warn('❌ Profile picture failed to load in profile page');
+                        this.style.display = 'none';
+                        if (defaultIcon) {
+                            defaultIcon.style.display = 'block';
+                        }
+                    };
+                    
+                    // Ensure it loaded successfully
+                    currentPic.onload = function() {
+                        console.log('✅ Profile picture loaded successfully in profile page');
+                        if (defaultIcon) {
+                            defaultIcon.style.display = 'none';
+                        }
+                    };
+                }
+                
+                if (defaultIcon) {
+                    defaultIcon.style.display = 'none';
+                }
             } else {
-                currentPic.style.display = 'none';
-                defaultIcon.style.display = 'block';
+                console.log('📷 No profile picture, showing default icon in profile page');
+                
+                if (currentPic) {
+                    currentPic.style.display = 'none';
+                    currentPic.src = '';
+                }
+                if (defaultIcon) {
+                    defaultIcon.style.display = 'block';
+                }
             }
+            
+            // Store profile picture URL globally for header use
+            if (profile.profilePictureUrl) {
+                userProfilePictureUrl = profile.profilePictureUrl;
+                
+                // Update header profile picture as well
+                const headerProfilePic = document.getElementById('profile-pic');
+                const headerProfileIcon = document.getElementById('profile-icon');
+                
+                if (headerProfilePic && headerProfileIcon) {
+                    headerProfilePic.src = profile.profilePictureUrl;
+                    headerProfilePic.style.display = 'block';
+                    headerProfileIcon.style.display = 'none';
+                    
+                    headerProfilePic.onerror = function() {
+                        this.style.display = 'none';
+                        headerProfileIcon.style.display = 'block';
+                    };
+                }
+            }
+            
+        } else {
+            console.error('❌ Failed to load profile data');
         }
     } catch (error) {
-        console.error('Error loading profile:', error);
+        console.error('❌ Error loading profile:', error);
     }
 }
 
@@ -1345,8 +1453,10 @@ async function updateProfilePicture() {
     const file = fileInput.files[0];
     
     if (!file) return;
-    
+
     try {
+        console.log('🔄 Uploading new profile picture...');
+        
         const formData = new FormData();
         formData.append('profile_picture', file);
         formData.append('uid', currentUser.uid);
@@ -1358,20 +1468,43 @@ async function updateProfilePicture() {
         
         if (response.ok) {
             const result = await response.json();
+            console.log('✅ Profile picture uploaded:', result.url);
             
             // Update Firebase user profile
             await currentUser.updateProfile({ photoURL: result.url });
             
-            // Update UI
+            // Update global variable
+            userProfilePictureUrl = result.url;
+            
+            // FIXED: Update both profile page and header immediately
             const currentPic = document.getElementById('current-profile-pic');
             const defaultIcon = document.getElementById('default-profile-icon');
+            const headerProfilePic = document.getElementById('profile-pic');
+            const headerProfileIcon = document.getElementById('profile-icon');
             
-            currentPic.src = result.url;
-            currentPic.style.display = 'block';
-            defaultIcon.style.display = 'none';
+            // Update profile page
+            if (currentPic && defaultIcon) {
+                currentPic.src = result.url;
+                currentPic.style.display = 'block';
+                defaultIcon.style.display = 'none';
+                
+                currentPic.onerror = function() {
+                    this.style.display = 'none';
+                    defaultIcon.style.display = 'block';
+                };
+            }
             
-            // Update header profile pic
-            updateUIForAuthState();
+            // Update header
+            if (headerProfilePic && headerProfileIcon) {
+                headerProfilePic.src = result.url;
+                headerProfilePic.style.display = 'block';
+                headerProfileIcon.style.display = 'none';
+                
+                headerProfilePic.onerror = function() {
+                    this.style.display = 'none';
+                    headerProfileIcon.style.display = 'block';
+                };
+            }
             
             alert('Profile picture updated successfully!');
         } else {
@@ -1388,6 +1521,8 @@ async function removeProfilePicture() {
     if (!confirm('Are you sure you want to remove your profile picture?')) return;
     
     try {
+        console.log('🔄 Removing profile picture...');
+        
         const response = await fetch(`${baseUrl}/remove-profile-picture`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -1395,18 +1530,33 @@ async function removeProfilePicture() {
         });
         
         if (response.ok) {
+            console.log('✅ Profile picture removed');
+            
             // Update Firebase user profile
             await currentUser.updateProfile({ photoURL: null });
             
-            // Update UI
+            // Clear global variable
+            userProfilePictureUrl = null;
+            
+            // FIXED: Update both profile page and header immediately
             const currentPic = document.getElementById('current-profile-pic');
             const defaultIcon = document.getElementById('default-profile-icon');
+            const headerProfilePic = document.getElementById('profile-pic');
+            const headerProfileIcon = document.getElementById('profile-icon');
             
-            currentPic.style.display = 'none';
-            defaultIcon.style.display = 'block';
+            // Update profile page
+            if (currentPic && defaultIcon) {
+                currentPic.style.display = 'none';
+                currentPic.src = '';
+                defaultIcon.style.display = 'block';
+            }
             
-            // Update header profile pic
-            updateUIForAuthState();
+            // Update header
+            if (headerProfilePic && headerProfileIcon) {
+                headerProfilePic.style.display = 'none';
+                headerProfilePic.src = '';
+                headerProfileIcon.style.display = 'block';
+            }
             
             alert('Profile picture removed successfully!');
         } else {
