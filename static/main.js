@@ -460,6 +460,31 @@ function setupAdditionalFeatures() {
     }
 }
 
+function getFirebaseErrorMessage(errorCode) {
+    switch (errorCode) {
+        case 'auth/user-not-found':
+            return 'No account found with this email address.';
+        case 'auth/wrong-password':
+            return 'Incorrect password. Please try again.';
+        case 'auth/email-already-in-use':
+            return 'This email is already registered. Please use a different email.';
+        case 'auth/invalid-email':
+            return 'Please enter a valid email address.';
+        case 'auth/weak-password':
+            return 'Password is too weak. Please choose a stronger password.';
+        case 'auth/too-many-requests':
+            return 'Too many failed attempts. Please try again later.';
+        case 'auth/network-request-failed':
+            return 'Network error. Please check your connection.';
+        case 'auth/user-disabled':
+            return 'This account has been disabled. Please contact support.';
+        case 'auth/operation-not-allowed':
+            return 'This operation is not allowed. Please contact support.';
+        default:
+            return 'Authentication error. Please try again.';
+    }
+}
+
 /////////////////////////////////////////
 // Denies access to users to the User //
 // Profile Page, unless signed in    //
@@ -687,14 +712,17 @@ function handleSignup(event) {
     const profilePictureFile = document.getElementById('profile_picture').files[0];
     
     console.log('Signup attempt with username:', username);
+    console.log('Email:', email);
+    console.log('Has profile picture:', !!profilePictureFile);
     
     if (!auth) {
         console.error('Firebase not initialized');
+        document.querySelector('.error-message12').textContent = 'Authentication system not ready. Please refresh the page.';
         return;
     }
     
-    // Validate username
-    if (username.length < 3 || username.length > 20) {
+    // Enhanced username validation
+    if (!username || username.length < 3 || username.length > 20) {
         document.querySelector('.error-message12').textContent = 'Username must be 3-20 characters long';
         return;
     }
@@ -704,24 +732,43 @@ function handleSignup(event) {
         return;
     }
     
+    // Email validation
+    if (!email || !email.includes('@')) {
+        document.querySelector('.error-message12').textContent = 'Please enter a valid email address';
+        return;
+    }
+    
+    // Password validation
+    if (!password || password.length < 6) {
+        document.querySelector('.error-message12').textContent = 'Password must be at least 6 characters long';
+        return;
+    }
+    
     // Show loading state
     const submitButton = event.target.querySelector('button[type="submit"]');
-    const originalText = submitButton.textContent;
-    submitButton.textContent = 'Creating Account...';
-    submitButton.disabled = true;
+    const originalText = submitButton ? submitButton.textContent : 'Sign Up';
+    if (submitButton) {
+        submitButton.textContent = 'Creating Account...';
+        submitButton.disabled = true;
+    }
+    
+    // Clear previous error messages
+    document.querySelector('.error-message12').textContent = '';
+    document.querySelector('.error-message').textContent = '';
+    document.querySelector('.success-message').textContent = '';
     
     // Use Firebase client-side authentication
     auth.createUserWithEmailAndPassword(email, password)
         .then(async (userCredential) => {
             const user = userCredential.user;
-            console.log('User signed up:', user.email);
+            console.log('✅ Firebase user created:', user.email);
             
             try {
-                // Prepare user data for backend
                 let profilePictureUrl = null;
                 
                 // Handle profile picture upload if provided
                 if (profilePictureFile) {
+                    console.log('📸 Uploading profile picture...');
                     const formData = new FormData();
                     formData.append('profile_picture', profilePictureFile);
                     formData.append('user_id', user.uid);
@@ -734,58 +781,150 @@ function handleSignup(event) {
                     if (uploadResponse.ok) {
                         const uploadResult = await uploadResponse.json();
                         profilePictureUrl = uploadResult.url;
+                        console.log('✅ Profile picture uploaded:', profilePictureUrl);
+                    } else {
+                        const uploadError = await uploadResponse.text();
+                        console.error('❌ Profile picture upload failed:', uploadError);
+                        // Continue with signup even if picture upload fails
                     }
                 }
                 
-                // Send user data to backend
+                // Send user data to backend with detailed logging
+                console.log('📤 Sending user data to backend...');
+                const userData = {
+                    uid: user.uid,
+                    email: user.email,
+                    username: username,
+                    profilePictureUrl: profilePictureUrl
+                };
+                console.log('User data being sent:', userData);
+                
                 const response = await fetch(`${baseUrl}/complete-signup`, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        uid: user.uid,
-                        email: user.email,
-                        username: username,
-                        profilePictureUrl: profilePictureUrl
-                    })
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(userData)
                 });
+                
+                console.log('Backend response status:', response.status);
+                console.log('Backend response ok:', response.ok);
                 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.message || 'Failed to complete signup');
+                    const errorText = await response.text();
+                    console.error('❌ Backend error response:', errorText);
+                    
+                    let errorMessage = 'Failed to complete signup';
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        errorMessage = errorData.message || errorMessage;
+                    } catch (e) {
+                        // If it's not JSON, use the raw text
+                        errorMessage = errorText || errorMessage;
+                    }
+                    
+                    throw new Error(errorMessage);
                 }
                 
+                const result = await response.json();
+                console.log('✅ Backend signup completed:', result);
+                
                 // Update Firebase user profile
-                await user.updateProfile({
-                    displayName: username,
-                    photoURL: profilePictureUrl
-                });
+                try {
+                    await user.updateProfile({
+                        displayName: username,
+                        photoURL: profilePictureUrl
+                    });
+                    console.log('✅ Firebase profile updated');
+                } catch (profileError) {
+                    console.error('⚠️ Firebase profile update failed:', profileError);
+                    // Continue even if profile update fails
+                }
                 
                 // Display success message
                 document.querySelector('.success-message').textContent = "Account created successfully! Please log in.";
                 document.querySelector('.error-message12').textContent = '';
                 document.querySelector('.error-message').textContent = '';
                 
-                // Close signup popup and show login
-                togglePopup('signup-popup');
-                togglePopup('login-popup');
+                // Clear form
+                document.querySelector('input[name="email_signup"]').value = '';
+                document.querySelector('input[name="password_signup"]').value = '';
+                document.querySelector('input[name="username"]').value = '';
+                if (document.getElementById('profile_picture')) {
+                    document.getElementById('profile_picture').value = '';
+                }
+                
+                // Close signup popup and show login after delay
+                setTimeout(() => {
+                    togglePopup('signup-popup');
+                    setTimeout(() => {
+                        togglePopup('login-popup');
+                    }, 500);
+                }, 2000);
                 
             } catch (backendError) {
-                console.error('Backend signup error:', backendError);
-                document.querySelector('.error-message12').textContent = backendError.message || 'Failed to complete account setup';
+                console.error('❌ Backend signup error:', backendError);
+                
+                // Show specific error message
+                let errorMessage = backendError.message;
+                if (errorMessage.includes('Username already taken')) {
+                    errorMessage = 'This username is already taken. Please choose another one.';
+                } else if (errorMessage.includes('Database not available')) {
+                    errorMessage = 'Database temporarily unavailable. Please try again later.';
+                } else if (!errorMessage || errorMessage === 'Failed to complete signup') {
+                    errorMessage = 'Failed to complete account setup. Please try again.';
+                }
+                
+                document.querySelector('.error-message12').textContent = errorMessage;
                 
                 // Delete the Firebase user since backend setup failed
-                await user.delete();
+                try {
+                    await user.delete();
+                    console.log('🗑️ Firebase user deleted due to backend failure');
+                } catch (deleteError) {
+                    console.error('❌ Failed to delete Firebase user:', deleteError);
+                }
             }
         })
         .catch((error) => {
-            console.error('Signup error:', error);
+            console.error('❌ Firebase signup error:', error);
             document.querySelector('.success-message').textContent = '';
-            document.querySelector('.error-message12').textContent = getFirebaseErrorMessage(error.code);
+            
+            let errorMessage = 'Account creation failed. Please try again.';
+            
+            // Handle specific Firebase errors
+            switch (error.code) {
+                case 'auth/email-already-in-use':
+                    errorMessage = 'This email is already registered. Please use a different email or try logging in.';
+                    break;
+                case 'auth/invalid-email':
+                    errorMessage = 'Please enter a valid email address.';
+                    break;
+                case 'auth/operation-not-allowed':
+                    errorMessage = 'Email/password accounts are not enabled. Please contact support.';
+                    break;
+                case 'auth/weak-password':
+                    errorMessage = 'Password is too weak. Please choose a stronger password.';
+                    break;
+                case 'auth/network-request-failed':
+                    errorMessage = 'Network error. Please check your connection and try again.';
+                    break;
+                default:
+                    if (error.message) {
+                        errorMessage = error.message;
+                    }
+                    break;
+            }
+            
+            document.querySelector('.error-message12').textContent = errorMessage;
         })
         .finally(() => {
-            // Reset button
-            submitButton.textContent = originalText;
-            submitButton.disabled = false;
+            // Reset button state
+            if (submitButton) {
+                submitButton.textContent = originalText;
+                submitButton.disabled = false;
+            }
         });
 }
 

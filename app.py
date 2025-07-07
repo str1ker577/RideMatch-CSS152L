@@ -667,6 +667,143 @@ def signup():
     
 @app.route('/complete-signup', methods=['POST'])
 def complete_signup():
+    """Complete user signup with username and profile data - Enhanced version"""
+    app.logger.info("🔄 Starting complete-signup process...")
+    
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available for signup completion")
+        return jsonify({"status": "error", "message": "Database not available"}), 500
+    
+    try:
+        # Get and validate request data
+        data = request.get_json()
+        app.logger.info(f"📥 Received signup data: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+        
+        uid = data.get('uid')
+        email = data.get('email')
+        username = data.get('username', '').strip()
+        profile_picture_url = data.get('profilePictureUrl')
+        
+        app.logger.info(f"📋 Processing signup for:")
+        app.logger.info(f"   UID: {uid}")
+        app.logger.info(f"   Email: {email}")
+        app.logger.info(f"   Username: {username}")
+        app.logger.info(f"   Profile Picture: {profile_picture_url}")
+        
+        # Validate required fields
+        if not uid:
+            app.logger.error("❌ Missing UID")
+            return jsonify({"status": "error", "message": "User ID is required"}), 400
+        
+        if not email:
+            app.logger.error("❌ Missing email")
+            return jsonify({"status": "error", "message": "Email is required"}), 400
+        
+        if not username:
+            app.logger.error("❌ Missing username")
+            return jsonify({"status": "error", "message": "Username is required"}), 400
+        
+        # Enhanced username validation
+        app.logger.info("🔍 Validating username...")
+        is_valid, message = validate_username(username)
+        if not is_valid:
+            app.logger.error(f"❌ Username validation failed: {message}")
+            return jsonify({"status": "error", "message": message}), 400
+        
+        app.logger.info("✅ Username validation passed")
+        
+        # Check username availability
+        app.logger.info("🔍 Checking username availability...")
+        try:
+            users_ref = realtime_db_ref.child('users')
+            existing_users = users_ref.order_by_child('username').equal_to(username).get()
+            
+            app.logger.info(f"📊 Username check result: {existing_users}")
+            
+            if existing_users:
+                # Check if any of the existing users have a different UID
+                for existing_uid, existing_data in existing_users.items():
+                    if existing_uid != uid:
+                        app.logger.error(f"❌ Username '{username}' already taken by user {existing_uid}")
+                        return jsonify({"status": "error", "message": "Username already taken"}), 400
+                
+                app.logger.info("✅ Username belongs to current user (re-signup case)")
+            else:
+                app.logger.info("✅ Username is available")
+                
+        except Exception as db_error:
+            app.logger.error(f"❌ Database query error during username check: {db_error}")
+            return jsonify({"status": "error", "message": "Database query failed"}), 500
+        
+        # Process profile picture URL
+        if profile_picture_url:
+            # Ensure profile picture URL is properly formatted
+            if not profile_picture_url.startswith('/') and not profile_picture_url.startswith('http'):
+                profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
+            app.logger.info(f"📸 Profile picture URL processed: {profile_picture_url}")
+        
+        # Create comprehensive user profile data
+        app.logger.info("📝 Creating user profile data...")
+        user_data = {
+            'uid': uid,
+            'email': email,
+            'username': username,
+            'profilePictureUrl': profile_picture_url,
+            'memberSince': datetime.utcnow().isoformat() + 'Z',
+            'favoriteCount': 0,
+            'createdAt': int(time.time() * 1000),
+            'lastUpdated': int(time.time() * 1000),
+            'accountStatus': 'active'
+        }
+        
+        app.logger.info(f"📄 User data to be stored: {user_data}")
+        
+        # Store user data in database
+        app.logger.info("💾 Storing user data in database...")
+        try:
+            users_ref.child(uid).set(user_data)
+            app.logger.info("✅ User data stored successfully")
+        except Exception as store_error:
+            app.logger.error(f"❌ Failed to store user data: {store_error}")
+            return jsonify({"status": "error", "message": "Failed to store user data"}), 500
+        
+        # Verify the data was stored correctly
+        app.logger.info("🔍 Verifying stored data...")
+        try:
+            stored_data = users_ref.child(uid).get()
+            if stored_data:
+                app.logger.info("✅ Data verification successful")
+                app.logger.info(f"📊 Stored data: {stored_data}")
+            else:
+                app.logger.error("❌ Data verification failed - no data found")
+                return jsonify({"status": "error", "message": "Failed to verify stored data"}), 500
+        except Exception as verify_error:
+            app.logger.error(f"❌ Data verification error: {verify_error}")
+            # Continue anyway, as the main storage might have succeeded
+        
+        app.logger.info(f"🎉 User profile created successfully for {email} with username '{username}'")
+        
+        return jsonify({
+            "status": "success", 
+            "message": "Profile created successfully",
+            "user": {
+                "uid": uid,
+                "email": email,
+                "username": username,
+                "profilePictureUrl": profile_picture_url
+            }
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error in complete_signup: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({"status": "error", "message": "Failed to complete signup"}), 500
     """Complete user signup with username and profile data"""
     if not realtime_db_ref:
         return jsonify({"status": "error", "message": "Database not available"}), 500
@@ -770,6 +907,45 @@ def complete_signup():
         app.logger.error(f"Error completing signup: {e}")
         return jsonify({"status": "error", "message": "Failed to complete signup"}), 500    
 
+@app.route('/debug/signup-process')
+def debug_signup_process():
+    """Debug endpoint to check signup process components"""
+    try:
+        debug_info = {
+            "database_available": realtime_db_ref is not None,
+            "upload_folder_exists": os.path.exists(UPLOAD_FOLDER),
+            "upload_folder_writable": os.access(UPLOAD_FOLDER, os.W_OK) if os.path.exists(UPLOAD_FOLDER) else False,
+            "max_file_size": MAX_FILE_SIZE,
+            "allowed_extensions": list(ALLOWED_EXTENSIONS),
+            "current_time": datetime.utcnow().isoformat() + 'Z',
+            "firebase_admin_available": firebase_admin is not None
+        }
+        
+        # Test database connection
+        if realtime_db_ref:
+            try:
+                test_ref = realtime_db_ref.child('test')
+                test_data = test_ref.get()
+                debug_info["database_connection"] = "working"
+                debug_info["test_read_result"] = test_data
+            except Exception as db_error:
+                debug_info["database_connection"] = f"error: {str(db_error)}"
+        
+        # Check existing users count
+        if realtime_db_ref:
+            try:
+                users_ref = realtime_db_ref.child('users')
+                users_data = users_ref.get() or {}
+                debug_info["existing_users_count"] = len(users_data)
+                debug_info["sample_usernames"] = [data.get('username', 'No username') for data in list(users_data.values())[:3]]
+            except Exception as users_error:
+                debug_info["users_check_error"] = str(users_error)
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
 ##################
 # Login Function #
 ##################
@@ -842,6 +1018,34 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def validate_username(username):
+    """Enhanced username validation with detailed error messages"""
+    if not username:
+        return False, "Username is required"
+    
+    # Remove any whitespace
+    username = username.strip()
+    
+    if len(username) < 3:
+        return False, "Username must be at least 3 characters long"
+    
+    if len(username) > 20:
+        return False, "Username must be less than 20 characters long"
+    
+    # Check for valid characters only
+    if not re.match(r'^[a-zA-Z0-9_]+$', username):
+        return False, "Username can only contain letters, numbers, and underscores"
+    
+    # Check that it doesn't start or end with underscore
+    if username.startswith('_') or username.endswith('_'):
+        return False, "Username cannot start or end with an underscore"
+    
+    # Check for reserved usernames
+    reserved_usernames = ['admin', 'administrator', 'root', 'system', 'anonymous', 'null', 'undefined']
+    if username.lower() in reserved_usernames:
+        return False, "This username is reserved and cannot be used"
+    
+    return True, "Valid username"
+
     """Validate username format and length"""
     if not username:
         return False, "Username is required"
@@ -918,6 +1122,95 @@ def check_username():
 
 @app.route('/upload-profile-picture', methods=['POST'])
 def upload_profile_picture():
+    """Upload and process profile picture during signup - Enhanced version"""
+    app.logger.info("📸 Starting profile picture upload...")
+    
+    try:
+        # Check if file is in request
+        if 'profile_picture' not in request.files:
+            app.logger.error("❌ No file provided in request")
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files['profile_picture']
+        user_id = request.form.get('user_id')
+        
+        app.logger.info(f"📋 Upload request details:")
+        app.logger.info(f"   User ID: {user_id}")
+        app.logger.info(f"   Filename: {file.filename}")
+        app.logger.info(f"   Content Type: {file.content_type}")
+        
+        if not user_id:
+            app.logger.error("❌ User ID required but not provided")
+            return jsonify({"error": "User ID required"}), 400
+        
+        if file.filename == '':
+            app.logger.error("❌ No file selected")
+            return jsonify({"error": "No file selected"}), 400
+        
+        if not allowed_file(file.filename):
+            app.logger.error(f"❌ File type not allowed: {file.filename}")
+            return jsonify({"error": "File type not allowed. Please use PNG, JPG, JPEG, GIF, or WEBP"}), 400
+        
+        # Check file size
+        file.seek(0, os.SEEK_END)  # Move to end of file
+        file_size = file.tell()     # Get current position (file size)
+        file.seek(0)               # Reset to beginning
+        
+        app.logger.info(f"📊 File size: {file_size} bytes")
+        
+        if file_size > MAX_FILE_SIZE:
+            app.logger.error(f"❌ File too large: {file_size} bytes > {MAX_FILE_SIZE} bytes")
+            return jsonify({"error": "File too large (max 5MB)"}), 400
+        
+        # Create upload directory if it doesn't exist
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        app.logger.info(f"📁 Upload folder ensured: {UPLOAD_FOLDER}")
+        
+        # Generate unique filename
+        file_extension = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"{user_id}_{uuid.uuid4().hex}.{file_extension}"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+        app.logger.info(f"💾 Saving file as: {filename}")
+        app.logger.info(f"📂 Full path: {filepath}")
+        
+        # Save file
+        try:
+            file.save(filepath)
+            app.logger.info("✅ File saved successfully")
+        except Exception as save_error:
+            app.logger.error(f"❌ Failed to save file: {save_error}")
+            return jsonify({"error": "Failed to save file"}), 500
+        
+        # Resize image
+        app.logger.info("🖼️ Resizing image...")
+        if not resize_image(filepath):
+            app.logger.error("❌ Failed to resize image")
+            # Clean up the failed file
+            try:
+                os.remove(filepath)
+            except:
+                pass
+            return jsonify({"error": "Failed to process image"}), 500
+        
+        app.logger.info("✅ Image resized successfully")
+        
+        # Generate URL
+        file_url = f"/static/profile_pictures/{filename}"
+        
+        app.logger.info(f"🎉 Profile picture upload completed:")
+        app.logger.info(f"   User: {user_id}")
+        app.logger.info(f"   Filename: {filename}")
+        app.logger.info(f"   URL: {file_url}")
+        
+        return jsonify({"url": file_url}), 200
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error uploading profile picture: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Failed to upload image"}), 500
     """Upload and process profile picture during signup"""
     try:
         if 'profile_picture' not in request.files:
