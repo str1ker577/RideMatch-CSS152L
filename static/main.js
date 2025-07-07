@@ -8,7 +8,7 @@ const baseUrl = isLocalhost ? 'http://127.0.0.1:8000' : window.location.origin;
 
 // Firebase initialization 
 let auth; // Global auth object
-let userName = null; // Keep your existing userName variable
+let userName = null; 
 let currentUser = null;
 let userDisplayName = null; // NEW: For storing username
 let userFavorites = new Set();
@@ -88,6 +88,49 @@ document.addEventListener('click', function(event) {
 ////////////////////////////
 // Firebase Related Code //
 //////////////////////////
+
+async function initializeFirebase() {
+    try {
+        console.log('🔄 Starting Firebase initialization...');
+        
+        // Check if Firebase is already loaded
+        if (typeof firebase === 'undefined') {
+            console.error('❌ Firebase library not loaded');
+            return false;
+        }
+        
+        // Get Firebase config from backend
+        const configResponse = await fetch('/firebase-config');
+        if (!configResponse.ok) {
+            throw new Error('Failed to get Firebase config');
+        }
+        
+        const config = await configResponse.json();
+        console.log('✅ Firebase config loaded');
+        
+        // Initialize Firebase only if not already initialized
+        if (!firebase.apps.length) {
+            firebase.initializeApp(config);
+            console.log('✅ Firebase app initialized');
+        } else {
+            console.log('✅ Firebase app already initialized');
+        }
+        
+        // Initialize Auth
+        auth = firebase.auth();
+        console.log('✅ Firebase Auth initialized');
+        
+        // Set up auth state listener
+        setupAuthStateListener();
+        
+        return true;
+        
+    } catch (error) {
+        console.error('❌ Firebase initialization failed:', error);
+        showFirebaseError();
+        return false;
+    }
+}
 
 // Initialize Firebase when the page loads
 function updateUIForAuthState(user = null, userData = null) {
@@ -341,16 +384,20 @@ function setupAuthStateListener() {
                     const profileData = await profileResponse.json();
                     userDisplayName = profileData.username || user.displayName || user.email;
                     
-                    // FIXED: Update Firebase user object with database profile picture
-                    if (profileData.profilePictureUrl) {
-                        // Update the currentUser object to include the profile picture
-                        currentUser.photoURL = profileData.profilePictureUrl;
-                    }
-                    
                     console.log('✅ User profile loaded:', profileData);
                     console.log('🖼️ Profile picture URL:', profileData.profilePictureUrl);
                     
+                    // FIXED: Create proper user object with profile data
+                    currentUser = {
+                        ...user,
+                        profileData: profileData,
+                        photoURL: profileData.profilePictureUrl || user.photoURL
+                    };
+                    
                     updateUIForAuthState(currentUser, profileData);
+                    
+                    // Load favorites after auth
+                    loadUserFavoritesForDuplicateCheck();
                 } else {
                     userDisplayName = user.displayName || user.email;
                     updateUIForAuthState(user, { username: userDisplayName });
@@ -371,6 +418,7 @@ function setupAuthStateListener() {
         }
     });
 }
+
 function showFirebaseError() {
     const errorDiv = document.createElement('div');
     errorDiv.style.cssText = `
@@ -419,22 +467,35 @@ async function checkSessionStatus() {
                 userName = sessionData.email;
                 userDisplayName = sessionData.username || sessionData.email;
                 
-                // FIXED: Create a proper user object with all profile data
+                // FIXED: Create a proper user object with session data
                 currentUser = {
                     uid: sessionData.user,
                     email: sessionData.email,
                     displayName: sessionData.username,
-                    photoURL: sessionData.profile_picture_url || null // Ensure this is set correctly
+                    photoURL: sessionData.profile_picture_url || null,
+                    profileData: {
+                        username: sessionData.username,
+                        profilePictureUrl: sessionData.profile_picture_url
+                    },
+                    // FIXED: Add Firebase Auth methods simulation for session-based users
+                    updateProfile: async function(updates) {
+                        console.log('🔄 Updating profile via session...', updates);
+                        // This will be handled by backend calls, not Firebase client
+                        return Promise.resolve();
+                    }
                 };
                 
                 console.log('✅ Session is valid, user is logged in:', sessionData.email);
                 console.log('🖼️ Profile picture URL from session:', sessionData.profile_picture_url);
                 
-                // FIXED: Update UI with complete profile data including profile picture
+                // Update UI with complete profile data
                 updateUIForAuthState(currentUser, {
                     username: userDisplayName,
                     profilePictureUrl: sessionData.profile_picture_url
                 });
+                
+                // Load favorites for session user
+                loadUserFavoritesForDuplicateCheck();
                 
                 return true;
             } else {
@@ -492,15 +553,10 @@ async function checkSessionAndInitialize() {
         // Then initialize Firebase
         await initializeFirebase();
         
-        // If we have a valid session, make sure UI is updated
+        // If we have a valid session but no Firebase user, that's OK
+        // The session-based currentUser will handle things
         if (hasValidSession && currentUser) {
-            console.log('✅ Valid session found, updating UI');
-            setTimeout(() => {
-                updateUIForAuthState(currentUser, {
-                    username: userDisplayName,
-                    profilePictureUrl: currentUser.photoURL
-                });
-            }, 500);
+            console.log('✅ Valid session found, UI already updated');
         }
         
         console.log('✅ Session check and Firebase initialization completed');
@@ -554,6 +610,29 @@ function setupAdditionalFeatures() {
     const profilePictureInput = document.getElementById('new-profile-picture');
     if (profilePictureInput) {
         profilePictureInput.addEventListener('change', updateProfilePicture);
+    }
+}
+
+function getFirebaseErrorMessage(errorCode) {
+    switch (errorCode) {
+        case 'auth/user-not-found':
+            return 'No account found with this email address.';
+        case 'auth/wrong-password':
+            return 'Incorrect password. Please try again.';
+        case 'auth/invalid-email':
+            return 'Please enter a valid email address.';
+        case 'auth/user-disabled':
+            return 'This account has been disabled.';
+        case 'auth/too-many-requests':
+            return 'Too many failed attempts. Please try again later.';
+        case 'auth/email-already-in-use':
+            return 'An account with this email already exists.';
+        case 'auth/weak-password':
+            return 'Password should be at least 6 characters.';
+        case 'auth/network-request-failed':
+            return 'Network error. Please check your connection.';
+        default:
+            return 'Authentication error. Please try again.';
     }
 }
 
@@ -1010,6 +1089,9 @@ function handleLogin(event) {
                             username: data.username,
                             profilePictureUrl: data.profile_picture_url
                         });
+                        
+                        // Load favorites after successful login
+                        loadUserFavoritesForDuplicateCheck();
                     }, 100);
                     
                     // Show success message
@@ -1038,6 +1120,7 @@ function handleLogin(event) {
             }
         });
 }
+
 
 // Helper function to show success messages
 function showSuccessMessage(message) {
@@ -1420,6 +1503,12 @@ async function updateProfilePicture() {
     
     if (!file) return;
     
+    // Check if user is authenticated
+    if (!currentUser || !currentUser.uid) {
+        alert('Please log in to update your profile picture.');
+        return;
+    }
+
     try {
         const formData = new FormData();
         formData.append('profile_picture', file);
@@ -1433,19 +1522,29 @@ async function updateProfilePicture() {
         if (response.ok) {
             const result = await response.json();
             
-            // Update Firebase user profile
-            await currentUser.updateProfile({ photoURL: result.url });
+            // FIXED: Update currentUser object properly
+            if (currentUser.profileData) {
+                currentUser.profileData.profilePictureUrl = result.url;
+            }
+            currentUser.photoURL = result.url;
             
-            // Update UI
+            // Update UI elements
             const currentPic = document.getElementById('current-profile-pic');
             const defaultIcon = document.getElementById('default-profile-icon');
             
-            currentPic.src = result.url;
-            currentPic.style.display = 'block';
-            defaultIcon.style.display = 'none';
+            if (currentPic) {
+                currentPic.src = result.url;
+                currentPic.style.display = 'block';
+            }
+            if (defaultIcon) {
+                defaultIcon.style.display = 'none';
+            }
             
             // Update header profile pic
-            updateUIForAuthState();
+            updateUIForAuthState(currentUser, {
+                username: userDisplayName,
+                profilePictureUrl: result.url
+            });
             
             alert('Profile picture updated successfully!');
         } else {
@@ -4348,12 +4447,14 @@ async function populateVariants() {
 ////////////////////////
 //FAVOURITES Function//
 //////////////////////
+
 async function addToFave(event, variant) {
     // Prevent event bubbling
     event.stopPropagation();
     
-    // Check if user is authenticated
-    if (!auth || !auth.currentUser) {
+    // FIXED: Better authentication check
+    if (!currentUser || !currentUser.uid) {
+        console.log('❌ User not authenticated for favorites');
         alert('Please sign in to save favorites');
         return;
     }
@@ -4361,9 +4462,9 @@ async function addToFave(event, variant) {
     const isCurrentlyLiked = userFavorites.has(variant);
     const newLikedStatus = !isCurrentlyLiked;
 
-    console.log('Like action:', variant, 'currently liked:', isCurrentlyLiked, 'new status:', newLikedStatus);
+    console.log('🔄 Like action:', variant, 'currently liked:', isCurrentlyLiked, 'new status:', newLikedStatus);
 
-    // REQUIREMENT 1 & 4: Check for duplicates when trying to like
+    // Check for duplicates when trying to like
     if (newLikedStatus && userFavorites.has(variant)) {
         showLikeErrorMessage("You already liked this car!");
         return;
@@ -4377,6 +4478,7 @@ async function addToFave(event, variant) {
         const response = await fetch(`${baseUrl}/toggle-fave`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            credentials: 'same-origin', // FIXED: Include credentials for session
             body: JSON.stringify({ variant: variant, liked: newLikedStatus })
         });
         
@@ -4386,8 +4488,9 @@ async function addToFave(event, variant) {
         }
         
         const data = await response.json();
+        console.log('✅ Favorite toggle response:', data);
         
-        // REQUIREMENT 2: Update heart appearance with new colors
+        // Update heart appearance with new colors
         if (data.liked || data.status === 'added') {
             // Added to favorites - solid red heart
             event.target.classList.remove('fa-regular');
@@ -4416,7 +4519,7 @@ async function addToFave(event, variant) {
         }
 
     } catch (error) {
-        console.error('Error toggling favorite:', error);
+        console.error('❌ Error toggling favorite:', error);
         event.target.style.color = originalColor;
         showLikeErrorMessage('Error updating favorites. Please try again.');
     }
@@ -4495,15 +4598,19 @@ async function addToFaveFromCalculator(event, variant) {
 
 // Load user favorites into memory for quick duplicate checking
 async function loadUserFavoritesForDuplicateCheck() {
-    if (!auth || !auth.currentUser) {
+    if (!currentUser || !currentUser.uid) {
         userFavorites.clear();
+        console.log('❌ No authenticated user for favorites loading');
         return;
     }
 
     try {
+        console.log('🔄 Loading user favorites for duplicate check...');
+        
         const response = await fetch(`${baseUrl}/get-faves`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: 'same-origin' // FIXED: Include credentials
         });
 
         if (response.ok) {
@@ -4512,13 +4619,17 @@ async function loadUserFavoritesForDuplicateCheck() {
             favorites.forEach(fav => {
                 userFavorites.add(fav.variant);
             });
-            console.log('Loaded favorites for duplicate check:', userFavorites);
+            console.log('✅ Loaded favorites for duplicate check:', userFavorites.size, 'items');
             
             // Update heart colors on current page
             updateHeartColorsOnPage();
+        } else {
+            console.error('❌ Failed to load favorites:', response.status);
+            userFavorites.clear();
         }
     } catch (error) {
-        console.error('Error loading favorites for duplicate check:', error);
+        console.error('❌ Error loading favorites for duplicate check:', error);
+        userFavorites.clear();
     }
 }
 
@@ -5644,13 +5755,13 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
   }
 
   // Function to get current user name
-  function getCurrentUserName() {
-    if (typeof auth !== 'undefined' && auth && auth.currentUser) {
-      return auth.currentUser.displayName || auth.currentUser.email || 'Anonymous';
+function getCurrentUserName() {
+    if (currentUser) {
+        // Priority: username > displayName > email > 'Anonymous'
+        return userDisplayName || currentUser.displayName || currentUser.email || 'Anonymous';
     }
     return 'Anonymous';
-  }
-
+}
   // Initialize testimonials DOM elements
   function initializeTestimonialElements() {
     try {
