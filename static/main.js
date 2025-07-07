@@ -5755,13 +5755,13 @@ window.loadUserFavoritesForDuplicateCheck = loadUserFavoritesForDuplicateCheck;
   }
 
   // Function to get current user name
-function getCurrentUserName() {
-    if (currentUser) {
-        // Priority: username > displayName > email > 'Anonymous'
-        return userDisplayName || currentUser.displayName || currentUser.email || 'Anonymous';
+  function getCurrentUserName() {
+    if (typeof auth !== 'undefined' && auth && auth.currentUser) {
+      return auth.currentUser.displayName || auth.currentUser.email || 'Anonymous';
     }
     return 'Anonymous';
-}
+  }
+
   // Initialize testimonials DOM elements
   function initializeTestimonialElements() {
     try {
