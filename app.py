@@ -400,6 +400,69 @@ def get_firebase_config():
 # UPDATED: Enhanced verify-token route to include username (replace existing)
 @app.route('/verify-token', methods=['POST'])
 def verify_token():
+    """Enhanced token verification with better session management"""
+    if not realtime_db_ref:
+        app.logger.error("Database not available for token verification")
+        return jsonify({"status": "error", "message": "Database not available"}), 500
+    
+    try:
+        data = request.get_json()
+        if not data:
+            app.logger.error("No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+            
+        id_token = data.get('idToken')
+        email = data.get('email')
+        
+        if not id_token:
+            app.logger.error("No token provided in request")
+            return jsonify({"status": "error", "message": "No token provided"}), 400
+        
+        # Verify token with Firebase Admin
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        
+        # Get user profile data including username
+        user_ref = realtime_db_ref.child('users').child(uid)
+        user_data = user_ref.get()
+        
+        username = None
+        profile_picture_url = None
+        if user_data:
+            username = user_data.get('username')
+            profile_picture_url = user_data.get('profilePictureUrl')
+        
+        # Create comprehensive session
+        session.clear()  # Clear any existing session data first
+        session['user'] = uid
+        session['email'] = email
+        session['username'] = username
+        session['profile_picture_url'] = profile_picture_url
+        session['idToken'] = id_token
+        session['authenticated'] = True
+        session['auth_time'] = int(time.time())
+        session['last_activity'] = int(time.time())
+        
+        # Make session permanent and set lifetime
+        session.permanent = True
+        app.permanent_session_lifetime = timedelta(days=30)
+        
+        app.logger.info(f"✅ Session created for user {email} with username: {username}")
+        
+        return jsonify({
+            "status": "success", 
+            "message": "Authentication successful",
+            "username": username,
+            "profile_picture_url": profile_picture_url,
+            "uid": uid
+        }), 200
+        
+    except firebase_admin.auth.InvalidIdTokenError as e:
+        app.logger.error(f"Invalid token error: {e}")
+        return jsonify({"status": "error", "message": "Invalid token"}), 401
+    except Exception as e:
+        app.logger.error(f"Token verification failed: {str(e)}")
+        return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
     if not realtime_db_ref:
         app.logger.error("Database not available for token verification")
         return jsonify({"status": "error", "message": "Database not available"}), 500
@@ -508,19 +571,79 @@ def verify_token():
         app.logger.error(f"Token verification failed: {str(e)}")
         return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
     
+@app.route('/refresh-session', methods=['POST'])
+def refresh_session():
+    """Refresh session activity timestamp"""
+    if 'user' in session and session.get('authenticated'):
+        session['last_activity'] = int(time.time())
+        return jsonify({"status": "success"}), 200
+    else:
+        return jsonify({"status": "error", "message": "No active session"}), 401
+    
 @app.route('/check-session', methods=['GET'])
 def check_session():
-    """Check if user has a valid session"""
-    if 'user' in session and session.get('authenticated'):
-        return jsonify({
+    """Enhanced session check with proper validation"""
+    try:
+        app.logger.info(f"Session check request from {request.remote_addr}")
+        
+        # Check if user session exists and is valid
+        if 'user' not in session or not session.get('authenticated'):
+            app.logger.info("No valid session found")
+            return jsonify({"authenticated": False}), 200
+        
+        # Check if session has expired
+        auth_time = session.get('auth_time')
+        if auth_time and (int(time.time()) - auth_time > (30 * 24 * 60 * 60)):
+            app.logger.info(f"Session expired for user {session.get('email')}")
+            session.clear()
+            return jsonify({"authenticated": False}), 200
+        
+        # Get user data from database to ensure it's still valid
+        user_id = session.get('user')
+        if user_id and realtime_db_ref:
+            try:
+                user_ref = realtime_db_ref.child('users').child(user_id)
+                user_data = user_ref.get()
+                
+                if user_data:
+                    # Update session with latest user data
+                    session['username'] = user_data.get('username', session.get('username'))
+                    session['profile_picture_url'] = user_data.get('profilePictureUrl', session.get('profile_picture_url'))
+                    
+                    response_data = {
+                        "authenticated": True,
+                        "user": session.get('user'),
+                        "email": session.get('email'),
+                        "username": session.get('username'),
+                        "profile_picture_url": session.get('profile_picture_url')
+                    }
+                    
+                    app.logger.info(f"Valid session found for user: {session.get('email')}")
+                    return jsonify(response_data), 200
+                else:
+                    app.logger.warning(f"User data not found for user ID: {user_id}")
+                    session.clear()
+                    return jsonify({"authenticated": False}), 200
+                    
+            except Exception as db_error:
+                app.logger.error(f"Database error during session check: {db_error}")
+                # Don't clear session for database errors, just return current session data
+                pass
+        
+        # Fallback: return session data even if database check failed
+        response_data = {
             "authenticated": True,
             "user": session.get('user'),
             "email": session.get('email'),
             "username": session.get('username'),
             "profile_picture_url": session.get('profile_picture_url')
-        }), 200
-    else:
-        return jsonify({"authenticated": False}), 200
+        }
+        
+        return jsonify(response_data), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error in session check: {e}")
+        return jsonify({"authenticated": False, "error": "Session check failed"}), 500
     
 ###################
 # Signup Function #
@@ -686,9 +809,21 @@ def login():
 
 @app.route('/logout', methods=['POST'])
 def logout():
-    app.logger.info("User logged out")
+    """Enhanced logout with proper session cleanup"""
+    user_email = session.get('email', 'Unknown')
+    app.logger.info(f"User {user_email} logging out")
+    
+    # Clear all session data
     session.clear()
-    return jsonify({"status": "success", "message": "Logged out successfully"}), 200
+    
+    # Make sure session is properly cleared
+    session.permanent = False
+    
+    return jsonify({
+        "status": "success", 
+        "message": "Logged out successfully",
+        "redirect": "/"
+    }), 200
 
 ####################
 # Profile Function #

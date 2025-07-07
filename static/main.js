@@ -354,12 +354,16 @@ async function checkSessionStatus() {
         
         const response = await fetch('/check-session', {
             method: 'GET',
-            credentials: 'same-origin'
+            credentials: 'same-origin',
+            headers: {
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache'
+            }
         });
         
         if (response.ok) {
             const sessionData = await response.json();
-            console.log('📋 Session data:', sessionData);
+            console.log('📋 Session data received:', sessionData);
             
             if (sessionData.authenticated) {
                 // User has valid session, update global variables
@@ -372,7 +376,7 @@ async function checkSessionStatus() {
                     photoURL: sessionData.profile_picture_url
                 };
                 
-                console.log('✅ Session is valid, user is logged in');
+                console.log('✅ Session is valid, user is logged in:', sessionData.email);
                 
                 // Update UI immediately
                 updateUIForAuthState(currentUser, {
@@ -383,14 +387,18 @@ async function checkSessionStatus() {
                 return true;
             } else {
                 console.log('❌ No valid session found');
+                // Clear any existing user data
+                clearUserData();
                 return false;
             }
         } else {
-            console.log('⚠️ Session check failed');
+            console.log('⚠️ Session check request failed');
+            clearUserData();
             return false;
         }
     } catch (error) {
         console.error('❌ Error checking session:', error);
+        clearUserData();
         return false;
     }
 }
@@ -422,6 +430,82 @@ async function initializeFirebaseWithSession() {
     }
 }
 
+async function checkSessionAndInitialize() {
+    try {
+        console.log('🔄 Starting session check and Firebase initialization...');
+        
+        // First, check if user has a valid session
+        const hasValidSession = await checkSessionStatus();
+        console.log('📋 Session check result:', hasValidSession);
+        
+        // Then initialize Firebase
+        await initializeFirebase();
+        
+        // If we have a valid session, make sure UI is updated
+        if (hasValidSession && currentUser) {
+            console.log('✅ Valid session found, updating UI');
+            setTimeout(() => {
+                updateUIForAuthState(currentUser, {
+                    username: userDisplayName,
+                    profilePictureUrl: currentUser.photoURL
+                });
+            }, 500);
+        }
+        
+        console.log('✅ Session check and Firebase initialization completed');
+        
+    } catch (error) {
+        console.error('❌ Session check and Firebase initialization failed:', error);
+        // Even if session check fails, try to initialize Firebase
+        try {
+            await initializeFirebase();
+        } catch (firebaseError) {
+            console.error('❌ Firebase initialization also failed:', firebaseError);
+        }
+    }
+}
+
+function setupPageSpecificFeatures() {
+    const isFilterPage = document.getElementById('year') !== null;
+    const isComparePage = document.getElementById('compare-charts-section') !== null;
+    const isProfilePage = window.location.pathname === '/profile';
+    
+    console.log('🔍 Page detection:', {
+        isFilterPage,
+        isComparePage,
+        isProfilePage,
+        pathname: window.location.pathname
+    });
+    
+    if (isFilterPage) {
+        setupFilterPage();
+    }
+    
+    if (isComparePage) {
+        initializeComparePage();
+    }
+    
+    if (isProfilePage) {
+        handleProfilePageAccess();
+    }
+}
+
+function setupAdditionalFeatures() {
+    // Ensure username display element exists (only on pages that need it)
+    ensureUsernameDisplay();
+    
+    // Setup username validation for signup (only if signup form exists)
+    if (document.getElementById('username_signup')) {
+        setupUsernameValidation();
+    }
+    
+    // Setup profile picture change handler (only if element exists)
+    const profilePictureInput = document.getElementById('new-profile-picture');
+    if (profilePictureInput) {
+        profilePictureInput.addEventListener('change', updateProfilePicture);
+    }
+}
+
 /////////////////////////////////////////
 // Denies access to users to the User //
 // Profile Page, unless signed in    //
@@ -443,20 +527,188 @@ function toggleLogoutDropdown() {
 }
 
 function handleLogout() {
+    console.log('🔄 Logout initiated');
+    
     if (auth) {
+        // Sign out from Firebase first
         auth.signOut().then(() => {
-            console.log('User signed out from Firebase');
-
-            // Tell the backend to remove session cookie
-            fetch('/logout', { method: 'POST' })
-                .then(() => {
-                    const dropdown = document.getElementById('logout-dropdown');
-                    if (dropdown) dropdown.style.display = 'none';
-                    location.reload(); // Refresh UI
-                })
-                .catch(error => console.error('Logout error:', error));
+            console.log('✅ User signed out from Firebase');
+            
+            // Clear frontend variables
+            currentUser = null;
+            userName = null;
+            userDisplayName = null;
+            if (typeof userFavorites !== 'undefined') {
+                userFavorites.clear();
+            }
+            
+            // Tell the backend to clear session
+            return fetch('/logout', { 
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'same-origin'
+            });
+        }).then(response => {
+            if (response.ok) {
+                return response.json();
+            }
+            throw new Error('Logout request failed');
+        }).then(data => {
+            console.log('✅ Backend session cleared successfully');
+            
+            // Hide logout dropdown
+            const dropdown = document.getElementById('logout-dropdown');
+            if (dropdown) dropdown.style.display = 'none';
+            
+            // Update UI to logged out state
+            updateUIForAuthState(null, null);
+            
+            // Show success message
+            showLogoutMessage('Successfully logged out');
+            
+            // Redirect to home page after a short delay
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1000);
+            
+        }).catch(error => {
+            console.error('❌ Logout error:', error);
+            
+            // Even if backend logout fails, clear frontend state
+            updateUIForAuthState(null, null);
+            
+            // Force redirect to home
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1000);
         });
+    } else {
+        console.log('⚠️ Auth not available, clearing frontend state only');
+        
+        // Clear frontend state
+        currentUser = null;
+        userName = null;
+        userDisplayName = null;
+        
+        // Update UI
+        updateUIForAuthState(null, null);
+        
+        // Redirect to home
+        window.location.href = '/';
     }
+}
+
+async function refreshSession() {
+    try {
+        const response = await fetch('/refresh-session', {
+            method: 'POST',
+            credentials: 'same-origin'
+        });
+        
+        if (response.ok) {
+            console.log('✅ Session refreshed successfully');
+            return true;
+        } else {
+            console.log('⚠️ Session refresh failed');
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ Error refreshing session:', error);
+        return false;
+    }
+}
+
+// NEW: Auto-refresh session periodically
+function startSessionRefresh() {
+    // Refresh session every 5 minutes if user is active
+    setInterval(() => {
+        if (currentUser || userName) {
+            refreshSession();
+        }
+    }, 5 * 60 * 1000); // 5 minutes
+}
+
+// NEW: Show logout message
+function showLogoutMessage(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'logout-notification';
+    messageDiv.innerHTML = `
+        <i class="fas fa-sign-out-alt"></i>
+        <span>${message}</span>
+    `;
+    messageDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #3498db;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        animation: slideInRight 0.3s ease;
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 300);
+        }
+    }, 2000);
+}
+
+// ENHANCED: Check session status on page focus
+window.addEventListener('focus', () => {
+    // When user comes back to the page, check session status
+    if (document.visibilityState === 'visible') {
+        setTimeout(() => {
+            checkSessionStatus();
+        }, 500);
+    }
+});
+
+// NEW: Handle page visibility change
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && (currentUser || userName)) {
+        // Page became visible and user should be logged in
+        // Check session status
+        setTimeout(() => {
+            checkSessionStatus();
+        }, 1000);
+    }
+});
+
+function startSessionManagement() {
+    console.log('🔄 Starting session management...');
+    startSessionRefresh();
+    
+    // Also refresh session when user interacts with the page
+    let interactionTimer;
+    const refreshOnInteraction = () => {
+        clearTimeout(interactionTimer);
+        interactionTimer = setTimeout(() => {
+            if (currentUser || userName) {
+                refreshSession();
+            }
+        }, 1000);
+    };
+    
+    // Add interaction listeners
+    document.addEventListener('click', refreshOnInteraction);
+    document.addEventListener('keypress', refreshOnInteraction);
+    document.addEventListener('scroll', refreshOnInteraction);
 }
 
 ///////////////////////
@@ -779,90 +1031,31 @@ function showSuccessMessage(message) {
 document.addEventListener("DOMContentLoaded", function () {
     console.log('🔄 DOM loaded, initializing...');
     
-    // Initialize Firebase AND check session status
-    initializeFirebaseWithSession().then(() => {
-        console.log('✅ Firebase and session initialization completed');
-        
-        // Check if we're on a specific page that needs special handling
-        const isFilterPage = document.getElementById('year') !== null;
-        const isComparePage = document.getElementById('compare-charts-section') !== null;
-        const isProfilePage = window.location.pathname === '/profile';
-        
-        console.log('🔍 Page detection:', {
-            isFilterPage,
-            isComparePage,
-            isProfilePage,
-            pathname: window.location.pathname
-        });
-        
-        // Initialize page-specific features
-        if (isFilterPage) {
-            // Setup filter page features
-            setupFilterPage();
-        }
-        
-        if (isComparePage) {
-            // Initialize compare page
-            initializeComparePage();
-        }
-        
-        if (isProfilePage) {
-            // Load profile page if we're on it
-            setTimeout(() => {
-                if (currentUser) {
-                    loadProfilePage();
-                } else {
-                    // Check again after auth state is loaded
-                    setTimeout(() => {
-                        if (currentUser) {
-                            loadProfilePage();
-                        } else {
-                            window.location.href = '/';
-                        }
-                    }, 2000);
-                }
-            }, 1000);
-        }
-        
-    }).catch(error => {
-        console.error('❌ Firebase and session initialization failed in DOMContentLoaded:', error);
-    });
+    // STEP 1: First check session, then initialize Firebase
+    checkSessionAndInitialize();
     
-    // Setup slider values only if sliders exist
+    // STEP 2: Setup page-specific features after a delay
     setTimeout(() => {
-        if (document.getElementById('price')) {
-            updateSliderValue("price", "", true);
-        }
-        if (document.getElementById('horsepower')) {
-            updateSliderValue("horsepower", "HP", false);
-        }
-        if (document.getElementById('seating')) {
-            updateSliderValue("seating", "seats", false);
-        }
-        if (document.getElementById('cargo-space')) {
-            updateSliderValue("cargo-space", "L", false);
-        }
-        if (document.getElementById('ground-clearance')) {
-            updateSliderValue("ground-clearance", "cm", false);
-        }
-    }, 500);
-    
-    // Ensure username display element exists (only on pages that need it)
-    setTimeout(() => {
-        ensureUsernameDisplay();
+        setupPageSpecificFeatures();
     }, 1000);
     
-    // Setup username validation for signup (only if signup form exists)
-    if (document.getElementById('username_signup')) {
-        setupUsernameValidation();
-    }
+    // STEP 3: Setup slider values only if sliders exist
+    setTimeout(() => {
+        setupSliders();
+    }, 500);
     
-    // Setup profile picture change handler (only if element exists)
-    const profilePictureInput = document.getElementById('new-profile-picture');
-    if (profilePictureInput) {
-        profilePictureInput.addEventListener('change', updateProfilePicture);
-    }
+    // STEP 4: Setup other features
+    setTimeout(() => {
+        setupAdditionalFeatures();
+    }, 1500);
+    
+    // STEP 5: Start session management
+    setTimeout(() => {
+        startSessionManagement();
+    }, 2000);
 });
+
+
 
 // Setup filter page specific features
 function setupFilterPage() {
@@ -883,28 +1076,50 @@ function setupFilterPage() {
 
 // Enhanced ensureUsernameDisplay with better error handling
 function ensureUsernameDisplay() {
-    const profileContainer = document.getElementById('profile-container');
-    
-    // Only create username display if profile container exists and we don't have it already
-    if (!profileContainer) {
-        console.log('📝 Profile container not found - skipping username display creation');
-        return;
-    }
-    
-    let usernameDisplay = document.getElementById('username-display');
-    
-    if (!usernameDisplay) {
-        console.log('🔧 Creating missing username display element');
-        usernameDisplay = document.createElement('span');
-        usernameDisplay.id = 'username-display';
-        usernameDisplay.className = 'username-display';
-        usernameDisplay.style.marginRight = '10px';
-        usernameDisplay.style.color = '#b49b66';
-        usernameDisplay.style.fontWeight = 'bold';
+    try {
+        console.log('🔧 Ensuring username display element exists...');
         
-        // Insert it as the first child of profile container
-        profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
-        console.log('✅ Username display element created and added');
+        // Safely get the profile container
+        const profileContainer = document.getElementById('profile-container');
+        
+        // Only proceed if profile container exists
+        if (!profileContainer) {
+            console.log('📝 Profile container not found - skipping username display creation');
+            return;
+        }
+        
+        // Check if username display already exists
+        let usernameDisplay = document.getElementById('username-display');
+        
+        if (!usernameDisplay) {
+            console.log('🔧 Creating missing username display element');
+            
+            try {
+                usernameDisplay = document.createElement('span');
+                usernameDisplay.id = 'username-display';
+                usernameDisplay.className = 'username-display';
+                usernameDisplay.style.marginRight = '10px';
+                usernameDisplay.style.color = '#b49b66';
+                usernameDisplay.style.fontWeight = 'bold';
+                
+                // Safely insert it as the first child of profile container
+                if (profileContainer.firstChild) {
+                    profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
+                } else {
+                    profileContainer.appendChild(usernameDisplay);
+                }
+                
+                console.log('✅ Username display element created and added successfully');
+            } catch (createError) {
+                console.error('❌ Error creating username display element:', createError);
+            }
+        } else {
+            console.log('✅ Username display element already exists');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error in ensureUsernameDisplay:', error);
+        // Don't throw the error, just log it to prevent crashes
     }
 }
 
@@ -982,9 +1197,67 @@ function setupUsernameValidation() {
   });
 }
 
+function getProfileContainer() {
+    try {
+        return document.getElementById('profile-container');
+    } catch (error) {
+        console.error('❌ Error getting profile container:', error);
+        return null;
+    }
+}
+
+function getProfileContainer() {
+    try {
+        return document.getElementById('profile-container');
+    } catch (error) {
+        console.error('❌ Error getting profile container:', error);
+        return null;
+    }
+}
+
+// ✅ SAFE function to check if element exists
+function elementExists(elementId) {
+    try {
+        return document.getElementById(elementId) !== null;
+    } catch (error) {
+        console.error('❌ Error checking element existence:', error);
+        return false;
+    }
+}
+
+function clearUserData() {
+    userName = null;
+    userDisplayName = null;
+    currentUser = null;
+    if (typeof userFavorites !== 'undefined') {
+        userFavorites.clear();
+    }
+    updateUIForAuthState(null, null);
+}
+
+
 /////////////////////////////////
 // Profile Page Functionality //
 ///////////////////////////////
+
+function handleProfilePageAccess() {
+    console.log('🔒 Checking profile page access...');
+    
+    // Wait a bit for session check to complete
+    setTimeout(() => {
+        if (!currentUser && !userName) {
+            console.log('❌ User not authenticated, redirecting to home');
+            alert('Please sign in to access your profile.');
+            window.location.href = '/';
+            return;
+        }
+        
+        console.log('✅ User authenticated, loading profile page');
+        if (typeof loadProfilePage === 'function') {
+            loadProfilePage();
+        }
+    }, 1500); // Wait longer for session check to complete
+}
 
 function loadProfilePage() {
     if (!currentUser) {
@@ -6900,43 +7173,6 @@ function sortPosts(posts) {
   window.closeAskModal = closeAskModal;
 
 })();
-
-document.addEventListener("DOMContentLoaded", function () {
-    console.log('DOM loaded, initializing...');
-    
-    // Initialize Firebase first
-    initializeFirebase();
-    
-    // NEW: Setup username validation for signup
-    setupUsernameValidation();
-    
-    // NEW: Setup profile picture change handler
-    const profilePictureInput = document.getElementById('new-profile-picture');
-    if (profilePictureInput) {
-        profilePictureInput.addEventListener('change', updateProfilePicture);
-    }
-    
-    // NEW: Load profile page if we're on it
-    if (window.location.pathname === '/profile') {
-        // Wait for auth to initialize
-        setTimeout(() => {
-            if (currentUser) {
-                loadProfilePage();
-            } else {
-                // Check again after a bit more time
-                setTimeout(() => {
-                    if (currentUser) {
-                        loadProfilePage();
-                    } else {
-                        window.location.href = '/';
-                    }
-                }, 2000);
-            }
-        }, 1000);
-    }
-    
-    // ... rest of your existing initialization code
-});
 
 // NEW: Make profile functions globally available
 window.enableUsernameEdit = enableUsernameEdit;
