@@ -421,7 +421,7 @@ def verify_token():
         decoded_token = auth.verify_id_token(id_token)
         uid = decoded_token['uid']
         
-        # Get user profile data including username and profile picture
+        # Get user profile data including username
         user_ref = realtime_db_ref.child('users').child(uid)
         user_data = user_ref.get()
         
@@ -430,17 +430,12 @@ def verify_token():
         if user_data:
             username = user_data.get('username')
             profile_picture_url = user_data.get('profilePictureUrl')
-            
-            # ENHANCED: Log profile picture retrieval for debugging
-            app.logger.info(f"Retrieved profile data for {email}: username={username}, has_profile_pic={bool(profile_picture_url)}")
-            if profile_picture_url:
-                app.logger.info(f"Profile picture URL: {profile_picture_url}")
         
         # Set comprehensive session data
         session['user'] = uid
         session['email'] = email
         session['username'] = username
-        session['profile_picture_url'] = profile_picture_url  # FIXED: Ensure this is stored in session
+        session['profile_picture_url'] = profile_picture_url
         session['idToken'] = id_token
         session['authenticated'] = True
         session['auth_time'] = int(time.time())
@@ -450,13 +445,60 @@ def verify_token():
         app.permanent_session_lifetime = timedelta(days=30)
         
         app.logger.info(f"✅ User {email} logged in successfully with username: {username}")
-        
         return jsonify({
             "status": "success", 
             "message": "Authentication successful",
             "username": username,
-            "profile_picture_url": profile_picture_url,  # FIXED: Return profile picture URL
+            "profile_picture_url": profile_picture_url,
             "uid": uid
+        }), 200
+        
+    except firebase_admin.auth.InvalidIdTokenError as e:
+        app.logger.error(f"Invalid token error: {e}")
+        return jsonify({"status": "error", "message": "Invalid token"}), 401
+    except Exception as e:
+        app.logger.error(f"Token verification failed: {str(e)}")
+        return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
+    if not firestore_db:
+        app.logger.error("Database not available for token verification")
+        return jsonify({"status": "error", "message": "Database not available"}), 500
+    
+    try:
+        data = request.get_json()
+        if not data:
+            app.logger.error("No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+            
+        id_token = data.get('idToken')
+        email = data.get('email')
+        
+        if not id_token:
+            app.logger.error("No token provided in request")
+            return jsonify({"status": "error", "message": "No token provided"}), 400
+        
+        # Verify token with Firebase Admin
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        
+        # Get user profile data including username
+        user_ref = realtime_db_ref.child('users').child(uid)
+        user_data = user_ref.get()
+        
+        username = None
+        if user_data:
+            username = user_data.get('username')
+        
+        # Set enhanced session
+        session['user'] = uid
+        session['email'] = email
+        session['username'] = username  # NEW: Store username in session
+        session['idToken'] = id_token
+        
+        app.logger.info(f"✅ User {email} logged in successfully with username: {username}")
+        return jsonify({
+            "status": "success", 
+            "message": "Authentication successful",
+            "username": username
         }), 200
         
     except firebase_admin.auth.InvalidIdTokenError as e:
@@ -468,34 +510,6 @@ def verify_token():
     
 @app.route('/check-session', methods=['GET'])
 def check_session():
-    """Check if user has a valid session - ENHANCED with profile picture"""
-    if 'user' in session and session.get('authenticated'):
-        # ENHANCED: Get fresh profile picture URL from database
-        uid = session.get('user')
-        profile_picture_url = session.get('profile_picture_url')
-        
-        # If no profile picture in session, try to get it from database
-        if not profile_picture_url and uid and realtime_db_ref:
-            try:
-                user_ref = realtime_db_ref.child('users').child(uid)
-                user_data = user_ref.get()
-                if user_data and user_data.get('profilePictureUrl'):
-                    profile_picture_url = user_data.get('profilePictureUrl')
-                    # Update session with the found profile picture
-                    session['profile_picture_url'] = profile_picture_url
-                    app.logger.info(f"Retrieved profile picture from database for user {uid}")
-            except Exception as e:
-                app.logger.warning(f"Could not retrieve profile picture from database: {e}")
-        
-        return jsonify({
-            "authenticated": True,
-            "user": session.get('user'),
-            "email": session.get('email'),
-            "username": session.get('username'),
-            "profile_picture_url": profile_picture_url  # ENHANCED: Always include profile picture URL
-        }), 200
-    else:
-        return jsonify({"authenticated": False}), 200
     """Check if user has a valid session"""
     if 'user' in session and session.get('authenticated'):
         return jsonify({
@@ -571,59 +585,6 @@ def signup():
     
 @app.route('/complete-signup', methods=['POST'])
 def complete_signup():
-    """Complete user signup with username and profile data - ENHANCED"""
-    if not realtime_db_ref:
-        return jsonify({"status": "error", "message": "Database not available"}), 500
-    
-    try:
-        data = request.get_json()
-        uid = data.get('uid')
-        email = data.get('email')
-        username = data.get('username', '').strip()
-        profile_picture_url = data.get('profilePictureUrl')
-        
-        app.logger.info(f"Completing signup for user {uid} with username: {username}")
-        if profile_picture_url:
-            app.logger.info(f"Profile picture URL provided: {profile_picture_url}")
-        
-        if not uid or not email or not username:
-            return jsonify({"status": "error", "message": "Missing required fields"}), 400
-        
-        # Validate username
-        is_valid, message = validate_username(username)
-        if not is_valid:
-            return jsonify({"status": "error", "message": message}), 400
-        
-        # Check username availability
-        users_ref = realtime_db_ref.child('users')
-        existing_users = users_ref.order_by_child('username').equal_to(username).get()
-        
-        if existing_users:
-            return jsonify({"status": "error", "message": "Username already taken"}), 400
-        
-        # Create user profile in database
-        user_data = {
-            'uid': uid,
-            'email': email,
-            'username': username,
-            'profilePictureUrl': profile_picture_url,  # ENHANCED: Store profile picture URL
-            'memberSince': datetime.utcnow().isoformat() + 'Z',
-            'favoriteCount': 0,
-            'createdAt': int(time.time() * 1000)
-        }
-        
-        # Store user data
-        users_ref.child(uid).set(user_data)
-        
-        app.logger.info(f"✅ User profile created for {email} with username {username}")
-        if profile_picture_url:
-            app.logger.info(f"✅ Profile picture URL saved: {profile_picture_url}")
-        
-        return jsonify({"status": "success", "message": "Profile created successfully"}), 200
-        
-    except Exception as e:
-        app.logger.error(f"Error completing signup: {e}")
-        return jsonify({"status": "error", "message": "Failed to complete signup"}), 500
     """Complete user signup with username and profile data"""
     if not realtime_db_ref:
         return jsonify({"status": "error", "message": "Database not available"}), 500
@@ -725,21 +686,9 @@ def login():
 
 @app.route('/logout', methods=['POST'])
 def logout():
-    """Enhanced logout with proper session cleanup"""
-    user_email = session.get('email', 'Unknown')
-    app.logger.info(f"User {user_email} logging out")
-    
-    # Clear all session data
+    app.logger.info("User logged out")
     session.clear()
-    
-    # Make sure session is properly cleared
-    session.permanent = False
-    
-    return jsonify({
-        "status": "success", 
-        "message": "Logged out successfully",
-        "redirect": "/"
-    }), 200
+    return jsonify({"status": "success", "message": "Logged out successfully"}), 200
 
 ####################
 # Profile Function #
@@ -882,51 +831,6 @@ def upload_profile_picture():
 # NEW: Get user profile endpoint
 @app.route('/get-user-profile', methods=['POST'])
 def get_user_profile():
-    """Get user profile data - ENHANCED with better error handling"""
-    if not realtime_db_ref:
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        data = request.get_json()
-        uid = data.get('uid')
-        
-        if not uid:
-            return jsonify({"error": "User ID required"}), 400
-        
-        # Get user data from database
-        user_ref = realtime_db_ref.child('users').child(uid)
-        user_data = user_ref.get()
-        
-        app.logger.info(f"Fetching profile for user {uid}")
-        
-        if not user_data:
-            # Create basic profile if doesn't exist
-            app.logger.info(f"No profile found for user {uid}, creating basic profile")
-            user_data = {
-                'uid': uid,
-                'email': 'Unknown',
-                'username': '',
-                'memberSince': datetime.utcnow().isoformat() + 'Z',
-                'favoriteCount': 0,
-                'profilePictureUrl': None  # ENHANCED: Explicitly set to None
-            }
-            user_ref.set(user_data)
-        
-        # Get favorite count
-        favorites_ref = realtime_db_ref.child('favorites').child(uid)
-        favorites = favorites_ref.get() or {}
-        user_data['favoriteCount'] = len(favorites)
-        
-        # ENHANCED: Log profile picture status
-        profile_pic_status = "has profile picture" if user_data.get('profilePictureUrl') else "no profile picture"
-        app.logger.info(f"Profile fetched for {uid}: {profile_pic_status}")
-        
-        return jsonify(user_data), 200
-        
-    except Exception as e:
-        app.logger.error(f"Error getting user profile: {e}")
-        return jsonify({"error": "Failed to get profile"}), 500
-
     """Get user profile data"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
@@ -1041,72 +945,6 @@ def update_username():
 # NEW: Update profile picture endpoint
 @app.route('/update-profile-picture', methods=['POST'])
 def update_profile_picture():
-    """Update user's profile picture - ENHANCED with better persistence"""
-    if not realtime_db_ref:
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        if 'profile_picture' not in request.files:
-            return jsonify({"error": "No file provided"}), 400
-        
-        file = request.files['profile_picture']
-        uid = request.form.get('uid')
-        
-        if not uid:
-            return jsonify({"error": "User ID required"}), 400
-        
-        if file.filename == '':
-            return jsonify({"error": "No file selected"}), 400
-        
-        if not allowed_file(file.filename):
-            return jsonify({"error": "File type not allowed"}), 400
-        
-        # Check file size
-        if len(file.read()) > MAX_FILE_SIZE:
-            return jsonify({"error": "File too large (max 5MB)"}), 400
-        
-        file.seek(0)  # Reset file pointer
-        
-        # Remove old profile picture
-        user_ref = realtime_db_ref.child('users').child(uid)
-        user_data = user_ref.get()
-        
-        if user_data and user_data.get('profilePictureUrl'):
-            old_url = user_data['profilePictureUrl']
-            if old_url.startswith('/static/profile_pictures/'):
-                old_filename = old_url.split('/')[-1]
-                old_filepath = os.path.join(UPLOAD_FOLDER, old_filename)
-                if os.path.exists(old_filepath):
-                    os.remove(old_filepath)
-                    app.logger.info(f"Removed old profile picture: {old_filename}")
-        
-        # Generate unique filename
-        file_extension = file.filename.rsplit('.', 1)[1].lower()
-        filename = f"{uid}_{uuid.uuid4().hex}.{file_extension}"
-        filepath = os.path.join(UPLOAD_FOLDER, filename)
-        
-        # Save and resize image
-        file.save(filepath)
-        
-        if not resize_image(filepath):
-            os.remove(filepath)
-            return jsonify({"error": "Failed to process image"}), 500
-        
-        # Update database with new profile picture URL
-        file_url = f"/static/profile_pictures/{filename}"
-        user_ref.update({'profilePictureUrl': file_url})
-        
-        # ENHANCED: Update current session with new profile picture URL
-        if 'user' in session and session['user'] == uid:
-            session['profile_picture_url'] = file_url
-            app.logger.info(f"Updated session profile picture URL for user {uid}")
-        
-        app.logger.info(f"✅ Profile picture updated for user {uid}: {filename}")
-        return jsonify({"url": file_url}), 200
-        
-    except Exception as e:
-        app.logger.error(f"Error updating profile picture: {e}")
-        return jsonify({"error": "Failed to update profile picture"}), 500
     """Update user's profile picture"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
@@ -1263,50 +1101,6 @@ def debug_users():
         
     except Exception as e:
         app.logger.error(f"Error fetching users debug info: {e}")
-        return jsonify({"error": str(e)}), 500
-    
-@app.route('/debug/profile-pictures')
-def debug_profile_pictures():
-    """Debug endpoint to check profile picture storage and access"""
-    if not realtime_db_ref:
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        # Get current user from session
-        uid = session.get('user')
-        if not uid:
-            return jsonify({"error": "Not authenticated"}), 401
-        
-        # Get user data from database
-        user_ref = realtime_db_ref.child('users').child(uid)
-        user_data = user_ref.get()
-        
-        # Check profile pictures directory
-        profile_pics_dir = UPLOAD_FOLDER
-        profile_pics_exist = os.path.exists(profile_pics_dir)
-        profile_pics_list = []
-        
-        if profile_pics_exist:
-            try:
-                profile_pics_list = [f for f in os.listdir(profile_pics_dir) if f.startswith(uid)]
-            except Exception as e:
-                profile_pics_list = [f"Error listing files: {e}"]
-        
-        debug_info = {
-            "user_id": uid,
-            "session_profile_url": session.get('profile_picture_url'),
-            "database_profile_url": user_data.get('profilePictureUrl') if user_data else None,
-            "profile_pics_directory_exists": profile_pics_exist,
-            "profile_pics_directory_path": profile_pics_dir,
-            "user_profile_files": profile_pics_list,
-            "user_data_in_db": bool(user_data),
-            "full_user_data": user_data
-        }
-        
-        return jsonify(debug_info)
-        
-    except Exception as e:
-        app.logger.error(f"Error in profile pictures debug: {e}")
         return jsonify({"error": str(e)}), 500
     
 ###################

@@ -1010,9 +1010,6 @@ function showSuccessMessage(message) {
 // ✅ FIXED: Enhanced DOMContentLoaded with Firebase initialization
 document.addEventListener("DOMContentLoaded", function () {
     console.log('🔄 DOM loaded, initializing...');
-
-    // STEP 0: Hide results frame initially (NEW)
-    hideResultsFrameInitially();
     
     // STEP 1: First check session, then initialize Firebase
     checkSessionAndInitialize();
@@ -1807,21 +1804,6 @@ function displayFilteredCars(data) {
     console.log("✅ Table updated successfully!");
 }
 
-function hideResultsFrameInitially() {
-    const resultsFrame = document.getElementById("results-frame");
-    if (resultsFrame) {
-        resultsFrame.style.display = "none";
-        resultsFrame.classList.remove("active");
-        console.log('📋 Results frame hidden initially');
-    }
-    
-    // Also hide calculator results initially
-    const calculatorResults = document.getElementById("calculator-car-results");
-    if (calculatorResults) {
-        calculatorResults.style.display = "none";
-        console.log('📋 Calculator results hidden initially');
-    }
-}
 //////////////////////////////////
 // Adds corresponding Icon to  // 
 // the appropriate Car Type   //
