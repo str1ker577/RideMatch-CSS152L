@@ -132,6 +132,7 @@
   </header>
   
 
+<!-- UPDATED HTML STRUCTURE -->
 <div class="profile-page-container">
   <div class="profile-outer-frame">
     <!-- Header -->
@@ -139,16 +140,17 @@
       <h1><i class="fas fa-user-circle"></i> My Profile</h1>
       <div class="subtitle">Manage your account settings and preferences</div>
     </div>
-  
+    
     <!-- Main Content -->
-  <div class="profile-content">
+    <div class="profile-content">
       <!-- Left Side - Profile Picture -->
       <div class="profile-picture-section">
         <h3><i class="fas fa-camera"></i> Profile Picture</h3>
         
         <div class="current-picture">
-          <img id="current-profile-pic" src="" alt="Profile Picture">
-          <i id="default-profile-icon" class='bx bxs-user-circle' style="display: none;"></i>
+          <img id="current-profile-pic" src="" alt="Profile Picture" style="display: none;">
+          <!-- Default icon in gold color -->
+          <i id="default-profile-icon" class='fas fa-user-circle' style="font-size: 120px; color: #b49b66;"></i>
         </div>
         
         <div class="picture-controls">
@@ -161,9 +163,11 @@
           </button>
         </div>
       </div>
-    
- <!-- Username Section -->
-        <div class="info-section">
+      
+      <!-- Right Side - Username Section -->
+      <div class="profile-info-sections">
+        <!-- Username Section -->
+        <div class="info-section username-section">
           <div class="section-header">
             <i class="fas fa-user"></i>
             <h3>Username</h3>
@@ -189,8 +193,10 @@
             <p class="username-validation" id="username-validation"></p>
           </div>
         </div>
-        
-        <!-- Account Information Section -->
+      </div>
+      
+      <!-- Full Width Account Information Section -->
+      <div class="account-info-full-width">
         <div class="info-section">
           <div class="section-header">
             <i class="fas fa-info-circle"></i>
@@ -198,7 +204,7 @@
           </div>
           
           <!-- Email Field -->
-          <div style="margin-bottom: 25px;">
+          <div class="email-section">
             <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
               <i class="fas fa-envelope" style="margin-right: 8px; color: var(--second-color);"></i>
               Email Address
@@ -245,7 +251,6 @@
             </div>
           </div>
         </div>
-        
       </div>
     </div>
   </div>

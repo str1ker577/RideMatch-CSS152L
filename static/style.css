@@ -4113,16 +4113,21 @@ textarea:focus, input[type="text"]:focus {
   z-index: 2;
 }
 
+/* UPDATED: New grid layout structure */
 .profile-content {
   padding: 40px;
   display: grid;
   grid-template-columns: 350px 1fr;
-  gap: 40px;
-  align-items: start;
+  grid-template-rows: auto auto;
+  gap: 25px;
+  grid-template-areas: 
+    "picture username"
+    "account account";
 }
 
 /* LEFT SIDE - Profile Picture Section */
 .profile-picture-section {
+  grid-area: picture;
   background: white;
   border-radius: 15px;
   padding: 30px;
@@ -4141,14 +4146,17 @@ textarea:focus, input[type="text"]:focus {
   gap: 10px;
 }
 
+/* UPDATED: Remove "Profile Picture" text from above image */
 .current-picture {
   margin-bottom: 25px;
   position: relative;
   display: flex;
   justify-content: center;
+  /* Remove any text content */
 }
 
-.current-picture img, .current-picture i {
+/* UPDATED: Profile picture and default icon styling */
+.current-picture img {
   width: 140px;
   height: 140px;
   border-radius: 50%;
@@ -4157,13 +4165,18 @@ textarea:focus, input[type="text"]:focus {
   box-shadow: 0 8px 20px rgba(180, 155, 102, 0.3);
 }
 
+/* UPDATED: Default icon in gold color */
 .current-picture i {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #f8f9fa, #e9ecef);
-  font-size: 60px;
-  color: var(--second-color);
+  border: 4px solid var(--second-color);
+  box-shadow: 0 8px 20px rgba(180, 155, 102, 0.3);
+  color: #b49b66; /* Gold color */
 }
 
 .picture-controls {
@@ -4208,11 +4221,18 @@ textarea:focus, input[type="text"]:focus {
   box-shadow: 0 4px 12px rgba(231, 76, 60, 0.3);
 }
 
-/* RIGHT SIDE - Information Sections */
+/* RIGHT SIDE - Username Section */
 .profile-info-sections {
+  grid-area: username;
   display: flex;
   flex-direction: column;
-  gap: 25px;
+}
+
+/* UPDATED: Fixed height for username section to prevent shrinking */
+.username-section {
+  min-height: 200px; /* Fixed minimum height */
+  display: flex;
+  flex-direction: column;
 }
 
 .info-section {
@@ -4337,10 +4357,21 @@ textarea:focus, input[type="text"]:focus {
   color: #e74c3c;
 }
 
+/* UPDATED: Full width account information section */
+.account-info-full-width {
+  grid-area: account;
+  width: 100%;
+}
+
+/* Email Section */
+.email-section {
+  margin-bottom: 25px;
+}
+
 /* Account Information Grid */
 .account-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(4, 1fr);
   gap: 20px;
 }
 
@@ -4417,12 +4448,19 @@ textarea:focus, input[type="text"]:focus {
 @media (max-width: 1024px) {
   .profile-content {
     grid-template-columns: 1fr;
-    gap: 30px;
+    grid-template-areas: 
+      "picture"
+      "username"
+      "account";
   }
   
   .profile-picture-section {
     max-width: 400px;
     margin: 0 auto;
+  }
+  
+  .account-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
