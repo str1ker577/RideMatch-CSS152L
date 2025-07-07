@@ -908,32 +908,6 @@ function ensureUsernameDisplay() {
     }
 }
 
-function ensureUsernameDisplay() {
-    const profileContainer = document.getElementById('profile-container');
-    
-    // Only create username display if profile container exists and we don't have it already
-    if (!profileContainer) {
-        console.log('📝 Profile container not found - skipping username display creation');
-        return;
-    }
-    
-    let usernameDisplay = document.getElementById('username-display');
-    
-    if (!usernameDisplay) {
-        console.log('🔧 Creating missing username display element');
-        usernameDisplay = document.createElement('span');
-        usernameDisplay.id = 'username-display';
-        usernameDisplay.className = 'username-display';
-        usernameDisplay.style.marginRight = '10px';
-        usernameDisplay.style.color = '#b49b66';
-        usernameDisplay.style.fontWeight = 'bold';
-        
-        // Insert it as the first child of profile container
-        profileContainer.insertBefore(usernameDisplay, profileContainer.firstChild);
-        console.log('✅ Username display element created and added');
-    }
-}
-
 /////////////////////////////
 // Username Functionality //
 ///////////////////////////
