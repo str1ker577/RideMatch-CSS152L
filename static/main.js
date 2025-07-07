@@ -148,6 +148,111 @@ async function initializeFirebase() {
     }
 }
 
+function updateUIForAuthState(user = null, userData = null) {
+    console.log('🔄 Updating UI for auth state:', user ? 'logged in' : 'logged out');
+    
+    // ✅ SAFELY get DOM elements with proper null checks
+    const loginButton = document.getElementById('login-button');
+    const profileContainer = document.getElementById('profile-container');
+    const welcomeText = document.getElementById('welcome-text');
+    const profileIcon = document.getElementById('profile-icon');
+    const profilePic = document.getElementById('profile-pic');
+    // REMOVED: usernameDisplay - we don't want a separate username display
+
+    console.log('🔍 DOM Elements found:', {
+        loginButton: !!loginButton,
+        profileContainer: !!profileContainer,
+        welcomeText: !!welcomeText,
+        profileIcon: !!profileIcon,
+        profilePic: !!profilePic
+        // REMOVED: usernameDisplay from debug
+    });
+
+    // Use current user if not provided
+    const currentUser = user || (auth && auth.currentUser);
+    const currentUserData = userData || { username: userDisplayName };
+
+    console.log('👤 User data:', {
+        hasCurrentUser: !!currentUser,
+        userDisplayName: userDisplayName,
+        userEmail: currentUser ? currentUser.email : 'none'
+    });
+
+    if (currentUser && (userDisplayName || currentUser.email)) {
+        console.log('✅ User is logged in - updating UI');
+        
+        // User is logged in
+        if (loginButton) {
+            loginButton.style.display = 'none';
+        }
+        
+        if (profileContainer) {
+            profileContainer.style.display = 'flex';
+        }
+        
+        // Update welcome text with username (this is the only place we show the name)
+        const displayName = userDisplayName || currentUser.displayName || currentUser.email;
+        if (welcomeText) {
+            welcomeText.textContent = `Welcome, ${displayName}!`;
+        }
+        
+        // REMOVED: Username display update - we don't want separate username text
+        
+        // Handle profile picture
+        const profilePictureUrl = currentUser.photoURL || currentUserData.profilePictureUrl;
+        if (profilePictureUrl) {
+            if (profilePic) {
+                profilePic.src = profilePictureUrl;
+                profilePic.style.display = 'block';
+            }
+            if (profileIcon) {
+                profileIcon.style.display = 'none';
+            }
+        } else {
+            if (profilePic) {
+                profilePic.style.display = 'none';
+            }
+            if (profileIcon) {
+                profileIcon.style.display = 'block';
+            }
+        }
+        
+        // Load user favorites for duplicate checking (only if function exists)
+        if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
+            loadUserFavoritesForDuplicateCheck();
+        }
+        
+    } else {
+        console.log('❌ User is logged out - updating UI');
+        
+        // User is logged out
+        if (loginButton) {
+            loginButton.style.display = 'block';
+        }
+        if (profileContainer) {
+            profileContainer.style.display = 'none';
+        }
+        if (welcomeText) {
+            welcomeText.textContent = 'Welcome!';
+        }
+        // REMOVED: Clear username display - we don't have it anymore
+        if (profilePic) {
+            profilePic.style.display = 'none';
+            profilePic.src = '';
+        }
+        if (profileIcon) {
+            profileIcon.style.display = 'block';
+        }
+        
+        // Clear favorites when logged out
+        if (typeof userFavorites !== 'undefined' && userFavorites) {
+            userFavorites.clear();
+        }
+    }
+    
+    console.log('🏁 UI update completed');
+}
+
 function setupAuthStateListener() {
     if (!auth) {
         console.error('❌ Auth not available for listener setup');
@@ -930,8 +1035,6 @@ document.addEventListener("DOMContentLoaded", function () {
     }, 2000);
 });
 
-
-
 // Setup filter page specific features
 function setupFilterPage() {
     console.log('🔧 Setting up filter page features...');
@@ -1089,7 +1192,6 @@ function clearUserData() {
     }
     updateUIForAuthState(null, null);
 }
-
 
 /////////////////////////////////
 // Profile Page Functionality //
@@ -1599,6 +1701,26 @@ function resetAllFilters() {
     updateSliderValue("seating", "seats", false);
     updateSliderValue("cargo-space", "L", false);
     updateSliderValue("ground-clearance", "cm", false);
+}
+
+function setupSliders() {
+    console.log('🎚️ Setting up sliders...');
+    
+    // Check if we're on a page with sliders
+    const priceSlider = document.getElementById('price');
+    if (!priceSlider) {
+        console.log('📍 No sliders found on this page');
+        return;
+    }
+    
+    // Initialize all slider values
+    updateSliderValue("price", "", true);
+    updateSliderValue("horsepower", "HP", false);
+    updateSliderValue("seating", "", false); // seating has special handling
+    updateSliderValue("cargo-space", "L", false);
+    updateSliderValue("ground-clearance", "cm", false);
+    
+    console.log('✅ Sliders initialized successfully');
 }
 
 //////////////////////////////// 
