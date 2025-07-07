@@ -582,7 +582,7 @@ def refresh_session():
     
 @app.route('/check-session', methods=['GET'])
 def check_session():
-    """Enhanced session check with proper validation"""
+    """Enhanced session check with proper validation and profile picture persistence"""
     try:
         app.logger.info(f"Session check request from {request.remote_addr}")
         
@@ -606,19 +606,24 @@ def check_session():
                 user_data = user_ref.get()
                 
                 if user_data:
-                    # Update session with latest user data
-                    session['username'] = user_data.get('username', session.get('username'))
-                    session['profile_picture_url'] = user_data.get('profilePictureUrl', session.get('profile_picture_url'))
+                    # FIXED: Always get fresh profile picture URL from database
+                    profile_picture_url = user_data.get('profilePictureUrl')
+                    username = user_data.get('username', session.get('username'))
+                    
+                    # FIXED: Update session with latest profile data
+                    session['username'] = username
+                    session['profile_picture_url'] = profile_picture_url
                     
                     response_data = {
                         "authenticated": True,
                         "user": session.get('user'),
                         "email": session.get('email'),
-                        "username": session.get('username'),
-                        "profile_picture_url": session.get('profile_picture_url')
+                        "username": username,
+                        "profile_picture_url": profile_picture_url  # This ensures persistence
                     }
                     
                     app.logger.info(f"Valid session found for user: {session.get('email')}")
+                    app.logger.info(f"Profile picture URL: {profile_picture_url}")
                     return jsonify(response_data), 200
                 else:
                     app.logger.warning(f"User data not found for user ID: {user_id}")
@@ -651,6 +656,7 @@ def check_session():
 
 @app.route('/signup', methods=['POST'])
 def signup():
+    
     if not realtime_db_ref:
         app.logger.error("Database not available for signup")
         return jsonify({"status": "error", "message": "Database not available"}), 500

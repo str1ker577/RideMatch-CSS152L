@@ -90,62 +90,123 @@ document.addEventListener('click', function(event) {
 //////////////////////////
 
 // Initialize Firebase when the page loads
-async function initializeFirebase() {
-    try {
-        console.log('🔄 Starting Firebase initialization...');
+function updateUIForAuthState(user = null, userData = null) {
+    console.log('🔄 Updating UI for auth state:', user ? 'logged in' : 'logged out');
+    
+    const loginButton = document.getElementById('login-button');
+    const profileContainer = document.getElementById('profile-container');
+    const welcomeText = document.getElementById('welcome-text');
+    const profileIcon = document.getElementById('profile-icon');
+    const profilePic = document.getElementById('profile-pic');
+
+    console.log('🔍 DOM Elements found:', {
+        loginButton: !!loginButton,
+        profileContainer: !!profileContainer,
+        welcomeText: !!welcomeText,
+        profileIcon: !!profileIcon,
+        profilePic: !!profilePic
+    });
+
+    // Use current user if not provided
+    const currentUser = user || (auth && auth.currentUser);
+    const currentUserData = userData || { username: userDisplayName };
+
+    console.log('👤 User data:', {
+        hasCurrentUser: !!currentUser,
+        userDisplayName: userDisplayName,
+        userEmail: currentUser ? currentUser.email : 'none'
+    });
+
+    if (currentUser && (userDisplayName || currentUser.email)) {
+        console.log('✅ User is logged in - updating UI');
         
-        // Check if Firebase is already initialized
-        if (firebase.apps && firebase.apps.length > 0) {
-            console.log('✅ Firebase already initialized');
-            auth = firebase.auth();
-            setupAuthStateListener(); // Always set up listener
-            return;
+        // User is logged in
+        if (loginButton) {
+            loginButton.style.display = 'none';
         }
         
-        console.log('📡 Fetching Firebase config...');
-        const response = await fetch('/firebase-config');
-        
-        if (!response.ok) {
-            throw new Error(`Failed to fetch Firebase config: ${response.status}`);
+        if (profileContainer) {
+            profileContainer.style.display = 'flex';
         }
         
-        const firebaseConfig = await response.json();
-        
-        // Ensure we have the correct database URL
-        firebaseConfig.databaseURL = 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app';
-        
-        console.log('🔧 Firebase config loaded:', firebaseConfig);
-        
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        console.log('✅ Firebase app initialized successfully');
-        
-        // Initialize auth
-        auth = firebase.auth();
-        console.log('✅ Firebase auth initialized successfully');
-        
-        // Test database connection
-        try {
-            const database = firebase.database();
-            const testRef = database.ref('test');
-            await testRef.once('value');
-            console.log('✅ Firebase database connection successful');
-        } catch (dbError) {
-            console.error('❌ Firebase database connection failed:', dbError);
+        // Update welcome text with username
+        const displayName = userDisplayName || currentUser.displayName || currentUser.email;
+        if (welcomeText) {
+            welcomeText.textContent = `Welcome, ${displayName}!`;
         }
         
-        // Set up auth state listener
-        setupAuthStateListener();
+        // FIXED: Handle profile picture with proper fallback to icon
+        const profilePictureUrl = currentUser.photoURL || currentUserData.profilePictureUrl;
         
-        console.log('✅ Firebase initialization completed successfully');
+        console.log('🖼️ Profile picture URL:', profilePictureUrl);
         
-    } catch (error) {
-        console.error('❌ Firebase initialization failed:', error);
-        console.error('Error details:', error.message);
+        if (profilePictureUrl && 
+            profilePictureUrl !== '' && 
+            !profilePictureUrl.includes('data:image/svg+xml') && // Exclude SVG placeholders
+            !profilePictureUrl.includes('Car Image')) { // Exclude car image placeholders
+            
+            console.log('✅ Valid profile picture found, showing image');
+            if (profilePic) {
+                profilePic.src = profilePictureUrl;
+                profilePic.style.display = 'block';
+                
+                // Hide the image if it fails to load and show icon instead
+                profilePic.onerror = function() {
+                    console.log('❌ Profile picture failed to load, showing default icon');
+                    this.style.display = 'none';
+                    if (profileIcon) {
+                        profileIcon.style.display = 'block';
+                    }
+                };
+            }
+            if (profileIcon) {
+                profileIcon.style.display = 'none';
+            }
+        } else {
+            console.log('📷 No valid profile picture, showing default icon');
+            // No valid profile picture - show default icon
+            if (profilePic) {
+                profilePic.style.display = 'none';
+                profilePic.src = '';
+            }
+            if (profileIcon) {
+                profileIcon.style.display = 'block';
+            }
+        }
         
-        // Show user-friendly error
-        showFirebaseError();
+        // Load user favorites for duplicate checking
+        if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
+            loadUserFavoritesForDuplicateCheck();
+        }
+        
+    } else {
+        console.log('❌ User is logged out - updating UI');
+        
+        // User is logged out
+        if (loginButton) {
+            loginButton.style.display = 'block';
+        }
+        if (profileContainer) {
+            profileContainer.style.display = 'none';
+        }
+        if (welcomeText) {
+            welcomeText.textContent = 'Welcome!';
+        }
+        if (profilePic) {
+            profilePic.style.display = 'none';
+            profilePic.src = '';
+        }
+        if (profileIcon) {
+            profileIcon.style.display = 'block';
+        }
+        
+        // Clear favorites when logged out
+        if (typeof userFavorites !== 'undefined' && userFavorites) {
+            userFavorites.clear();
+        }
     }
+    
+    console.log('🏁 UI update completed');
 }
 
 function updateUIForAuthState(user = null, userData = null) {
@@ -269,7 +330,7 @@ function setupAuthStateListener() {
             userName = user.email;
             
             try {
-                // Get user profile data including username
+                // Get user profile data including username and profile picture
                 const profileResponse = await fetch(`${baseUrl}/get-user-profile`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -279,8 +340,17 @@ function setupAuthStateListener() {
                 if (profileResponse.ok) {
                     const profileData = await profileResponse.json();
                     userDisplayName = profileData.username || user.displayName || user.email;
+                    
+                    // FIXED: Update Firebase user object with database profile picture
+                    if (profileData.profilePictureUrl) {
+                        // Update the currentUser object to include the profile picture
+                        currentUser.photoURL = profileData.profilePictureUrl;
+                    }
+                    
                     console.log('✅ User profile loaded:', profileData);
-                    updateUIForAuthState(user, profileData);
+                    console.log('🖼️ Profile picture URL:', profileData.profilePictureUrl);
+                    
+                    updateUIForAuthState(currentUser, profileData);
                 } else {
                     userDisplayName = user.displayName || user.email;
                     updateUIForAuthState(user, { username: userDisplayName });
@@ -349,16 +419,19 @@ async function checkSessionStatus() {
                 // User has valid session, update global variables
                 userName = sessionData.email;
                 userDisplayName = sessionData.username || sessionData.email;
+                
+                // FIXED: Create a proper user object with all profile data
                 currentUser = {
                     uid: sessionData.user,
                     email: sessionData.email,
                     displayName: sessionData.username,
-                    photoURL: sessionData.profile_picture_url
+                    photoURL: sessionData.profile_picture_url || null // Ensure this is set correctly
                 };
                 
                 console.log('✅ Session is valid, user is logged in:', sessionData.email);
+                console.log('🖼️ Profile picture URL from session:', sessionData.profile_picture_url);
                 
-                // Update UI immediately
+                // FIXED: Update UI with complete profile data including profile picture
                 updateUIForAuthState(currentUser, {
                     username: userDisplayName,
                     profilePictureUrl: sessionData.profile_picture_url
@@ -367,7 +440,6 @@ async function checkSessionStatus() {
                 return true;
             } else {
                 console.log('❌ No valid session found');
-                // Clear any existing user data
                 clearUserData();
                 return false;
             }
