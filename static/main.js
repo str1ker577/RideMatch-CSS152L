@@ -485,6 +485,45 @@ function getFirebaseErrorMessage(errorCode) {
     }
 }
 
+function showWarningMessage(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'warning-notification';
+    messageDiv.innerHTML = `
+        <i class="fas fa-exclamation-triangle"></i>
+        <span>${message}</span>
+    `;
+    messageDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #f39c12;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10000;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        animation: slideInRight 0.3s ease;
+        max-width: 350px;
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                if (messageDiv.parentNode) {
+                    messageDiv.parentNode.removeChild(messageDiv);
+                }
+            }, 300);
+        }
+    }, 5000);
+}
+
 /////////////////////////////////////////
 // Denies access to users to the User //
 // Profile Page, unless signed in    //
@@ -773,23 +812,28 @@ function handleSignup(event) {
                     formData.append('profile_picture', profilePictureFile);
                     formData.append('user_id', user.uid);
                     
-                    const uploadResponse = await fetch(`${baseUrl}/upload-profile-picture`, {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    if (uploadResponse.ok) {
-                        const uploadResult = await uploadResponse.json();
-                        profilePictureUrl = uploadResult.url;
-                        console.log('✅ Profile picture uploaded:', profilePictureUrl);
-                    } else {
-                        const uploadError = await uploadResponse.text();
-                        console.error('❌ Profile picture upload failed:', uploadError);
+                    try {
+                        const uploadResponse = await fetch(`${baseUrl}/upload-profile-picture`, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        if (uploadResponse.ok) {
+                            const uploadResult = await uploadResponse.json();
+                            profilePictureUrl = uploadResult.url;
+                            console.log('✅ Profile picture uploaded:', profilePictureUrl);
+                        } else {
+                            const uploadError = await uploadResponse.text();
+                            console.error('❌ Profile picture upload failed:', uploadError);
+                            // Continue with signup even if picture upload fails
+                        }
+                    } catch (uploadError) {
+                        console.error('❌ Profile picture upload error:', uploadError);
                         // Continue with signup even if picture upload fails
                     }
                 }
                 
-                // Send user data to backend with detailed logging
+                // Send user data to backend with enhanced error handling
                 console.log('📤 Sending user data to backend...');
                 const userData = {
                     uid: user.uid,
@@ -799,38 +843,115 @@ function handleSignup(event) {
                 };
                 console.log('User data being sent:', userData);
                 
-                const response = await fetch(`${baseUrl}/complete-signup`, {
-                    method: 'POST',
-                    headers: { 
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify(userData)
-                });
+                // FIXED: Enhanced backend communication with retries
+                let backendSuccess = false;
+                let lastError = null;
                 
-                console.log('Backend response status:', response.status);
-                console.log('Backend response ok:', response.ok);
-                
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    console.error('❌ Backend error response:', errorText);
-                    
-                    let errorMessage = 'Failed to complete signup';
+                for (let attempt = 1; attempt <= 3; attempt++) {
                     try {
-                        const errorData = JSON.parse(errorText);
-                        errorMessage = errorData.message || errorMessage;
-                    } catch (e) {
-                        // If it's not JSON, use the raw text
-                        errorMessage = errorText || errorMessage;
+                        console.log(`📤 Backend signup attempt ${attempt}/3...`);
+                        
+                        const response = await fetch(`${baseUrl}/complete-signup`, {
+                            method: 'POST',
+                            headers: { 
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify(userData)
+                        });
+                        
+                        console.log(`Backend response status (attempt ${attempt}):`, response.status);
+                        console.log(`Backend response ok (attempt ${attempt}):`, response.ok);
+                        
+                        if (response.ok) {
+                            const result = await response.json();
+                            console.log('✅ Backend signup completed:', result);
+                            backendSuccess = true;
+                            break; // Success, exit retry loop
+                        } else {
+                            const errorText = await response.text();
+                            console.error(`❌ Backend error response (attempt ${attempt}):`, errorText);
+                            
+                            try {
+                                const errorData = JSON.parse(errorText);
+                                lastError = errorData.message || 'Failed to complete signup';
+                            } catch (e) {
+                                lastError = errorText || 'Failed to complete signup';
+                            }
+                            
+                            // For certain errors, don't retry
+                            if (response.status === 400 && lastError.includes('Username already taken')) {
+                                break; // Don't retry for username conflicts
+                            }
+                            
+                            if (attempt < 3) {
+                                console.log(`⏳ Waiting before retry...`);
+                                await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Progressive delay
+                            }
+                        }
+                    } catch (networkError) {
+                        console.error(`❌ Network error (attempt ${attempt}):`, networkError);
+                        lastError = 'Network connection failed. Please check your internet connection.';
+                        
+                        if (attempt < 3) {
+                            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                        }
                     }
-                    
-                    throw new Error(errorMessage);
                 }
                 
-                const result = await response.json();
-                console.log('✅ Backend signup completed:', result);
+                if (!backendSuccess) {
+                    // FIXED: Handle backend failure more gracefully
+                    console.error('❌ All backend attempts failed');
+                    
+                    // Check if it's a database issue vs other issues
+                    if (lastError && (lastError.includes('Database') || lastError.includes('database'))) {
+                        // Database issue - inform user but don't delete Firebase user
+                        document.querySelector('.error-message12').textContent = 
+                            'Account created but some features may be limited due to database issues. You can still log in.';
+                        document.querySelector('.success-message').textContent = 
+                            'Account created! Please log in (some features may be limited).';
+                        
+                        // Clear form
+                        document.querySelector('input[name="email_signup"]').value = '';
+                        document.querySelector('input[name="password_signup"]').value = '';
+                        document.querySelector('input[name="username"]').value = '';
+                        if (document.getElementById('profile_picture')) {
+                            document.getElementById('profile_picture').value = '';
+                        }
+                        
+                        // Close signup popup and show login after delay
+                        setTimeout(() => {
+                            togglePopup('signup-popup');
+                            setTimeout(() => {
+                                togglePopup('login-popup');
+                            }, 500);
+                        }, 3000);
+                        
+                        return; // Don't delete Firebase user for database issues
+                    } else {
+                        // Other errors - show error and delete Firebase user
+                        let errorMessage = lastError;
+                        if (errorMessage.includes('Username already taken')) {
+                            errorMessage = 'This username is already taken. Please choose another one.';
+                        } else if (!errorMessage) {
+                            errorMessage = 'Failed to complete account setup. Please try again.';
+                        }
+                        
+                        document.querySelector('.error-message12').textContent = errorMessage;
+                        
+                        // Delete the Firebase user since backend setup failed
+                        try {
+                            await user.delete();
+                            console.log('🗑️ Firebase user deleted due to backend failure');
+                        } catch (deleteError) {
+                            console.error('❌ Failed to delete Firebase user:', deleteError);
+                        }
+                        
+                        return;
+                    }
+                }
                 
-                // Update Firebase user profile
+                // Success path
                 try {
                     await user.updateProfile({
                         displayName: username,
@@ -871,19 +992,21 @@ function handleSignup(event) {
                 if (errorMessage.includes('Username already taken')) {
                     errorMessage = 'This username is already taken. Please choose another one.';
                 } else if (errorMessage.includes('Database not available')) {
-                    errorMessage = 'Database temporarily unavailable. Please try again later.';
+                    errorMessage = 'Account created but database is temporarily unavailable. You can still log in.';
                 } else if (!errorMessage || errorMessage === 'Failed to complete signup') {
                     errorMessage = 'Failed to complete account setup. Please try again.';
                 }
                 
                 document.querySelector('.error-message12').textContent = errorMessage;
                 
-                // Delete the Firebase user since backend setup failed
-                try {
-                    await user.delete();
-                    console.log('🗑️ Firebase user deleted due to backend failure');
-                } catch (deleteError) {
-                    console.error('❌ Failed to delete Firebase user:', deleteError);
+                // Only delete Firebase user for non-database errors
+                if (!errorMessage.includes('database') && !errorMessage.includes('Database')) {
+                    try {
+                        await user.delete();
+                        console.log('🗑️ Firebase user deleted due to backend failure');
+                    } catch (deleteError) {
+                        console.error('❌ Failed to delete Firebase user:', deleteError);
+                    }
                 }
             }
         })
@@ -1006,69 +1129,121 @@ function handleLogin(event) {
             const user = userCredential.user;
             console.log('✅ User logged in:', user.email);
             
-            return user.getIdToken().then((idToken) => {
+            return user.getIdToken().then(async (idToken) => {
                 console.log('🔄 Sending token to backend for session creation...');
                 
-                return fetch('/verify-token', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        idToken: idToken,
-                        email: user.email
-                    })
-                });
-            }).then(response => {
-                console.log('📥 Backend response status:', response.status);
+                // FIXED: Enhanced backend communication with retries
+                let backendSuccess = false;
+                let lastError = null;
                 
-                if (!response.ok) {
-                    throw new Error(`Backend authentication failed: ${response.status}`);
+                for (let attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        console.log(`📤 Backend login attempt ${attempt}/3...`);
+                        
+                        const response = await fetch('/verify-token', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                idToken: idToken,
+                                email: user.email
+                            })
+                        });
+                        
+                        console.log(`📥 Backend response status (attempt ${attempt}):`, response.status);
+                        
+                        if (response.ok) {
+                            const data = await response.json();
+                            console.log('📥 Backend response data:', data);
+                            
+                            if (data.status === 'success') {
+                                console.log('✅ Backend session created successfully');
+                                
+                                // Update global variables
+                                userName = user.email;
+                                currentUser = user;
+                                userDisplayName = data.username || user.displayName || user.email;
+                                userProfilePictureUrl = data.profile_picture_url;
+                                
+                                const errorMsg = document.querySelector('.error-message');
+                                const errorMsg12 = document.querySelector('.error-message12');
+                                if (errorMsg) errorMsg.textContent = '';
+                                if (errorMsg12) errorMsg12.textContent = '';
+                                
+                                togglePopup('login-popup');
+                                
+                                // Update sidebar safely
+                                const sidebar = document.getElementById('sidebar');
+                                const menuButton = document.getElementById('menu-button');
+                                const closeButton = document.getElementById('close-button');
+                                
+                                if (sidebar) sidebar.classList.remove('open');
+                                if (menuButton) menuButton.style.display = 'block';
+                                if (closeButton) closeButton.style.display = 'none';
+                                
+                                // Update UI with complete user data
+                                setTimeout(() => {
+                                    updateUIForAuthState(user, { 
+                                        username: data.username,
+                                        profilePictureUrl: data.profile_picture_url
+                                    });
+                                }, 100);
+                                
+                                // Show success message
+                                showSuccessMessage('Login successful! Welcome back.');
+                                
+                                backendSuccess = true;
+                                break; // Success, exit retry loop
+                            } else {
+                                console.error('❌ Backend authentication failed:', data);
+                                lastError = data.message || 'Backend authentication failed';
+                                
+                                if (attempt < 3) {
+                                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                                }
+                            }
+                        } else {
+                            const errorText = await response.text();
+                            console.error(`❌ Backend error (attempt ${attempt}):`, errorText);
+                            lastError = `Backend authentication failed: ${response.status}`;
+                            
+                            if (attempt < 3) {
+                                await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                            }
+                        }
+                    } catch (networkError) {
+                        console.error(`❌ Network error (attempt ${attempt}):`, networkError);
+                        lastError = 'Network connection failed. Please check your internet connection.';
+                        
+                        if (attempt < 3) {
+                            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                        }
+                    }
                 }
                 
-                return response.json();
-            })
-            .then(data => {
-                console.log('📥 Backend response data:', data);
-                
-                if (data.status === 'success') {
-                    console.log('✅ Backend session created successfully');
+                if (!backendSuccess) {
+                    console.error('❌ All backend login attempts failed');
                     
-                    // Update global variables
-                    userName = user.email;
-                    currentUser = user;
-                    userDisplayName = data.username || user.displayName || user.email;
-                    
-                    const errorMsg = document.querySelector('.error-message');
-                    const errorMsg12 = document.querySelector('.error-message12');
-                    if (errorMsg) errorMsg.textContent = '';
-                    if (errorMsg12) errorMsg12.textContent = '';
-                    
-                    togglePopup('login-popup');
-                    
-                    // Update sidebar safely
-                    const sidebar = document.getElementById('sidebar');
-                    const menuButton = document.getElementById('menu-button');
-                    const closeButton = document.getElementById('close-button');
-                    
-                    if (sidebar) sidebar.classList.remove('open');
-                    if (menuButton) menuButton.style.display = 'block';
-                    if (closeButton) closeButton.style.display = 'none';
-                    
-                    // Update UI with complete user data
-                    setTimeout(() => {
-                        updateUIForAuthState(user, { 
-                            username: data.username,
-                            profilePictureUrl: data.profile_picture_url
-                        });
-                    }, 100);
-                    
-                    // Show success message
-                    showSuccessMessage('Login successful! Welcome back.');
-                    
-                } else {
-                    console.error('❌ Backend authentication failed:', data);
-                    throw new Error(data.message || 'Backend authentication failed');
+                    // Check if it's a database issue
+                    if (lastError && (lastError.includes('Database') || lastError.includes('database'))) {
+                        // Database issue - allow limited login
+                        console.log('⚠️ Database unavailable, creating limited session');
+                        
+                        // Create basic session data
+                        userName = user.email;
+                        currentUser = user;
+                        userDisplayName = user.displayName || user.email;
+                        
+                        // Update UI
+                        togglePopup('login-popup');
+                        updateUIForAuthState(user, { username: userDisplayName });
+                        
+                        // Show warning message
+                        showWarningMessage('Logged in with limited features due to database issues.');
+                    } else {
+                        throw new Error(lastError || 'Backend authentication failed');
+                    }
                 }
             });
         })
@@ -4808,7 +4983,7 @@ async function addToFave(event, variant) {
 
     console.log('Like action:', variant, 'currently liked:', isCurrentlyLiked, 'new status:', newLikedStatus);
 
-    // REQUIREMENT 1 & 4: Check for duplicates when trying to like
+    // Check for duplicates when trying to like
     if (newLikedStatus && userFavorites.has(variant)) {
         showLikeErrorMessage("You already liked this car!");
         return;
@@ -4819,49 +4994,87 @@ async function addToFave(event, variant) {
         const originalColor = event.target.style.color;
         event.target.style.color = '#95a5a6'; // Gray loading color
         
-        const response = await fetch(`${baseUrl}/toggle-fave`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ variant: variant, liked: newLikedStatus })
-        });
+        // FIXED: Enhanced request with retries
+        let success = false;
+        let lastError = null;
         
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
-        }
-        
-        const data = await response.json();
-        
-        // REQUIREMENT 2: Update heart appearance with new colors
-        if (data.liked || data.status === 'added') {
-            // Added to favorites - solid red heart
-            event.target.classList.remove('fa-regular');
-            event.target.classList.add('fa-solid');
-            event.target.style.color = '#e74c3c'; // Red
-            
-            userFavorites.add(variant);
-            showLikeSuccessMessage("Added to favorites!");
-            
-        } else {
-            // Removed from favorites - outline gold heart
-            event.target.classList.remove('fa-solid');
-            event.target.classList.add('fa-regular');
-            event.target.style.color = '#b49b66'; // Gold
-            
-            userFavorites.delete(variant);
-            showLikeSuccessMessage("Removed from favorites!");
-        }
+        for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+                console.log(`📤 Favorite toggle attempt ${attempt}/3...`);
+                
+                const response = await fetch(`${baseUrl}/toggle-fave`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ variant: variant, liked: newLikedStatus })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Update heart appearance with new colors
+                    if (data.liked || data.status === 'added') {
+                        // Added to favorites - solid red heart
+                        event.target.classList.remove('fa-regular');
+                        event.target.classList.add('fa-solid');
+                        event.target.style.color = '#e74c3c'; // Red
+                        
+                        userFavorites.add(variant);
+                        showLikeSuccessMessage("Added to favorites!");
+                        
+                    } else {
+                        // Removed from favorites - outline gold heart
+                        event.target.classList.remove('fa-solid');
+                        event.target.classList.add('fa-regular');
+                        event.target.style.color = '#b49b66'; // Gold
+                        
+                        userFavorites.delete(variant);
+                        showLikeSuccessMessage("Removed from favorites!");
+                    }
 
-        // If we're on the favorites page, reload the favorites immediately
-        const favoritesContainer = document.getElementById("favorites-items");
-        if (favoritesContainer) {
-            setTimeout(() => {
-                loadFavorites();
-            }, 500);
+                    // If we're on the favorites page, reload the favorites immediately
+                    const favoritesContainer = document.getElementById("favorites-items");
+                    if (favoritesContainer) {
+                        setTimeout(() => {
+                            loadFavorites();
+                        }, 500);
+                    }
+                    
+                    success = true;
+                    break; // Success, exit retry loop
+                    
+                } else if (response.status === 503) {
+                    // Service unavailable (database down)
+                    lastError = 'Database temporarily unavailable. Please try again later.';
+                    if (attempt < 3) {
+                        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                    }
+                } else {
+                    const errorText = await response.text();
+                    console.error(`❌ Favorite toggle error (attempt ${attempt}):`, errorText);
+                    lastError = 'Failed to update favorites. Please try again.';
+                    
+                    if (attempt < 3) {
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    }
+                }
+            } catch (networkError) {
+                console.error(`❌ Network error (attempt ${attempt}):`, networkError);
+                lastError = 'Network error. Please check your connection.';
+                
+                if (attempt < 3) {
+                    await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+                }
+            }
+        }
+        
+        if (!success) {
+            // All attempts failed
+            event.target.style.color = originalColor;
+            showLikeErrorMessage(lastError || 'Error updating favorites. Please try again.');
         }
 
     } catch (error) {
-        console.error('Error toggling favorite:', error);
+        console.error('❌ Error toggling favorite:', error);
         event.target.style.color = originalColor;
         showLikeErrorMessage('Error updating favorites. Please try again.');
     }
@@ -4946,24 +5159,70 @@ async function loadUserFavoritesForDuplicateCheck() {
     }
 
     try {
+        console.log('🔄 Loading favorites for duplicate check...');
+        
         const response = await fetch(`${baseUrl}/get-faves`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
         });
 
+        console.log('📡 Favorites response status:', response.status);
+
         if (response.ok) {
-            const favorites = await response.json();
+            const result = await response.json();
+            
+            // Handle both array and object responses
+            let favorites = [];
+            if (Array.isArray(result)) {
+                favorites = result;
+            } else if (result.favorites && Array.isArray(result.favorites)) {
+                favorites = result.favorites;
+            } else if (result.error) {
+                console.warn('⚠️ Backend returned error for favorites:', result.error);
+                // Don't clear existing favorites, just log the warning
+                return;
+            }
+            
             userFavorites.clear();
             favorites.forEach(fav => {
-                userFavorites.add(fav.variant);
+                if (fav && fav.variant) {
+                    userFavorites.add(fav.variant);
+                }
             });
-            console.log('Loaded favorites for duplicate check:', userFavorites);
+            
+            console.log('✅ Loaded favorites for duplicate check:', userFavorites.size, 'items');
             
             // Update heart colors on current page
             updateHeartColorsOnPage();
+        } else {
+            console.warn('⚠️ Failed to load favorites, status:', response.status);
+            
+            // For 401 errors, just clear favorites (user not authenticated)
+            if (response.status === 401) {
+                userFavorites.clear();
+                return;
+            }
+            
+            // For other errors, try to get error message
+            try {
+                const errorData = await response.json();
+                console.warn('⚠️ Favorites error:', errorData);
+                
+                // If it's a database error, don't clear existing favorites
+                if (!errorData.error || !errorData.error.includes('Database')) {
+                    userFavorites.clear();
+                }
+            } catch (parseError) {
+                console.warn('⚠️ Could not parse favorites error response');
+            }
         }
     } catch (error) {
-        console.error('Error loading favorites for duplicate check:', error);
+        console.error('❌ Error loading favorites for duplicate check:', error);
+        
+        // Don't clear favorites on network errors - user might be offline
+        if (error.message && error.message.includes('fetch')) {
+            console.warn('⚠️ Network error loading favorites - keeping existing data');
+        }
     }
 }
 

@@ -400,6 +400,80 @@ def get_firebase_config():
 # UPDATED: Enhanced verify-token route to include username (replace existing)
 @app.route('/verify-token', methods=['POST'])
 def verify_token():
+    try:
+        data = request.get_json()
+        if not data:
+            app.logger.error("No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+            
+        id_token = data.get('idToken')
+        email = data.get('email')
+        
+        if not id_token:
+            app.logger.error("No token provided in request")
+            return jsonify({"status": "error", "message": "No token provided"}), 400
+        
+        # Verify token with Firebase Admin
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        
+        # FIXED: Better database availability check
+        username = None
+        profile_picture_url = None
+        
+        if realtime_db_ref:
+            try:
+                # Get user profile data including username AND profile picture
+                user_ref = realtime_db_ref.child('users').child(uid)
+                user_data = user_ref.get()
+                
+                if user_data:
+                    username = user_data.get('username')
+                    profile_picture_url = user_data.get('profilePictureUrl')
+                    
+                    # FIXED: Ensure profile picture URL is properly formatted
+                    if profile_picture_url and not profile_picture_url.startswith('/'):
+                        if not profile_picture_url.startswith('http'):
+                            profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
+                            
+                app.logger.info(f"📱 User data retrieved: username={username}, picture={profile_picture_url}")
+                
+            except Exception as db_error:
+                app.logger.error(f"❌ Database error retrieving user data: {db_error}")
+                # Continue with login even if user data retrieval fails
+                username = email  # Fallback to email as username
+        else:
+            app.logger.warning("⚠️ Database not available, using email as username")
+            username = email  # Fallback when database is not available
+        
+        # Set comprehensive session data
+        session['user'] = uid
+        session['email'] = email
+        session['username'] = username
+        session['profile_picture_url'] = profile_picture_url
+        session['idToken'] = id_token
+        session['authenticated'] = True
+        session['auth_time'] = int(time.time())
+        
+        # Make session permanent (expires in 30 days)
+        session.permanent = True
+        app.permanent_session_lifetime = timedelta(days=30)
+        
+        app.logger.info(f"✅ User {email} logged in successfully with username: {username}, profile_picture: {profile_picture_url}")
+        return jsonify({
+            "status": "success", 
+            "message": "Authentication successful",
+            "username": username,
+            "profile_picture_url": profile_picture_url,
+            "uid": uid
+        }), 200
+        
+    except firebase_admin.auth.InvalidIdTokenError as e:
+        app.logger.error(f"Invalid token error: {e}")
+        return jsonify({"status": "error", "message": "Invalid token"}), 401
+    except Exception as e:
+        app.logger.error(f"Token verification failed: {str(e)}")
+        return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
     if not realtime_db_ref:
         app.logger.error("Database not available for token verification")
         return jsonify({"status": "error", "message": "Database not available"}), 500
@@ -667,6 +741,200 @@ def signup():
     
 @app.route('/complete-signup', methods=['POST'])
 def complete_signup():
+    """Complete user signup with username and profile data - Enhanced with better error handling"""
+    app.logger.info("🔄 Starting complete-signup process...")
+    
+    # FIXED: Better database availability check
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available for signup completion")
+        # Instead of failing, create a basic session without database storage
+        try:
+            data = request.get_json()
+            uid = data.get('uid')
+            email = data.get('email')
+            username = data.get('username', email)  # Fallback to email
+            
+            # Create basic session without database
+            session['user'] = uid
+            session['email'] = email
+            session['username'] = username
+            session['authenticated'] = True
+            session['auth_time'] = int(time.time())
+            
+            app.logger.info(f"✅ Basic signup completed for {email} (database unavailable)")
+            return jsonify({
+                "status": "success", 
+                "message": "Profile created successfully (limited features due to database)",
+                "user": {
+                    "uid": uid,
+                    "email": email,
+                    "username": username,
+                    "profilePictureUrl": None
+                }
+            }), 200
+            
+        except Exception as fallback_error:
+            app.logger.error(f"❌ Fallback signup also failed: {fallback_error}")
+            return jsonify({"status": "error", "message": "Signup failed - database unavailable"}), 500
+    
+    try:
+        # Get and validate request data
+        data = request.get_json()
+        app.logger.info(f"📥 Received signup data: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+        
+        uid = data.get('uid')
+        email = data.get('email')
+        username = data.get('username', '').strip()
+        profile_picture_url = data.get('profilePictureUrl')
+        
+        app.logger.info(f"📋 Processing signup for:")
+        app.logger.info(f"   UID: {uid}")
+        app.logger.info(f"   Email: {email}")
+        app.logger.info(f"   Username: {username}")
+        app.logger.info(f"   Profile Picture: {profile_picture_url}")
+        
+        # Validate required fields
+        if not uid:
+            app.logger.error("❌ Missing UID")
+            return jsonify({"status": "error", "message": "User ID is required"}), 400
+        
+        if not email:
+            app.logger.error("❌ Missing email")
+            return jsonify({"status": "error", "message": "Email is required"}), 400
+        
+        if not username:
+            app.logger.error("❌ Missing username")
+            return jsonify({"status": "error", "message": "Username is required"}), 400
+        
+        # Enhanced username validation
+        app.logger.info("🔍 Validating username...")
+        is_valid, message = validate_username(username)
+        if not is_valid:
+            app.logger.error(f"❌ Username validation failed: {message}")
+            return jsonify({"status": "error", "message": message}), 400
+        
+        app.logger.info("✅ Username validation passed")
+        
+        # FIXED: Better username availability check with retry logic
+        app.logger.info("🔍 Checking username availability...")
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                users_ref = realtime_db_ref.child('users')
+                existing_users = users_ref.order_by_child('username').equal_to(username).get()
+                
+                app.logger.info(f"📊 Username check result (attempt {attempt + 1}): {existing_users}")
+                
+                if existing_users:
+                    # Check if any of the existing users have a different UID
+                    for existing_uid, existing_data in existing_users.items():
+                        if existing_uid != uid:
+                            app.logger.error(f"❌ Username '{username}' already taken by user {existing_uid}")
+                            return jsonify({"status": "error", "message": "Username already taken"}), 400
+                    
+                    app.logger.info("✅ Username belongs to current user (re-signup case)")
+                else:
+                    app.logger.info("✅ Username is available")
+                
+                break  # Success, exit retry loop
+                
+            except Exception as query_error:
+                app.logger.warning(f"Username check attempt {attempt + 1} failed: {query_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed - continue with signup anyway
+                    app.logger.warning("⚠️ Username availability check failed, proceeding anyway")
+                    break
+                else:
+                    time.sleep(0.5)  # Wait before retry
+        
+        # Process profile picture URL
+        if profile_picture_url:
+            # Ensure profile picture URL is properly formatted
+            if not profile_picture_url.startswith('/') and not profile_picture_url.startswith('http'):
+                profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
+            app.logger.info(f"📸 Profile picture URL processed: {profile_picture_url}")
+        
+        # Create comprehensive user profile data
+        app.logger.info("📝 Creating user profile data...")
+        user_data = {
+            'uid': uid,
+            'email': email,
+            'username': username,
+            'profilePictureUrl': profile_picture_url,
+            'memberSince': datetime.utcnow().isoformat() + 'Z',
+            'favoriteCount': 0,
+            'createdAt': int(time.time() * 1000),
+            'lastUpdated': int(time.time() * 1000),
+            'accountStatus': 'active'
+        }
+        
+        app.logger.info(f"📄 User data to be stored: {user_data}")
+        
+        # FIXED: Store user data with retry logic
+        app.logger.info("💾 Storing user data in database...")
+        for attempt in range(max_retries):
+            try:
+                users_ref = realtime_db_ref.child('users')
+                users_ref.child(uid).set(user_data)
+                app.logger.info("✅ User data stored successfully")
+                break
+                
+            except Exception as store_error:
+                app.logger.error(f"❌ Storage attempt {attempt + 1} failed: {store_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed - create basic session anyway
+                    app.logger.warning("⚠️ Database storage failed, creating basic session")
+                    session['user'] = uid
+                    session['email'] = email
+                    session['username'] = username
+                    session['authenticated'] = True
+                    session['auth_time'] = int(time.time())
+                    
+                    return jsonify({
+                        "status": "success", 
+                        "message": "Profile created successfully (limited database features)",
+                        "user": {
+                            "uid": uid,
+                            "email": email,
+                            "username": username,
+                            "profilePictureUrl": profile_picture_url
+                        }
+                    }), 200
+                else:
+                    time.sleep(0.5)  # Wait before retry
+        
+        # Create session
+        session['user'] = uid
+        session['email'] = email
+        session['username'] = username
+        session['profile_picture_url'] = profile_picture_url
+        session['authenticated'] = True
+        session['auth_time'] = int(time.time())
+        
+        app.logger.info(f"🎉 User profile created successfully for {email} with username '{username}'")
+        
+        return jsonify({
+            "status": "success", 
+            "message": "Profile created successfully",
+            "user": {
+                "uid": uid,
+                "email": email,
+                "username": username,
+                "profilePictureUrl": profile_picture_url
+            }
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error in complete_signup: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({"status": "error", "message": "Failed to complete signup"}), 500
     """Complete user signup with username and profile data - Enhanced version"""
     app.logger.info("🔄 Starting complete-signup process...")
     
@@ -1874,6 +2142,106 @@ def unsanitize_firebase_key(key):
 
 @app.route('/toggle-fave', methods=['POST'])
 def toggle_fave():
+    """Toggle favorite status using Firebase Realtime Database with enhanced error handling"""
+    if 'user' not in session:
+        app.logger.warning("Unauthorized access to toggle-fave")
+        return jsonify({"error": "User not logged in"}), 401
+    
+    # FIXED: Better database availability check
+    if not realtime_db_ref:
+        app.logger.error("Database not available for toggle-fave")
+        return jsonify({"error": "Database temporarily unavailable"}), 503  # Service unavailable
+    
+    try:
+        user_id = session['user']
+        data = request.get_json()
+        
+        app.logger.info(f"Toggle fave request from user {user_id}: {data}")
+        
+        if not data:
+            app.logger.error("No JSON data received for toggle-fave")
+            return jsonify({"error": "No data provided"}), 400
+            
+        variant = data.get('variant')
+        liked = data.get('liked')
+
+        if not variant:
+            app.logger.error("No variant specified for toggle-fave")
+            return jsonify({"error": "Variant required"}), 400
+
+        # Sanitize the variant for Firebase path
+        sanitized_variant = sanitize_firebase_key(variant)
+        app.logger.info(f"Processing variant: {variant} -> {sanitized_variant}")
+
+        # FIXED: Add retry logic for database operations
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                # Use Firebase Realtime Database
+                favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+                existing_fave = favorites_ref.child(sanitized_variant).get()
+
+                app.logger.info(f"Existing favorite check for {sanitized_variant} (attempt {attempt + 1}): {existing_fave}")
+
+                if liked:
+                    # Add to favorites
+                    favorite_data = {
+                        'variant': variant,  # Store original variant name
+                        'sanitized_key': sanitized_variant,  # Store sanitized key for reference
+                        'timestamp': int(time.time() * 1000),
+                        'dateAdded': datetime.utcnow().isoformat() + 'Z',
+                        'userEmail': session.get('email', 'Unknown')
+                    }
+                    
+                    # Set the favorite data
+                    favorites_ref.child(sanitized_variant).set(favorite_data)
+                    app.logger.info(f"✅ Added favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
+                    
+                    return jsonify({
+                        "status": "added", 
+                        "variant": variant, 
+                        "liked": True,
+                        "message": "Added to favorites"
+                    }), 200
+                else:
+                    # Remove from favorites
+                    if existing_fave:
+                        favorites_ref.child(sanitized_variant).delete()
+                        app.logger.info(f"✅ Removed favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
+                        
+                        return jsonify({
+                            "status": "removed", 
+                            "variant": variant, 
+                            "liked": False,
+                            "message": "Removed from favorites"
+                        }), 200
+                    else:
+                        app.logger.info(f"Favorite not found for removal: {variant}")
+                        return jsonify({
+                            "status": "not_found", 
+                            "variant": variant, 
+                            "liked": False,
+                            "message": "Favorite not found"
+                        }), 200
+                
+                break  # Success, exit retry loop
+                
+            except Exception as db_error:
+                app.logger.warning(f"Database operation attempt {attempt + 1} failed: {db_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    app.logger.error(f"All database operation attempts failed for user {user_id}")
+                    return jsonify({"error": "Database operation failed"}), 503
+                else:
+                    time.sleep(0.5)  # Wait before retry
+            
+    except Exception as e:
+        app.logger.error(f"Error toggling favorite: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
+    
     """Toggle favorite status using Firebase Realtime Database"""
     if 'user' not in session:
         app.logger.warning("Unauthorized access to toggle-fave")
@@ -1959,6 +2327,80 @@ def toggle_fave():
 
 @app.route('/get-faves', methods=['POST'])
 def get_faves():
+    """Get user's favorites using Firebase Realtime Database with enhanced error handling"""
+    if 'user' not in session:
+        app.logger.warning("Unauthorized access to favorites")
+        return jsonify({"error": "Not logged in"}), 401
+    
+    # FIXED: Better database availability check
+    if not realtime_db_ref:
+        app.logger.error("Database not available for get-faves")
+        return jsonify({"error": "Database temporarily unavailable", "favorites": []}), 200  # Return empty list instead of error
+    
+    try:
+        user_id = session['user']
+        app.logger.info(f"Getting favorites for user: {user_id}")
+        
+        # FIXED: Add timeout and retry logic for database queries
+        max_retries = 3
+        retry_delay = 0.5
+        
+        for attempt in range(max_retries):
+            try:
+                # Get favorites from Firebase Realtime Database
+                favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+                favorites_data = favorites_ref.get()
+                
+                app.logger.info(f"Raw favorites data for {user_id} (attempt {attempt + 1}): {favorites_data}")
+                break  # Success, exit retry loop
+                
+            except Exception as query_error:
+                app.logger.warning(f"Database query attempt {attempt + 1} failed: {query_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    app.logger.error(f"All database query attempts failed for user {user_id}")
+                    return jsonify({"error": "Database query failed", "favorites": []}), 200  # Return empty list
+                else:
+                    # Wait before retry
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+
+        # Process favorites data
+        if not favorites_data:
+            app.logger.info(f"No favorites found for user {user_id}")
+            return jsonify([]), 200
+
+        # Convert to list format
+        favorite_variants = []
+        for sanitized_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                # Use the original variant name from the stored data
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
+                
+                # Ensure we have the complete variant data
+                complete_variant_data = {
+                    'variant': original_variant,
+                    'sanitized_key': sanitized_key,
+                    'timestamp': variant_data.get('timestamp', int(time.time() * 1000)),
+                    'dateAdded': variant_data.get('dateAdded', datetime.utcnow().isoformat() + 'Z'),
+                    'userEmail': variant_data.get('userEmail', session.get('email', 'Unknown'))
+                }
+                
+                favorite_variants.append(complete_variant_data)
+
+        app.logger.info(f"✅ Retrieved {len(favorite_variants)} favorites for user {user_id}")
+        
+        # Sort by timestamp (newest first)
+        favorite_variants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
+        return jsonify(favorite_variants), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error retrieving favorites: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        # FIXED: Return empty list instead of error to prevent frontend crashes
+        return jsonify({"error": f"Failed to retrieve favorites: {str(e)}", "favorites": []}), 200
     """Get user's favorites using Firebase Realtime Database"""
     if 'user' not in session:
         app.logger.warning("Unauthorized access to favorites")
