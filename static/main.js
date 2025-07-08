@@ -181,9 +181,12 @@ function updateUIForAuthState(user = null, userData = null) {
         // Update header profile picture with persistence
         updateHeaderProfilePicture(profilePictureUrl);
         
-        if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
-            loadUserFavoritesForDuplicateCheck();
-        }
+        // FIXED: Load favorites with delay to ensure authentication is complete
+        setTimeout(() => {
+            if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
+                loadUserFavoritesForDuplicateCheck();
+            }
+        }, 500);
         
     } else {
         console.log('❌ User is logged out - updating UI');
@@ -1336,7 +1339,17 @@ document.addEventListener("DOMContentLoaded", function () {
     setTimeout(() => {
         startSessionManagement();
     }, 2000);
+    
+    // NEW: Add auto-debug after everything is loaded
+    setTimeout(() => {
+        autoDebugIssues();
+    }, 5000);
 });
+
+// Make debug functions globally available for console debugging
+window.debugFavorites = debugFavorites;
+window.debugProfilePictures = debugProfilePictures;
+window.autoDebugIssues = autoDebugIssues;
 
 // Setup filter page specific features
 function setupFilterPage() {
@@ -2082,12 +2095,12 @@ function updateHeaderProfilePicture(profilePictureUrl) {
     const headerProfileIcon = document.getElementById('profile-icon');
     
     if (!headerProfilePic || !headerProfileIcon) {
-        console.warn('Header profile elements not found');
+        console.warn('❌ Header profile elements not found');
         return;
     }
     
     if (profilePictureUrl && profilePictureUrl !== 'null' && profilePictureUrl !== 'undefined') {
-        // Test image loading first
+        // Test image loading first with better error handling
         const testImg = new Image();
         
         testImg.onload = function() {
@@ -2098,7 +2111,13 @@ function updateHeaderProfilePicture(profilePictureUrl) {
         };
         
         testImg.onerror = function() {
-            console.warn('❌ Header image failed to load');
+            console.warn('❌ Header image failed to load:', profilePictureUrl);
+            
+            // Try to debug the issue
+            console.log('🔍 Debugging profile picture loading...');
+            debugProfilePictures();
+            
+            // Fallback to default icon
             headerProfilePic.style.display = 'none';
             headerProfilePic.src = '';
             headerProfileIcon.style.display = 'block';
@@ -2112,6 +2131,40 @@ function updateHeaderProfilePicture(profilePictureUrl) {
         headerProfileIcon.style.display = 'block';
     }
 }
+
+async function debugProfilePictures() {
+    try {
+        console.log('🔍 Debugging profile pictures...');
+        
+        const response = await fetch(`${baseUrl}/debug/profile-pictures`, {
+            method: 'GET',
+            credentials: 'same-origin'
+        });
+        
+        if (response.ok) {
+            const debugData = await response.json();
+            console.log('🔍 Profile pictures debug data:', debugData);
+            
+            // Check if current user's profile picture exists
+            const currentUserPicture = debugData.current_user_session?.profile_picture_url;
+            if (currentUserPicture) {
+                console.log('🔍 Current user profile picture:', currentUserPicture);
+                
+                // Test if the image URL is accessible
+                const testImg = new Image();
+                testImg.onload = () => console.log('✅ Profile picture is accessible');
+                testImg.onerror = () => console.error('❌ Profile picture failed to load');
+                testImg.src = currentUserPicture;
+            }
+        } else {
+            console.error('❌ Profile pictures debug failed:', response.status);
+        }
+        
+    } catch (error) {
+        console.error('❌ Debug profile pictures error:', error);
+    }
+}
+
 
 ////////////////////////////
 // Formats the CSV file  //
@@ -5153,23 +5206,35 @@ async function addToFaveFromCalculator(event, variant) {
 
 // Load user favorites into memory for quick duplicate checking
 async function loadUserFavoritesForDuplicateCheck() {
-    if (!auth || !auth.currentUser) {
+    // FIXED: Better authentication check
+    if (!currentUser && !session?.authenticated && !userName) {
+        console.log('🔍 No authenticated user found, clearing favorites');
         userFavorites.clear();
         return;
     }
 
     try {
         console.log('🔄 Loading favorites for duplicate check...');
+        console.log('🔍 Auth state:', {
+            currentUser: !!currentUser,
+            userName: !!userName,
+            sessionAuth: !!session?.authenticated
+        });
         
         const response = await fetch(`${baseUrl}/get-faves`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "Cache-Control": "no-cache"
+            },
+            credentials: 'same-origin' // FIXED: Include credentials
         });
 
         console.log('📡 Favorites response status:', response.status);
 
         if (response.ok) {
             const result = await response.json();
+            console.log('📦 Raw favorites response:', result);
             
             // Handle both array and object responses
             let favorites = [];
@@ -5179,7 +5244,7 @@ async function loadUserFavoritesForDuplicateCheck() {
                 favorites = result.favorites;
             } else if (result.error) {
                 console.warn('⚠️ Backend returned error for favorites:', result.error);
-                // Don't clear existing favorites, just log the warning
+                // Don't clear existing favorites for errors
                 return;
             }
             
@@ -5191,14 +5256,19 @@ async function loadUserFavoritesForDuplicateCheck() {
             });
             
             console.log('✅ Loaded favorites for duplicate check:', userFavorites.size, 'items');
+            console.log('📋 Favorite variants:', Array.from(userFavorites));
             
             // Update heart colors on current page
-            updateHeartColorsOnPage();
+            setTimeout(() => {
+                updateHeartColorsOnPage();
+            }, 100);
+            
         } else {
             console.warn('⚠️ Failed to load favorites, status:', response.status);
             
             // For 401 errors, just clear favorites (user not authenticated)
             if (response.status === 401) {
+                console.log('🔐 Authentication error, clearing favorites');
                 userFavorites.clear();
                 return;
             }
@@ -5207,11 +5277,6 @@ async function loadUserFavoritesForDuplicateCheck() {
             try {
                 const errorData = await response.json();
                 console.warn('⚠️ Favorites error:', errorData);
-                
-                // If it's a database error, don't clear existing favorites
-                if (!errorData.error || !errorData.error.includes('Database')) {
-                    userFavorites.clear();
-                }
             } catch (parseError) {
                 console.warn('⚠️ Could not parse favorites error response');
             }
@@ -5427,31 +5492,58 @@ document.head.appendChild(styleSheet);
 ///////////////////
 
 async function loadFavorites() {
-    console.log("Loading favorites...");
+    console.log("🔄 Loading favorites for favorites page...");
 
-    // Check if user is authenticated
-    if (!auth || !auth.currentUser) {
-        console.log('User not authenticated for loading favorites');
+    // FIXED: Better authentication check
+    if (!currentUser && !session?.authenticated && !userName) {
+        console.log('❌ User not authenticated for loading favorites');
+        const cardContainer = document.getElementById("card-container");
+        if (cardContainer) {
+            cardContainer.innerHTML = '<div class="no-favorites"><i class="fas fa-sign-in-alt"></i><p>Please sign in to view your favorites.</p></div>';
+        }
         return;
     }
 
     try {
+        console.log('📤 Fetching favorites from backend...');
+        
         // Use Flask backend
         const response = await fetch(`${baseUrl}/get-faves`, {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers: { 
+                "Content-Type": "application/json",
+                "Cache-Control": "no-cache"
+            },
+            credentials: 'same-origin' // FIXED: Include credentials
         });
 
-        console.log('Get favorites response status:', response.status);
+        console.log('📡 Get favorites response status:', response.status);
 
         if (!response.ok) {
+            if (response.status === 401) {
+                console.log('🔐 Authentication error on favorites page');
+                const cardContainer = document.getElementById("card-container");
+                if (cardContainer) {
+                    cardContainer.innerHTML = '<div class="no-favorites"><i class="fas fa-sign-in-alt"></i><p>Please sign in to view your favorites.</p></div>';
+                }
+                return;
+            }
+            
             const errorText = await response.text();
-            console.error('Get favorites error:', errorText);
+            console.error('❌ Get favorites error:', errorText);
             throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
         }
 
-        const favorites = await response.json();
-        console.log('Received favorites:', favorites);
+        const result = await response.json();
+        console.log('📦 Received favorites data:', result);
+        
+        // Handle both array and object responses
+        let favorites = [];
+        if (Array.isArray(result)) {
+            favorites = result;
+        } else if (result.favorites && Array.isArray(result.favorites)) {
+            favorites = result.favorites;
+        }
         
         // Check if favorites list element exists before trying to use it
         const favoritesList = document.getElementById("favorites-items");
@@ -5470,33 +5562,47 @@ async function loadFavorites() {
         }
 
         if (favorites.length > 0) {
-            console.log(`Processing ${favorites.length} favorites`);
+            console.log(`✅ Processing ${favorites.length} favorites`);
+            
+            // Clear container before adding new cards
+            cardContainer.innerHTML = "";
             
             for (const car of favorites) {
-                console.log('Processing favorite car:', car);
+                console.log('🔍 Processing favorite car:', car);
                 
                 try {
-                    const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${encodeURIComponent(car.variant)}`, {
+                    // FIXED: Better variant encoding for URL
+                    const encodedVariant = encodeURIComponent(car.variant);
+                    const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${encodedVariant}`, {
                         method: "GET",
-                        headers: { "Content-Type": "application/json" }
+                        headers: { 
+                            "Content-Type": "application/json",
+                            "Cache-Control": "no-cache"
+                        }
                     });
                     
                     if (!variantResponse.ok) {
-                        console.error(`Failed to fetch specs for variant: ${car.variant}, status: ${variantResponse.status}`);
+                        console.error(`❌ Failed to fetch specs for variant: ${car.variant}, status: ${variantResponse.status}`);
                         continue;
                     }
                     
                     const variantData = await variantResponse.json();
-                    console.log('Got variant data:', variantData);
+                    console.log('📋 Got variant data:', variantData);
 
                     const card = document.createElement("div");
                     card.classList.add("card");
 
+                    // FIXED: Better image handling with fallback
+                    const imageUrl = variantData.Image || '/static/resources/default_car.png';
+
                     card.innerHTML = `
-                        <img src="${variantData.Image || '/static/resources/tesr.png'}" alt="${variantData.Model || 'Car'}">
+                        <img src="${imageUrl}" 
+                             alt="${variantData.Model || 'Car'}"
+                             onerror="this.src='/static/resources/default_car.png'; console.log('🖼️ Fallback image used for ${car.variant}');">
                         <div class="name">${variantData.Brand || 'Unknown'} ${variantData.Model || 'Model'}</div>
+                        <div class="variant-name">${car.variant}</div>
                         <div class="favorite-actions">
-                            <button class="remove-favorite-btn" onclick="removeFavoriteFromDisplay('${car.variant}', this)">
+                            <button class="remove-favorite-btn" onclick="removeFavoriteFromDisplay('${car.variant.replace(/'/g, "\\'")}', this)">
                                 <i class="fas fa-heart-broken"></i> Remove
                             </button>
                         </div>
@@ -5506,7 +5612,7 @@ async function loadFavorites() {
                         // Don't trigger popup if remove button was clicked
                         if (e.target.closest('.remove-favorite-btn')) return;
                         
-                        console.log("Card clicked - Populating popup");
+                        console.log("🔍 Card clicked - Populating popup");
                         
                         // Check if popup elements exist before trying to populate them
                         const carTitleElement = document.querySelector(".car-title");
@@ -5516,21 +5622,23 @@ async function loadFavorites() {
                         if (carTitleElement && imgElement && specContainer) {
                             // Populate the popup with the selected car's details
                             carTitleElement.textContent = `${variantData.Brand} ${variantData.Model}`;
-                            imgElement.src = variantData.Image || '/static/resources/tesr.png';
+                            imgElement.src = imageUrl;
+                            imgElement.onerror = function() { this.src = '/static/resources/default_car.png'; };
+                            
                             specContainer.innerHTML = `
-                                <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${variantData.Brand}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${variantData.Model}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${variantData.BodyType}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${variantData.Brand || 'N/A'}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${variantData.Model || 'N/A'}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${variantData.BodyType || 'N/A'}</span></div>
                                 <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${car.variant}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${variantData.DriveTrain}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${variantData.Engine}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${variantData.Horsepower}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Transmission</strong><br><span class="spec-value">${variantData.Transmission}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Fuel Type</strong><br><span class="spec-value">${variantData.FuelType}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Ground Clearance</strong><br><span class="spec-value">${variantData.GroundClearance}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Cargo Space</strong><br><span class="spec-value">${variantData.CargoSpace}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Seating Capacity</strong><br><span class="spec-value">${variantData.SeatingCapacity}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Price</strong><br><span class="spec-value">${variantData.Price}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${variantData.DriveTrain || 'N/A'}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${variantData.Engine || 'N/A'}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${variantData.Horsepower ? variantData.Horsepower + ' HP' : 'N/A'}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Transmission</strong><br><span class="spec-value">${variantData.Transmission || 'N/A'}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Fuel Type</strong><br><span class="spec-value">${variantData.FuelType || 'N/A'}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Ground Clearance</strong><br><span class="spec-value">${variantData.GroundClearance ? variantData.GroundClearance + ' cm' : 'N/A'}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Cargo Space</strong><br><span class="spec-value">${variantData.Cargospace ? variantData.Cargospace + ' L' : 'N/A'}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Seating Capacity</strong><br><span class="spec-value">${variantData.SeatingCapacity ? variantData.SeatingCapacity + ' seats' : 'N/A'}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Price</strong><br><span class="spec-value">${variantData.Price ? '₱' + parseInt(variantData.Price).toLocaleString() : 'N/A'}</span></div>
                             `;
 
                             // Check if populateColors function exists before calling it
@@ -5543,57 +5651,72 @@ async function loadFavorites() {
                                 togglePopup("card-popup");
                             }
                         } else {
-                            console.warn("Popup elements not found on this page");
+                            console.warn("❌ Popup elements not found on this page");
                         }
                     });
 
                     cardContainer.appendChild(card);
                     
                 } catch (specError) {
-                    console.error('Error fetching specs for variant:', car.variant, specError);
+                    console.error('❌ Error fetching specs for variant:', car.variant, specError);
                     continue;
                 }
             }
+            
+            console.log(`✅ Successfully loaded ${favorites.length} favorites`);
+            
         } else {
-            console.log('No favorites found');
+            console.log('📭 No favorites found');
             cardContainer.innerHTML = '<div class="no-favorites"><i class="fas fa-heart"></i><p>No favorite cars yet. Start adding some!</p></div>';
         }
     } catch (error) {
-        console.error("Error loading favorites:", error);
+        console.error("❌ Error loading favorites:", error);
         // Show user-friendly error message
         const cardContainer = document.getElementById("card-container");
         if (cardContainer) {
-            cardContainer.innerHTML = '<p style="color: red; text-align: center;">Error loading favorites. Please try again later.</p>';
+            cardContainer.innerHTML = '<div class="no-favorites"><i class="fas fa-exclamation-triangle"></i><p>Error loading favorites. Please refresh the page.</p></div>';
         }
     }
 }
 
 // FIXED: Better removeFavoriteFromDisplay function
 async function removeFavoriteFromDisplay(variant, buttonElement) {
-    if (!auth || !auth.currentUser) return;
+    if (!currentUser && !session?.authenticated && !userName) {
+        console.log('❌ User not authenticated for removing favorite');
+        return;
+    }
 
-    console.log('Removing favorite from display:', variant);
+    console.log('🗑️ Removing favorite from display:', variant);
 
     try {
         const response = await fetch(`${baseUrl}/toggle-fave`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Cache-Control': 'no-cache'
+            },
+            credentials: 'same-origin',
             body: JSON.stringify({ variant: variant, liked: false })
         });
         
         if (!response.ok) {
             const errorText = await response.text();
-            console.error('Remove favorite error:', errorText);
+            console.error('❌ Remove favorite error:', errorText);
             throw new Error(`HTTP error! status: ${response.status}`);
         }
+        
+        const result = await response.json();
+        console.log('✅ Remove favorite result:', result);
+        
+        // Remove from local favorites set
+        userFavorites.delete(variant);
         
         // Remove the card from display
         const card = buttonElement.closest('.card');
         if (card) {
             card.remove();
+            console.log('✅ Card removed from display');
         }
-        
-        console.log('Removed from favorites:', variant);
         
         // Check if no more favorites and show empty state
         const cardContainer = document.getElementById("card-container");
@@ -5601,12 +5724,65 @@ async function removeFavoriteFromDisplay(variant, buttonElement) {
             cardContainer.innerHTML = '<div class="no-favorites"><i class="fas fa-heart"></i><p>No favorite cars yet. Start adding some!</p></div>';
         }
         
+        // Show success message
+        showLikeSuccessMessage('Removed from favorites!');
+        
     } catch (error) {
-        console.error('Error removing favorite:', error);
-        alert('Error removing favorite. Please try again.');
+        console.error('❌ Error removing favorite:', error);
+        showLikeErrorMessage('Error removing favorite. Please try again.');
     }
 }
 
+async function debugFavorites() {
+    try {
+        console.log('🔍 Debugging favorites...');
+        
+        // Check session state
+        console.log('Session state:', {
+            currentUser: !!currentUser,
+            userName: !!userName,
+            sessionEmail: session?.email,
+            sessionAuth: session?.authenticated
+        });
+        
+        // Test favorites endpoint
+        const response = await fetch(`${baseUrl}/debug/favorites`, {
+            method: 'GET',
+            credentials: 'same-origin'
+        });
+        
+        if (response.ok) {
+            const debugData = await response.json();
+            console.log('🔍 Favorites debug data:', debugData);
+        } else {
+            console.error('❌ Favorites debug failed:', response.status);
+        }
+        
+    } catch (error) {
+        console.error('❌ Debug favorites error:', error);
+    }
+}
+
+function autoDebugIssues() {
+    // Check if user is logged in but has no favorites loaded
+    if ((currentUser || userName) && userFavorites.size === 0) {
+        console.log('🔍 User logged in but no favorites loaded - running debug');
+        setTimeout(() => {
+            debugFavorites();
+        }, 2000);
+    }
+    
+    // Check if user has profile picture but it's not loading
+    if ((currentUser || userName) && userProfilePictureUrl && userProfilePictureUrl !== 'null') {
+        setTimeout(() => {
+            const headerPic = document.getElementById('profile-pic');
+            if (headerPic && headerPic.style.display === 'none') {
+                console.log('🔍 Profile picture should be visible but is hidden - running debug');
+                debugProfilePictures();
+            }
+        }, 3000);
+    }
+}
 //////////////////////////////
 // Allows users to change  //
 // the color of the car   //
