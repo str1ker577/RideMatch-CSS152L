@@ -186,6 +186,16 @@ function updateUIForAuthState(user = null, userData = null) {
             if (typeof loadUserFavoritesForDuplicateCheck === 'function') {
                 loadUserFavoritesForDuplicateCheck();
             }
+            
+            // NEW: If we're on the favorites page, also load the display
+            if (window.location.pathname === '/favourites' || window.location.pathname.includes('favourites')) {
+                console.log('🔄 On favorites page, loading favorites display...');
+                if (typeof loadFavorites === 'function') {
+                    setTimeout(() => {
+                        loadFavorites();
+                    }, 1000); // Additional delay for favorites page
+                }
+            }
         }, 500);
         
     } else {
@@ -206,6 +216,21 @@ function updateUIForAuthState(user = null, userData = null) {
         
         if (typeof userFavorites !== 'undefined' && userFavorites) {
             userFavorites.clear();
+        }
+        
+        // NEW: If we're on the favorites page and user is logged out, show sign-in message
+        if (window.location.pathname === '/favourites' || window.location.pathname.includes('favourites')) {
+            console.log('🔄 On favorites page but user logged out, showing sign-in message...');
+            const cardContainer = document.getElementById("card-container");
+            if (cardContainer) {
+                cardContainer.innerHTML = `
+                    <div class="no-favorites">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <p>Please sign in to view your favorites.</p>
+                        <button onclick="togglePopup('login-popup')" class="sign-in-btn">Sign In</button>
+                    </div>
+                `;
+            }
         }
     }
     
@@ -433,11 +458,13 @@ function setupPageSpecificFeatures() {
     const isFilterPage = document.getElementById('year') !== null;
     const isComparePage = document.getElementById('compare-charts-section') !== null;
     const isProfilePage = window.location.pathname === '/profile' || window.location.pathname.includes('profile');
+    const isFavoritesPage = window.location.pathname === '/favourites' || window.location.pathname.includes('favourites'); // NEW: Detect favorites page
     
     console.log('🔍 Page detection:', {
         isFilterPage,
         isComparePage,
         isProfilePage,
+        isFavoritesPage, // NEW: Log favorites page detection
         pathname: window.location.pathname
     });
     
@@ -452,6 +479,12 @@ function setupPageSpecificFeatures() {
     if (isProfilePage) {
         console.log('🔧 Setting up profile page...');
         handleProfilePageAccess();
+    }
+    
+    // NEW: Add favorites page initialization
+    if (isFavoritesPage) {
+        console.log('🔧 Setting up favorites page...');
+        handleFavoritesPageAccess();
     }
 }
 
@@ -5263,6 +5296,38 @@ async function addToFaveFromCalculator(event, variant) {
     }
 }
 
+function handleFavoritesPageAccess() {
+    console.log('🔒 Checking favorites page access...');
+    
+    // Check if user is authenticated
+    setTimeout(() => {
+        if (!currentUser && !userName && !userDisplayName) {
+            console.log('❌ User not authenticated, showing sign-in message');
+            const cardContainer = document.getElementById("card-container");
+            if (cardContainer) {
+                cardContainer.innerHTML = `
+                    <div class="no-favorites">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <p>Please sign in to view your favorites.</p>
+                        <button onclick="togglePopup('login-popup')" class="sign-in-btn">Sign In</button>
+                    </div>
+                `;
+            }
+            return;
+        }
+        
+        console.log('✅ User authenticated, loading favorites page');
+        
+        // Call loadFavorites function
+        if (typeof loadFavorites === 'function') {
+            console.log('🔄 Calling loadFavorites function...');
+            loadFavorites();
+        } else {
+            console.error('❌ loadFavorites function not found!');
+        }
+    }, 2000); // Give time for auth to load
+}
+
 ///////////////////////////////////////
 // ENHANCED FAVOURITES FUNCTIONALITY //
 ///////////////////////////////////////
@@ -5560,24 +5625,43 @@ document.head.appendChild(styleSheet);
 
 async function loadFavorites() {
     console.log("🔄 Loading favorites for favorites page...");
+    console.log("🔍 Current auth state:", {
+        currentUser: !!currentUser,
+        userName: !!userName,
+        userDisplayName: !!userDisplayName,
+        sessionAuth: !!session?.authenticated
+    });
+
+    // Check if we're actually on the favorites page
+    const cardContainer = document.getElementById("card-container");
+    if (!cardContainer) {
+        console.error("❌ Not on favorites page - card-container not found");
+        return;
+    }
 
     // Check authentication more thoroughly
     if (!currentUser && !session?.authenticated && !userName && !userDisplayName) {
         console.log('❌ User not authenticated for loading favorites');
-        const cardContainer = document.getElementById("card-container");
-        if (cardContainer) {
-            cardContainer.innerHTML = `
-                <div class="no-favorites">
-                    <i class="fas fa-sign-in-alt"></i>
-                    <p>Please sign in to view your favorites.</p>
-                </div>
-            `;
-        }
+        cardContainer.innerHTML = `
+            <div class="no-favorites">
+                <i class="fas fa-sign-in-alt"></i>
+                <p>Please sign in to view your favorites.</p>
+                <button onclick="togglePopup('login-popup')" class="sign-in-btn">Sign In</button>
+            </div>
+        `;
         return;
     }
 
     try {
         console.log('📤 Fetching favorites from backend...');
+        
+        // Show loading state immediately
+        cardContainer.innerHTML = `
+            <div class="loading-favorites">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Loading your favorite cars...</p>
+            </div>
+        `;
         
         const response = await fetch(`${baseUrl}/get-faves`, {
             method: "POST",
@@ -5589,19 +5673,18 @@ async function loadFavorites() {
         });
 
         console.log('📡 Get favorites response status:', response.status);
+        console.log('📡 Get favorites response ok:', response.ok);
 
         if (!response.ok) {
             if (response.status === 401) {
                 console.log('🔐 Authentication error on favorites page');
-                const cardContainer = document.getElementById("card-container");
-                if (cardContainer) {
-                    cardContainer.innerHTML = `
-                        <div class="no-favorites">
-                            <i class="fas fa-sign-in-alt"></i>
-                            <p>Please sign in to view your favorites.</p>
-                        </div>
-                    `;
-                }
+                cardContainer.innerHTML = `
+                    <div class="no-favorites">
+                        <i class="fas fa-sign-in-alt"></i>
+                        <p>Please sign in to view your favorites.</p>
+                        <button onclick="togglePopup('login-popup')" class="sign-in-btn">Sign In</button>
+                    </div>
+                `;
                 return;
             }
             
@@ -5612,6 +5695,8 @@ async function loadFavorites() {
 
         const result = await response.json();
         console.log('📦 Received favorites data:', result);
+        console.log('📦 Favorites data type:', typeof result);
+        console.log('📦 Is favorites array?', Array.isArray(result));
         
         // Handle both array and object responses
         let favorites = [];
@@ -5619,48 +5704,43 @@ async function loadFavorites() {
             favorites = result;
         } else if (result.favorites && Array.isArray(result.favorites)) {
             favorites = result.favorites;
-        }
-        
-        // Check if favorites list element exists before trying to use it
-        const favoritesList = document.getElementById("favorites-items");
-        if (!favoritesList) {
-            console.warn("favorites-items element not found on this page");
-        }
-        
-        if (favoritesList) {
-            favoritesList.innerHTML = ""; // Clear existing items
-        }
-
-        // Check if card container exists
-        const cardContainer = document.getElementById("card-container");
-        if (!cardContainer) {
-            console.error("❌ card-container element not found on this page!");
+        } else if (result.error) {
+            console.error('❌ Backend returned error:', result.error);
+            cardContainer.innerHTML = `
+                <div class="no-favorites">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error loading favorites: ${result.error}</p>
+                </div>
+            `;
             return;
         }
+        
+        console.log('📋 Processed favorites count:', favorites.length);
 
         if (favorites.length > 0) {
             console.log(`✅ Processing ${favorites.length} favorites`);
             
-            // Clear container before adding new cards
+            // Clear loading state
             cardContainer.innerHTML = "";
             
-            // Show loading state
-            cardContainer.innerHTML = `
-                <div class="loading-favorites">
-                    <i class="fas fa-spinner fa-spin"></i>
-                    <p>Loading your favorite cars...</p>
-                </div>
-            `;
-            
             let successfullyLoaded = 0;
+            let failedToLoad = [];
             
-            for (const car of favorites) {
-                console.log('🔍 Processing favorite car:', car);
+            for (let i = 0; i < favorites.length; i++) {
+                const car = favorites[i];
+                console.log(`🔍 Processing favorite ${i + 1}/${favorites.length}:`, car);
                 
                 try {
                     // FIXED: Better variant encoding for URL - handle special characters
-                    const encodedVariant = encodeURIComponent(car.variant.trim());
-                    console.log(`📡 Fetching specs for variant: "${car.variant}" (encoded: "${encodedVariant}")`);
+                    const variantToEncode = car.variant ? car.variant.trim() : '';
+                    if (!variantToEncode) {
+                        console.error(`❌ Empty variant for favorite ${i + 1}`);
+                        failedToLoad.push(`Favorite ${i + 1}: Empty variant`);
+                        continue;
+                    }
+                    
+                    const encodedVariant = encodeURIComponent(variantToEncode);
+                    console.log(`📡 Fetching specs for variant: "${variantToEncode}" (encoded: "${encodedVariant}")`);
                     
                     const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${encodedVariant}`, {
                         method: "GET",
@@ -5670,28 +5750,34 @@ async function loadFavorites() {
                         }
                     });
                     
-                    console.log(`📡 Variant response status for "${car.variant}":`, variantResponse.status);
+                    console.log(`📡 Variant response status for "${variantToEncode}":`, variantResponse.status);
                     
                     if (!variantResponse.ok) {
-                        console.error(`❌ Failed to fetch specs for variant: ${car.variant}, status: ${variantResponse.status}`);
+                        console.error(`❌ Failed to fetch specs for variant: ${variantToEncode}, status: ${variantResponse.status}`);
                         
                         // Try to get error details
                         const errorText = await variantResponse.text();
-                        console.error(`❌ Error details for ${car.variant}:`, errorText);
+                        console.error(`❌ Error details for ${variantToEncode}:`, errorText);
+                        failedToLoad.push(`${variantToEncode}: HTTP ${variantResponse.status}`);
                         continue;
                     }
                     
                     const variantData = await variantResponse.json();
-                    console.log('📋 Got variant data for', car.variant, ':', variantData);
+                    console.log('📋 Got variant data for', variantToEncode, ':', variantData);
 
-                    // Clear loading state on first successful load
-                    if (successfullyLoaded === 0) {
-                        cardContainer.innerHTML = "";
+                    // Validate that we got meaningful data
+                    if (!variantData || (typeof variantData === 'object' && Object.keys(variantData).length === 0)) {
+                        console.error(`❌ Empty or invalid variant data for ${variantToEncode}`);
+                        failedToLoad.push(`${variantToEncode}: No data returned`);
+                        continue;
                     }
 
                     // Create the card element
                     const card = document.createElement("div");
                     card.classList.add("card");
+                    card.style.opacity = "0";
+                    card.style.transform = "translateY(20px)";
+                    card.style.transition = "all 0.3s ease";
 
                     // FIXED: Better image handling with multiple fallbacks
                     let imageUrl = '/static/resources/default_car.png'; // Default fallback
@@ -5708,11 +5794,11 @@ async function loadFavorites() {
                     card.innerHTML = `
                         <img src="${imageUrl}" 
                              alt="${variantData.Model || 'Car'}"
-                             onerror="this.onerror=null; this.src='/static/resources/default_car.png'; console.log('🖼️ Fallback image used for ${car.variant}');">
+                             onerror="this.onerror=null; this.src='/static/resources/default_car.png'; console.log('🖼️ Fallback image used for ${variantToEncode}');">
                         <div class="name">${variantData.Brand || 'Unknown'} ${variantData.Model || 'Model'}</div>
-                        <div class="variant-name">${car.variant}</div>
+                        <div class="variant-name">${variantToEncode}</div>
                         <div class="favorite-actions">
-                            <button class="remove-favorite-btn" onclick="removeFavoriteFromDisplay('${car.variant.replace(/'/g, "\\'")}', this)">
+                            <button class="remove-favorite-btn" onclick="removeFavoriteFromDisplay('${variantToEncode.replace(/'/g, "\\'")}', this)">
                                 <i class="fas fa-heart-broken"></i> Remove
                             </button>
                         </div>
@@ -5723,7 +5809,7 @@ async function loadFavorites() {
                         // Don't trigger popup if remove button was clicked
                         if (e.target.closest('.remove-favorite-btn')) return;
                         
-                        console.log("🔍 Card clicked - Populating popup for:", car.variant);
+                        console.log("🔍 Card clicked - Populating popup for:", variantToEncode);
                         
                         // Check if popup elements exist before trying to populate them
                         const carTitleElement = document.querySelector(".car-title");
@@ -5740,7 +5826,7 @@ async function loadFavorites() {
                                 <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${variantData.Brand || 'N/A'}</span></div>
                                 <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${variantData.Model || 'N/A'}</span></div>
                                 <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${variantData.BodyType || 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${car.variant}</span></div>
+                                <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${variantToEncode}</span></div>
                                 <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${variantData.DriveTrain || 'N/A'}</span></div>
                                 <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${variantData.Engine || 'N/A'}</span></div>
                                 <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${variantData.Horsepower ? variantData.Horsepower + ' HP' : 'N/A'}</span></div>
@@ -5767,15 +5853,27 @@ async function loadFavorites() {
                     });
 
                     cardContainer.appendChild(card);
+                    
+                    // Animate card appearance
+                    setTimeout(() => {
+                        card.style.opacity = "1";
+                        card.style.transform = "translateY(0)";
+                    }, i * 100); // Stagger the animations
+                    
                     successfullyLoaded++;
                     
                 } catch (specError) {
                     console.error('❌ Error fetching specs for variant:', car.variant, specError);
+                    failedToLoad.push(`${car.variant}: ${specError.message}`);
                     continue;
                 }
             }
             
             console.log(`✅ Successfully loaded ${successfullyLoaded} out of ${favorites.length} favorites`);
+            
+            if (failedToLoad.length > 0) {
+                console.warn(`⚠️ Failed to load ${failedToLoad.length} favorites:`, failedToLoad);
+            }
             
             // If no cards were successfully loaded, show error message
             if (successfullyLoaded === 0) {
@@ -5784,6 +5882,12 @@ async function loadFavorites() {
                         <i class="fas fa-exclamation-triangle"></i>
                         <p>Could not load car details for your favorites.</p>
                         <p><small>This might be due to data availability issues.</small></p>
+                        <details>
+                            <summary>Error Details</summary>
+                            <ul>
+                                ${failedToLoad.map(error => `<li>${error}</li>`).join('')}
+                            </ul>
+                        </details>
                     </div>
                 `;
             }
@@ -5794,11 +5898,14 @@ async function loadFavorites() {
                 <div class="no-favorites">
                     <i class="fas fa-heart"></i>
                     <p>No favorite cars yet. Start adding some!</p>
+                    <p><small>Go to the car filter page and click the heart icon on cars you like.</small></p>
                 </div>
             `;
         }
     } catch (error) {
         console.error("❌ Error loading favorites:", error);
+        console.error("❌ Error stack:", error.stack);
+        
         // Show user-friendly error message
         const cardContainer = document.getElementById("card-container");
         if (cardContainer) {
@@ -5807,6 +5914,7 @@ async function loadFavorites() {
                     <i class="fas fa-exclamation-triangle"></i>
                     <p>Error loading favorites. Please refresh the page.</p>
                     <p><small>Error: ${error.message}</small></p>
+                    <button onclick="loadFavorites()" class="retry-btn">Try Again</button>
                 </div>
             `;
         }
