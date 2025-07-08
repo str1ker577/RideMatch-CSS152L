@@ -4184,6 +4184,82 @@ def debug_files():
         app.logger.error(f"Error in profile pictures debug: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/debug/favorites-detailed')
+def debug_favorites_detailed():
+    """Enhanced debug endpoint for favorites issues"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        user_id = session.get('user')
+        if not user_id:
+            return jsonify({"error": "No user in session"}), 401
+        
+        # Get favorites from database
+        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+        favorites_data = favorites_ref.get() or {}
+        
+        # Process each favorite and try to get its specs
+        detailed_favorites = []
+        
+        for sanitized_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
+                
+                # Try to get specs for this variant
+                try:
+                    # Check if variant exists in CSV data
+                    variant_specs = None
+                    if not df.empty:
+                        matching_cars = df[df["Variant"].str.lower() == original_variant.lower()]
+                        if not matching_cars.empty:
+                            variant_specs = matching_cars.iloc[0].to_dict()
+                    
+                    detailed_favorites.append({
+                        'variant': original_variant,
+                        'sanitized_key': sanitized_key,
+                        'variant_data': variant_data,
+                        'specs_available': variant_specs is not None,
+                        'specs_preview': {
+                            'Brand': variant_specs.get('Brand') if variant_specs else None,
+                            'Model': variant_specs.get('Model') if variant_specs else None,
+                            'Price': variant_specs.get('Price') if variant_specs else None
+                        } if variant_specs else None
+                    })
+                    
+                except Exception as spec_error:
+                    detailed_favorites.append({
+                        'variant': original_variant,
+                        'sanitized_key': sanitized_key,
+                        'variant_data': variant_data,
+                        'specs_available': False,
+                        'spec_error': str(spec_error)
+                    })
+        
+        # Get CSV data info
+        csv_info = {
+            'loaded': not df.empty,
+            'total_rows': len(df) if not df.empty else 0,
+            'columns': list(df.columns) if not df.empty else [],
+            'unique_variants_count': len(df['Variant'].unique()) if not df.empty and 'Variant' in df.columns else 0,
+            'sample_variants': df['Variant'].head(10).tolist() if not df.empty and 'Variant' in df.columns else []
+        }
+        
+        return jsonify({
+            "session_info": {
+                "user": session.get('user'),
+                "email": session.get('email'),
+                "authenticated": session.get('authenticated')
+            },
+            "favorites_count": len(favorites_data),
+            "detailed_favorites": detailed_favorites,
+            "csv_data_info": csv_info
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in detailed favorites debug: {e}")
+        return jsonify({"error": str(e)}), 500
+    
 ##################
 # Error handlers #
 ##################

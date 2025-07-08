@@ -5625,15 +5625,16 @@ async function loadFavorites() {
         const favoritesList = document.getElementById("favorites-items");
         if (!favoritesList) {
             console.warn("favorites-items element not found on this page");
-            return;
         }
         
-        favoritesList.innerHTML = ""; // Clear existing items
+        if (favoritesList) {
+            favoritesList.innerHTML = ""; // Clear existing items
+        }
 
         // Check if card container exists
         const cardContainer = document.getElementById("card-container");
         if (!cardContainer) {
-            console.warn("card-container element not found on this page");
+            console.error("❌ card-container element not found on this page!");
             return;
         }
 
@@ -5643,12 +5644,24 @@ async function loadFavorites() {
             // Clear container before adding new cards
             cardContainer.innerHTML = "";
             
+            // Show loading state
+            cardContainer.innerHTML = `
+                <div class="loading-favorites">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading your favorite cars...</p>
+                </div>
+            `;
+            
+            let successfullyLoaded = 0;
+            
             for (const car of favorites) {
                 console.log('🔍 Processing favorite car:', car);
                 
                 try {
-                    // Better variant encoding for URL
-                    const encodedVariant = encodeURIComponent(car.variant);
+                    // FIXED: Better variant encoding for URL - handle special characters
+                    const encodedVariant = encodeURIComponent(car.variant.trim());
+                    console.log(`📡 Fetching specs for variant: "${car.variant}" (encoded: "${encodedVariant}")`);
+                    
                     const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${encodedVariant}`, {
                         method: "GET",
                         headers: { 
@@ -5657,25 +5670,45 @@ async function loadFavorites() {
                         }
                     });
                     
+                    console.log(`📡 Variant response status for "${car.variant}":`, variantResponse.status);
+                    
                     if (!variantResponse.ok) {
                         console.error(`❌ Failed to fetch specs for variant: ${car.variant}, status: ${variantResponse.status}`);
+                        
+                        // Try to get error details
+                        const errorText = await variantResponse.text();
+                        console.error(`❌ Error details for ${car.variant}:`, errorText);
                         continue;
                     }
                     
                     const variantData = await variantResponse.json();
-                    console.log('📋 Got variant data:', variantData);
+                    console.log('📋 Got variant data for', car.variant, ':', variantData);
 
-                    // USE YOUR ORIGINAL CARD CREATION LOGIC
+                    // Clear loading state on first successful load
+                    if (successfullyLoaded === 0) {
+                        cardContainer.innerHTML = "";
+                    }
+
+                    // Create the card element
                     const card = document.createElement("div");
                     card.classList.add("card");
 
-                    // Better image handling with fallback
-                    const imageUrl = variantData.Image || '/static/resources/default_car.png';
+                    // FIXED: Better image handling with multiple fallbacks
+                    let imageUrl = '/static/resources/default_car.png'; // Default fallback
+                    
+                    if (variantData.Image && variantData.Image.trim() !== '') {
+                        imageUrl = variantData.Image;
+                    } else if (variantData.Brand && variantData.Model) {
+                        // Try to construct image path based on brand and model
+                        const brandLower = variantData.Brand.toLowerCase().replace(/\s+/g, '_');
+                        const modelLower = variantData.Model.toLowerCase().replace(/\s+/g, '_');
+                        imageUrl = `/static/car_images/${brandLower}_${modelLower}.jpg`;
+                    }
 
                     card.innerHTML = `
                         <img src="${imageUrl}" 
                              alt="${variantData.Model || 'Car'}"
-                             onerror="this.src='/static/resources/default_car.png'; console.log('🖼️ Fallback image used for ${car.variant}');">
+                             onerror="this.onerror=null; this.src='/static/resources/default_car.png'; console.log('🖼️ Fallback image used for ${car.variant}');">
                         <div class="name">${variantData.Brand || 'Unknown'} ${variantData.Model || 'Model'}</div>
                         <div class="variant-name">${car.variant}</div>
                         <div class="favorite-actions">
@@ -5685,12 +5718,12 @@ async function loadFavorites() {
                         </div>
                     `;
 
-                    // USE YOUR ORIGINAL CLICK HANDLER LOGIC
+                    // Add click handler for popup
                     card.addEventListener("click", function (e) {
                         // Don't trigger popup if remove button was clicked
                         if (e.target.closest('.remove-favorite-btn')) return;
                         
-                        console.log("🔍 Card clicked - Populating popup");
+                        console.log("🔍 Card clicked - Populating popup for:", car.variant);
                         
                         // Check if popup elements exist before trying to populate them
                         const carTitleElement = document.querySelector(".car-title");
@@ -5734,6 +5767,7 @@ async function loadFavorites() {
                     });
 
                     cardContainer.appendChild(card);
+                    successfullyLoaded++;
                     
                 } catch (specError) {
                     console.error('❌ Error fetching specs for variant:', car.variant, specError);
@@ -5741,18 +5775,40 @@ async function loadFavorites() {
                 }
             }
             
-            console.log(`✅ Successfully loaded ${favorites.length} favorites`);
+            console.log(`✅ Successfully loaded ${successfullyLoaded} out of ${favorites.length} favorites`);
+            
+            // If no cards were successfully loaded, show error message
+            if (successfullyLoaded === 0) {
+                cardContainer.innerHTML = `
+                    <div class="no-favorites">
+                        <i class="fas fa-exclamation-triangle"></i>
+                        <p>Could not load car details for your favorites.</p>
+                        <p><small>This might be due to data availability issues.</small></p>
+                    </div>
+                `;
+            }
             
         } else {
             console.log('📭 No favorites found');
-            cardContainer.innerHTML = '<div class="no-favorites"><i class="fas fa-heart"></i><p>No favorite cars yet. Start adding some!</p></div>';
+            cardContainer.innerHTML = `
+                <div class="no-favorites">
+                    <i class="fas fa-heart"></i>
+                    <p>No favorite cars yet. Start adding some!</p>
+                </div>
+            `;
         }
     } catch (error) {
         console.error("❌ Error loading favorites:", error);
         // Show user-friendly error message
         const cardContainer = document.getElementById("card-container");
         if (cardContainer) {
-            cardContainer.innerHTML = '<div class="no-favorites"><i class="fas fa-exclamation-triangle"></i><p>Error loading favorites. Please refresh the page.</p></div>';
+            cardContainer.innerHTML = `
+                <div class="no-favorites">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error loading favorites. Please refresh the page.</p>
+                    <p><small>Error: ${error.message}</small></p>
+                </div>
+            `;
         }
     }
 }
