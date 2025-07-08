@@ -3273,6 +3273,121 @@ def get_specs():
         return jsonify({"error": "Car data not available"}), 500
     
     variant = request.args.get("variant", "").strip()
+    year = request.args.get("year", "").strip()
+    
+    if not variant:
+        app.logger.warning("No variant specified for specs lookup")
+        return jsonify({"error": "Variant parameter required"}), 400
+
+    try:
+        app.logger.info(f"Looking up specs for variant: {variant}, year: {year}")
+        
+        # Build query conditions
+        query_conditions = [df["Variant"].str.lower() == variant.lower()]
+        
+        # Add year condition if provided
+        if year:
+            try:
+                year_int = int(year)
+                query_conditions.append(df["Year"] == year_int)
+                app.logger.info(f"Including year filter: {year_int}")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
+                return jsonify({"error": "Invalid year format"}), 400
+        
+        # Combine all conditions
+        combined_condition = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_condition = combined_condition & condition
+        
+        car_data = df[combined_condition]
+        
+        if car_data.empty:
+            app.logger.warning(f"No car found for variant: {variant}, year: {year}")
+            available_variants = df["Variant"].unique().tolist()[:10]
+            app.logger.info(f"Available variants (sample): {available_variants}")
+            return jsonify({"error": f"Variant '{variant}' with year '{year}' not found"}), 404
+        
+        # Get the first matching car (in case of duplicates)
+        car = car_data.iloc[0]
+        app.logger.info(f"Found car data for variant: {variant}, year: {year}")
+        
+        # Build specs dictionary (same helper functions as before)
+        def safe_get_int(value, default=0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return int(float(value))
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_float(value, default=0.0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_str(value, default=""):
+            try:
+                if pd.isna(value) or value is None:
+                    return default
+                return str(value).strip()
+            except (ValueError, TypeError):
+                return default
+        
+        # UPDATED: Build specs dictionary with official website link included
+        specs = {
+            # Basic Information
+            "Brand": safe_get_str(car.get("Brand", "")),
+            "Model": safe_get_str(car.get("Model", "")),
+            "BodyType": safe_get_str(car.get("Body_Type", "")),
+            "Variant": safe_get_str(car.get("Variant", "")),
+            "Year": safe_get_int(car.get("Year", 0)),
+            
+            # Performance Specifications
+            "Horsepower": safe_get_int(car.get("Horsepower", 0)),
+            "Engine": safe_get_str(car.get("Engine", "")),
+            "Transmission": safe_get_str(car.get("Transmission", "")),
+            "DriveTrain": safe_get_str(car.get("Drive_Train", "")),
+            "FuelType": safe_get_str(car.get("Fuel_Type", "")),
+            
+            # Utility Specifications
+            "GroundClearance": safe_get_float(car.get("Ground_Clearance", 0)),
+            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),
+            "SeatingCapacity": safe_get_int(car.get("Seating_Capacity", 0)),
+            
+            # Pricing
+            "Price": safe_get_float(car.get("Price", 0)),
+            
+            # Image
+            "Image": find_car_image(safe_get_str(car.get("Model", ""))),
+            
+            # NEW: Official website link
+            "OfficialLink": safe_get_str(car.get("Official_Link", "")) or safe_get_str(car.get("official_link", "")) or ""
+        }
+        
+        # Log the specs for debugging
+        app.logger.info(f"Specs for {variant} ({year}): {specs}")
+        
+        # Validate that we have essential data
+        if not specs["Brand"] and not specs["Model"]:
+            app.logger.warning(f"Car found but missing essential data for variant: {variant}")
+            return jsonify({"error": "Car data incomplete"}), 404
+        
+        return jsonify(specs)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting specs for variant {variant}, year {year}: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500
+    if df.empty:
+        app.logger.error("Car data not available for specs")
+        return jsonify({"error": "Car data not available"}), 500
+    
+    variant = request.args.get("variant", "").strip()
     year = request.args.get("year", "").strip()  # NEW: Year parameter
     
     if not variant:

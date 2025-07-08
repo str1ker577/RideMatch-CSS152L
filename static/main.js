@@ -3278,7 +3278,7 @@ function addCarToComparison(carId, variant, year, specs) {
     if (chartsSection) chartsSection.style.display = 'block';
     if (radarSection) radarSection.style.display = 'block';
     
-    // FIXED: Determine image URL with proper fallback
+    // Determine image URL with proper fallback
     let imageUrl = '/static/resources/tesr.png'; // Default fallback
     
     // Try different image path patterns
@@ -3297,6 +3297,10 @@ function addCarToComparison(carId, variant, year, specs) {
     const isLiked = userFavorites.has(variant);
     const heartClass = isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
     const heartColor = isLiked ? '#e74c3c' : '#b49b66';
+    
+    // NEW: Determine if official link is available
+    const hasOfficialLink = specs.OfficialLink && specs.OfficialLink.trim() !== '';
+    console.log('Official link for', variant, ':', specs.OfficialLink, 'Available:', hasOfficialLink);
     
     const carColumn = document.createElement('div');
     carColumn.className = 'car-column';
@@ -3355,14 +3359,82 @@ function addCarToComparison(carId, variant, year, specs) {
             <div class="price-value">₱${specs.Price ? parseInt(specs.Price).toLocaleString() : 'N/A'}</div>
         </div>
         
-        <button class="remove-btn" onclick="removeCarFromComparison('${carId}')">
-            <i class="fas fa-trash"></i> Remove Car
-        </button>
+        <div class="car-action-buttons">
+            ${hasOfficialLink ? `
+                <button class="official-link-btn" onclick="openOfficialSite('${specs.OfficialLink}', '${specs.Brand}', '${specs.Model}')">
+                    <i class="fas fa-external-link-alt"></i> View Official Site
+                </button>
+            ` : `
+                <button class="official-link-btn disabled" disabled title="Official link not available">
+                    <i class="fas fa-external-link-alt"></i> Official Site Unavailable
+                </button>
+            `}
+            
+            <button class="remove-btn" onclick="removeCarFromComparison('${carId}')">
+                <i class="fas fa-trash"></i> Remove Car
+            </button>
+        </div>
     `;
     
     container.appendChild(carColumn);
-    console.log('Car added to comparison:', variant, year);
+    console.log('Car added to comparison:', variant, year, 'Official link available:', hasOfficialLink);
 }
+
+// NEW: Function to open official website links
+function openOfficialSite(officialLink, brand, model) {
+    if (!officialLink || officialLink.trim() === '') {
+        alert('Official website link is not available for this vehicle.');
+        return;
+    }
+    
+    console.log('Opening official site for', brand, model, ':', officialLink);
+    
+    // Ensure the URL has a protocol
+    let url = officialLink.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        url = 'https://' + url;
+    }
+    
+    // Validate URL format
+    try {
+        new URL(url);
+    } catch (e) {
+        console.error('Invalid URL format:', url);
+        alert('The official website link appears to be invalid. Please contact support.');
+        return;
+    }
+    
+    // Show confirmation dialog before redirecting
+    const confirmMessage = `You will be redirected to the official ${brand} ${model} website:\n\n${url}\n\nProceed?`;
+    
+    if (confirm(confirmMessage)) {
+        // Open in new tab for better user experience
+        window.open(url, '_blank', 'noopener,noreferrer');
+        
+        // Log the action for analytics
+        console.log('User redirected to official site:', {
+            brand: brand,
+            model: model,
+            url: url,
+            timestamp: new Date().toISOString()
+        });
+    }
+}
+
+// NEW: Function to handle cases where official links might be missing
+function handleMissingOfficialLink(brand, model) {
+    const message = `Official website link is not available for the ${brand} ${model}.\n\nWould you like to search for it online?`;
+    
+    if (confirm(message)) {
+        const searchQuery = encodeURIComponent(`${brand} ${model} official website`);
+        const searchUrl = `https://www.google.com/search?q=${searchQuery}`;
+        window.open(searchUrl, '_blank', 'noopener,noreferrer');
+    }
+}
+
+// NEW: Make the function globally available
+window.openOfficialSite = openOfficialSite;
+window.handleMissingOfficialLink = handleMissingOfficialLink;
 
 // Function to remove car from comparison
 function removeCarFromComparison(carId) {
