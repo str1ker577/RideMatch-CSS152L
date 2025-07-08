@@ -2062,21 +2062,158 @@ def serve_profile_picture(filename):
     except Exception as e:
         app.logger.error(f"❌ Error serving profile picture {filename}: {e}")
         return "Error serving profile picture", 500
-    """Serve profile picture files"""
-    try:
-        if not os.path.exists(UPLOAD_FOLDER):
-            return "Profile pictures directory not found", 404
-        
-        file_path = os.path.join(UPLOAD_FOLDER, filename)
-        if not os.path.exists(file_path):
-            return "Profile picture not found", 404
-        
-        return send_from_directory(UPLOAD_FOLDER, filename)
-        
-    except Exception as e:
-        app.logger.error(f"Error serving profile picture {filename}: {e}")
-        return "Error serving profile picture", 500
 
+# NEW: Add missing refresh-session route if it doesn't exist (ADD THIS ONLY IF IT DOESN'T EXIST)
+try:
+    # Check if the route already exists by testing the URL rule
+    existing_rules = [rule.rule for rule in app.url_map.iter_rules()]
+    if '/refresh-session' not in existing_rules:
+        @app.route('/refresh-session', methods=['POST'])
+        def refresh_session():
+            """Refresh user session"""
+            try:
+                if session.get('authenticated') and session.get('user'):
+                    # Update session timestamp
+                    session['last_refresh'] = int(time.time())
+                    app.logger.info(f"✅ Session refreshed for user: {session.get('email')}")
+                    return jsonify({"status": "success", "message": "Session refreshed"}), 200
+                else:
+                    app.logger.warning("⚠️ Session refresh requested but user not authenticated")
+                    return jsonify({"status": "error", "message": "Not authenticated"}), 401
+            except Exception as e:
+                app.logger.error(f"❌ Error refreshing session: {e}")
+                return jsonify({"status": "error", "message": "Session refresh failed"}), 500
+    else:
+        app.logger.info("refresh-session route already exists, skipping creation")
+except Exception as e:
+    app.logger.warning(f"Could not check for existing refresh-session route: {e}")
+
+# NEW: Debug route for profile pictures (ADD ONLY IF IT DOESN'T EXIST)
+try:
+    existing_rules = [rule.rule for rule in app.url_map.iter_rules()]
+    if '/debug/profile-pictures' not in existing_rules:
+        @app.route('/debug/profile-pictures')
+        def debug_profile_pictures_new():
+            """Debug endpoint to check profile picture files and database entries"""
+            if not realtime_db_ref:
+                return jsonify({"error": "Database not available"}), 500
+            
+            try:
+                # Check files in upload directory
+                files_info = []
+                upload_folder_exists = os.path.exists(UPLOAD_FOLDER)
+                
+                if upload_folder_exists:
+                    try:
+                        for filename in os.listdir(UPLOAD_FOLDER):
+                            filepath = os.path.join(UPLOAD_FOLDER, filename)
+                            if os.path.isfile(filepath):
+                                files_info.append({
+                                    "filename": filename,
+                                    "size": os.path.getsize(filepath),
+                                    "url": f"/static/profile_pictures/{filename}",
+                                    "full_path": filepath
+                                })
+                    except Exception as e:
+                        app.logger.error(f"Error listing profile picture files: {e}")
+                
+                # Check database entries
+                users_ref = realtime_db_ref.child('users')
+                users_data = users_ref.get() or {}
+                
+                users_with_pictures = []
+                for uid, user_data in users_data.items():
+                    if user_data.get('profilePictureUrl'):
+                        users_with_pictures.append({
+                            "uid": uid,
+                            "email": user_data.get('email'),
+                            "username": user_data.get('username'),
+                            "profilePictureUrl": user_data.get('profilePictureUrl')
+                        })
+                
+                return jsonify({
+                    "upload_folder_exists": upload_folder_exists,
+                    "upload_folder_path": UPLOAD_FOLDER,
+                    "upload_folder_writable": os.access(UPLOAD_FOLDER, os.W_OK) if upload_folder_exists else False,
+                    "files_count": len(files_info),
+                    "files": files_info,
+                    "users_with_pictures_count": len(users_with_pictures),
+                    "users_with_pictures": users_with_pictures,
+                    "current_user_session": {
+                        "user": session.get('user'),
+                        "email": session.get('email'),
+                        "profile_picture_url": session.get('profile_picture_url'),
+                        "authenticated": session.get('authenticated')
+                    }
+                })
+                
+            except Exception as e:
+                app.logger.error(f"Error in profile pictures debug: {e}")
+                return jsonify({"error": str(e)}), 500
+    else:
+        app.logger.info("debug/profile-pictures route already exists, skipping creation")
+except Exception as e:
+    app.logger.warning(f"Could not check for existing debug/profile-pictures route: {e}")
+
+# NEW: Debug route for favorites (ADD ONLY IF IT DOESN'T EXIST)
+try:
+    existing_rules = [rule.rule for rule in app.url_map.iter_rules()]
+    if '/debug/favorites' not in existing_rules:
+        @app.route('/debug/favorites')
+        def debug_favorites_new():
+            """Debug endpoint to check favorites data"""
+            if not realtime_db_ref:
+                return jsonify({"error": "Database not available"}), 500
+            
+            try:
+                user_id = session.get('user')
+                if not user_id:
+                    return jsonify({"error": "No user in session"}), 401
+                
+                # Get favorites from database
+                favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+                favorites_data = favorites_ref.get() or {}
+                
+                # Get all favorites for debugging
+                all_favorites_ref = realtime_db_ref.child('favorites')
+                all_favorites = all_favorites_ref.get() or {}
+                
+                return jsonify({
+                    "session_info": {
+                        "user": session.get('user'),
+                        "email": session.get('email'),
+                        "authenticated": session.get('authenticated')
+                    },
+                    "user_favorites": {
+                        "count": len(favorites_data),
+                        "data": favorites_data
+                    },
+                    "all_users_with_favorites": {
+                        "users": list(all_favorites.keys()),
+                        "total_count": len(all_favorites)
+                    }
+                })
+                
+            except Exception as e:
+                app.logger.error(f"Error in favorites debug: {e}")
+                return jsonify({"error": str(e)}), 500
+    else:
+        app.logger.info("debug/favorites route already exists, skipping creation")
+except Exception as e:
+    app.logger.warning(f"Could not check for existing debug/favorites route: {e}")
+
+# Add this at the end of your app.py file to log all routes
+if __name__ == "__main__":
+    port = int(os.environ.get('PORT', 8000))
+    app.logger.info(f"Starting app on port {port}")
+    
+    # Log all registered routes for debugging
+    app.logger.info("📋 Registered routes:")
+    for rule in app.url_map.iter_rules():
+        app.logger.info(f"  {rule.rule} -> {rule.endpoint}")
+    
+    app.run(host='0.0.0.0', port=port, debug=False)
+    
 @app.route('/debug/users')
 def debug_users():
     """Debug endpoint to check user data"""
@@ -2171,6 +2308,7 @@ def unsanitize_firebase_key(key):
 
 @app.route('/toggle-fave', methods=['POST'])
 def toggle_fave():
+    
     """Toggle favorite status using Firebase Realtime Database with enhanced error handling"""
     
     # FIXED: Better session check
@@ -2272,191 +2410,84 @@ def toggle_fave():
         import traceback
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
-    """Toggle favorite status using Firebase Realtime Database with enhanced error handling"""
-    if 'user' not in session:
-        app.logger.warning("Unauthorized access to toggle-fave")
-        return jsonify({"error": "User not logged in"}), 401
+@app.route('/get-faves', methods=['POST'])
+def get_faves():
+    """Get user's favorites using Firebase Realtime Database with enhanced error handling"""
+    
+    # FIXED: Better session check - check for authenticated flag
+    if not session.get('authenticated') or not session.get('user'):
+        app.logger.warning(f"Unauthorized access to favorites - session: {dict(session)}")
+        return jsonify([]), 200  # Return empty array instead of error
     
     # FIXED: Better database availability check
     if not realtime_db_ref:
-        app.logger.error("Database not available for toggle-fave")
-        return jsonify({"error": "Database temporarily unavailable"}), 503  # Service unavailable
+        app.logger.error("Database not available for get-faves")
+        return jsonify([]), 200  # Return empty array instead of error
     
     try:
         user_id = session['user']
-        data = request.get_json()
+        app.logger.info(f"Getting favorites for user: {user_id}")
         
-        app.logger.info(f"Toggle fave request from user {user_id}: {data}")
-        
-        if not data:
-            app.logger.error("No JSON data received for toggle-fave")
-            return jsonify({"error": "No data provided"}), 400
-            
-        variant = data.get('variant')
-        liked = data.get('liked')
-
-        if not variant:
-            app.logger.error("No variant specified for toggle-fave")
-            return jsonify({"error": "Variant required"}), 400
-
-        # Sanitize the variant for Firebase path
-        sanitized_variant = sanitize_firebase_key(variant)
-        app.logger.info(f"Processing variant: {variant} -> {sanitized_variant}")
-
-        # FIXED: Add retry logic for database operations
+        # FIXED: Add timeout and retry logic for database queries
         max_retries = 3
+        retry_delay = 0.5
         
         for attempt in range(max_retries):
             try:
-                # Use Firebase Realtime Database
+                # Get favorites from Firebase Realtime Database
                 favorites_ref = realtime_db_ref.child('favorites').child(user_id)
-                existing_fave = favorites_ref.child(sanitized_variant).get()
-
-                app.logger.info(f"Existing favorite check for {sanitized_variant} (attempt {attempt + 1}): {existing_fave}")
-
-                if liked:
-                    # Add to favorites
-                    favorite_data = {
-                        'variant': variant,  # Store original variant name
-                        'sanitized_key': sanitized_variant,  # Store sanitized key for reference
-                        'timestamp': int(time.time() * 1000),
-                        'dateAdded': datetime.utcnow().isoformat() + 'Z',
-                        'userEmail': session.get('email', 'Unknown')
-                    }
-                    
-                    # Set the favorite data
-                    favorites_ref.child(sanitized_variant).set(favorite_data)
-                    app.logger.info(f"✅ Added favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
-                    
-                    return jsonify({
-                        "status": "added", 
-                        "variant": variant, 
-                        "liked": True,
-                        "message": "Added to favorites"
-                    }), 200
-                else:
-                    # Remove from favorites
-                    if existing_fave:
-                        favorites_ref.child(sanitized_variant).delete()
-                        app.logger.info(f"✅ Removed favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
-                        
-                        return jsonify({
-                            "status": "removed", 
-                            "variant": variant, 
-                            "liked": False,
-                            "message": "Removed from favorites"
-                        }), 200
-                    else:
-                        app.logger.info(f"Favorite not found for removal: {variant}")
-                        return jsonify({
-                            "status": "not_found", 
-                            "variant": variant, 
-                            "liked": False,
-                            "message": "Favorite not found"
-                        }), 200
+                favorites_data = favorites_ref.get()
                 
+                app.logger.info(f"Raw favorites data for {user_id} (attempt {attempt + 1}): {favorites_data}")
                 break  # Success, exit retry loop
                 
-            except Exception as db_error:
-                app.logger.warning(f"Database operation attempt {attempt + 1} failed: {db_error}")
+            except Exception as query_error:
+                app.logger.warning(f"Database query attempt {attempt + 1} failed: {query_error}")
                 if attempt == max_retries - 1:
                     # Last attempt failed
-                    app.logger.error(f"All database operation attempts failed for user {user_id}")
-                    return jsonify({"error": "Database operation failed"}), 503
+                    app.logger.error(f"All database query attempts failed for user {user_id}")
+                    return jsonify([]), 200  # Return empty list
                 else:
-                    time.sleep(0.5)  # Wait before retry
-            
-    except Exception as e:
-        app.logger.error(f"Error toggling favorite: {e}")
-        import traceback
-        app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
-    
-    """Toggle favorite status using Firebase Realtime Database"""
-    if 'user' not in session:
-        app.logger.warning("Unauthorized access to toggle-fave")
-        return jsonify({"error": "User not logged in"}), 401
-    
-    if not realtime_db_ref:
-        app.logger.error("Database not available for toggle-fave")
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        user_id = session['user']
-        data = request.get_json()
-        
-        app.logger.info(f"Toggle fave request from user {user_id}: {data}")
-        
-        if not data:
-            app.logger.error("No JSON data received for toggle-fave")
-            return jsonify({"error": "No data provided"}), 400
-            
-        variant = data.get('variant')
-        liked = data.get('liked')
+                    # Wait before retry
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
 
-        if not variant:
-            app.logger.error("No variant specified for toggle-fave")
-            return jsonify({"error": "Variant required"}), 400
+        # Process favorites data
+        if not favorites_data:
+            app.logger.info(f"No favorites found for user {user_id}")
+            return jsonify([]), 200
 
-        # Sanitize the variant for Firebase path
-        sanitized_variant = sanitize_firebase_key(variant)
-        app.logger.info(f"Processing variant: {variant} -> {sanitized_variant}")
-
-        # Use Firebase Realtime Database
-        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
-        existing_fave = favorites_ref.child(sanitized_variant).get()
-
-        app.logger.info(f"Existing favorite check for {sanitized_variant}: {existing_fave}")
-
-        if liked:
-            # Add to favorites
-            favorite_data = {
-                'variant': variant,  # Store original variant name
-                'sanitized_key': sanitized_variant,  # Store sanitized key for reference
-                'timestamp': int(time.time() * 1000),
-                'dateAdded': datetime.utcnow().isoformat() + 'Z',
-                'userEmail': session.get('email', 'Unknown')
-            }
-            
-            # Set the favorite data
-            favorites_ref.child(sanitized_variant).set(favorite_data)
-            app.logger.info(f"✅ Added favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
-            
-            return jsonify({
-                "status": "added", 
-                "variant": variant, 
-                "liked": True,
-                "message": "Added to favorites"
-            }), 200
-        else:
-            # Remove from favorites
-            if existing_fave:
-                favorites_ref.child(sanitized_variant).delete()
-                app.logger.info(f"✅ Removed favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
+        # Convert to list format
+        favorite_variants = []
+        for sanitized_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                # Use the original variant name from the stored data
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
                 
-                return jsonify({
-                    "status": "removed", 
-                    "variant": variant, 
-                    "liked": False,
-                    "message": "Removed from favorites"
-                }), 200
-            else:
-                app.logger.info(f"Favorite not found for removal: {variant}")
-                return jsonify({
-                    "status": "not_found", 
-                    "variant": variant, 
-                    "liked": False,
-                    "message": "Favorite not found"
-                }), 200
-            
+                # Ensure we have the complete variant data
+                complete_variant_data = {
+                    'variant': original_variant,
+                    'sanitized_key': sanitized_key,
+                    'timestamp': variant_data.get('timestamp', int(time.time() * 1000)),
+                    'dateAdded': variant_data.get('dateAdded', datetime.utcnow().isoformat() + 'Z'),
+                    'userEmail': variant_data.get('userEmail', session.get('email', 'Unknown'))
+                }
+                
+                favorite_variants.append(complete_variant_data)
+
+        app.logger.info(f"✅ Retrieved {len(favorite_variants)} favorites for user {user_id}")
+        
+        # Sort by timestamp (newest first)
+        favorite_variants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
+        return jsonify(favorite_variants), 200
+        
     except Exception as e:
-        app.logger.error(f"Error toggling favorite: {e}")
+        app.logger.error(f"Error retrieving favorites: {e}")
         import traceback
         app.logger.error(f"Traceback: {traceback.format_exc()}")
-        return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
-
-@app.route('/get-faves', methods=['POST'])
-def get_faves():
+        # Return empty list instead of error to prevent frontend crashes
+        return jsonify([]), 200
     """Get user's favorites using Firebase Realtime Database with enhanced error handling"""
     
     # FIXED: Better session check - check for authenticated flag
