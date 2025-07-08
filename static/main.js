@@ -5629,7 +5629,7 @@ async function loadFavorites() {
         currentUser: !!currentUser,
         userName: !!userName,
         userDisplayName: !!userDisplayName,
-        sessionAuth: !!session?.authenticated
+        authCurrentUser: !!(auth && auth.currentUser)
     });
 
     // Check if we're actually on the favorites page
@@ -5639,8 +5639,8 @@ async function loadFavorites() {
         return;
     }
 
-    // Check authentication more thoroughly
-    if (!currentUser && !session?.authenticated && !userName && !userDisplayName) {
+    // FIXED: Remove session reference and use the available auth variables
+    if (!currentUser && !userName && !userDisplayName && !(auth && auth.currentUser)) {
         console.log('❌ User not authenticated for loading favorites');
         cardContainer.innerHTML = `
             <div class="no-favorites">
@@ -5673,251 +5673,103 @@ async function loadFavorites() {
         });
 
         console.log('📡 Get favorites response status:', response.status);
-        console.log('📡 Get favorites response ok:', response.ok);
 
         if (!response.ok) {
-            if (response.status === 401) {
-                console.log('🔐 Authentication error on favorites page');
-                cardContainer.innerHTML = `
-                    <div class="no-favorites">
-                        <i class="fas fa-sign-in-alt"></i>
-                        <p>Please sign in to view your favorites.</p>
-                        <button onclick="togglePopup('login-popup')" class="sign-in-btn">Sign In</button>
-                    </div>
-                `;
-                return;
-            }
-            
             const errorText = await response.text();
-            console.error('❌ Get favorites error:', errorText);
-            throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`);
+            console.error('❌ Get favorites error:', response.status, errorText);
+            
+            cardContainer.innerHTML = `
+                <div class="no-favorites">
+                    <i class="fas fa-exclamation-triangle"></i>
+                    <p>Error loading favorites (${response.status})</p>
+                    <button onclick="loadFavorites()" class="retry-btn">Try Again</button>
+                </div>
+            `;
+            return;
         }
 
         const result = await response.json();
         console.log('📦 Received favorites data:', result);
-        console.log('📦 Favorites data type:', typeof result);
-        console.log('📦 Is favorites array?', Array.isArray(result));
         
-        // Handle both array and object responses
+        // Handle the response - it should be an array
         let favorites = [];
         if (Array.isArray(result)) {
             favorites = result;
-        } else if (result.favorites && Array.isArray(result.favorites)) {
-            favorites = result.favorites;
         } else if (result.error) {
             console.error('❌ Backend returned error:', result.error);
             cardContainer.innerHTML = `
                 <div class="no-favorites">
                     <i class="fas fa-exclamation-triangle"></i>
-                    <p>Error loading favorites: ${result.error}</p>
+                    <p>Error: ${result.error}</p>
                 </div>
             `;
             return;
         }
         
-        console.log('📋 Processed favorites count:', favorites.length);
+        console.log('📋 Processing', favorites.length, 'favorites');
 
-        if (favorites.length > 0) {
-            console.log(`✅ Processing ${favorites.length} favorites`);
-            
-            // Clear loading state
-            cardContainer.innerHTML = "";
-            
-            let successfullyLoaded = 0;
-            let failedToLoad = [];
-            
-            for (let i = 0; i < favorites.length; i++) {
-                const car = favorites[i];
-                console.log(`🔍 Processing favorite ${i + 1}/${favorites.length}:`, car);
-                
-                try {
-                    // FIXED: Better variant encoding for URL - handle special characters
-                    const variantToEncode = car.variant ? car.variant.trim() : '';
-                    if (!variantToEncode) {
-                        console.error(`❌ Empty variant for favorite ${i + 1}`);
-                        failedToLoad.push(`Favorite ${i + 1}: Empty variant`);
-                        continue;
-                    }
-                    
-                    const encodedVariant = encodeURIComponent(variantToEncode);
-                    console.log(`📡 Fetching specs for variant: "${variantToEncode}" (encoded: "${encodedVariant}")`);
-                    
-                    const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${encodedVariant}`, {
-                        method: "GET",
-                        headers: { 
-                            "Content-Type": "application/json",
-                            "Cache-Control": "no-cache"
-                        }
-                    });
-                    
-                    console.log(`📡 Variant response status for "${variantToEncode}":`, variantResponse.status);
-                    
-                    if (!variantResponse.ok) {
-                        console.error(`❌ Failed to fetch specs for variant: ${variantToEncode}, status: ${variantResponse.status}`);
-                        
-                        // Try to get error details
-                        const errorText = await variantResponse.text();
-                        console.error(`❌ Error details for ${variantToEncode}:`, errorText);
-                        failedToLoad.push(`${variantToEncode}: HTTP ${variantResponse.status}`);
-                        continue;
-                    }
-                    
-                    const variantData = await variantResponse.json();
-                    console.log('📋 Got variant data for', variantToEncode, ':', variantData);
-
-                    // Validate that we got meaningful data
-                    if (!variantData || (typeof variantData === 'object' && Object.keys(variantData).length === 0)) {
-                        console.error(`❌ Empty or invalid variant data for ${variantToEncode}`);
-                        failedToLoad.push(`${variantToEncode}: No data returned`);
-                        continue;
-                    }
-
-                    // Create the card element
-                    const card = document.createElement("div");
-                    card.classList.add("card");
-                    card.style.opacity = "0";
-                    card.style.transform = "translateY(20px)";
-                    card.style.transition = "all 0.3s ease";
-
-                    // FIXED: Better image handling with multiple fallbacks
-                    let imageUrl = '/static/resources/default_car.png'; // Default fallback
-                    
-                    if (variantData.Image && variantData.Image.trim() !== '') {
-                        imageUrl = variantData.Image;
-                    } else if (variantData.Brand && variantData.Model) {
-                        // Try to construct image path based on brand and model
-                        const brandLower = variantData.Brand.toLowerCase().replace(/\s+/g, '_');
-                        const modelLower = variantData.Model.toLowerCase().replace(/\s+/g, '_');
-                        imageUrl = `/static/car_images/${brandLower}_${modelLower}.jpg`;
-                    }
-
-                    card.innerHTML = `
-                        <img src="${imageUrl}" 
-                             alt="${variantData.Model || 'Car'}"
-                             onerror="this.onerror=null; this.src='/static/resources/default_car.png'; console.log('🖼️ Fallback image used for ${variantToEncode}');">
-                        <div class="name">${variantData.Brand || 'Unknown'} ${variantData.Model || 'Model'}</div>
-                        <div class="variant-name">${variantToEncode}</div>
-                        <div class="favorite-actions">
-                            <button class="remove-favorite-btn" onclick="removeFavoriteFromDisplay('${variantToEncode.replace(/'/g, "\\'")}', this)">
-                                <i class="fas fa-heart-broken"></i> Remove
-                            </button>
-                        </div>
-                    `;
-
-                    // Add click handler for popup
-                    card.addEventListener("click", function (e) {
-                        // Don't trigger popup if remove button was clicked
-                        if (e.target.closest('.remove-favorite-btn')) return;
-                        
-                        console.log("🔍 Card clicked - Populating popup for:", variantToEncode);
-                        
-                        // Check if popup elements exist before trying to populate them
-                        const carTitleElement = document.querySelector(".car-title");
-                        const imgElement = document.querySelector(".img-fave-frame img");
-                        const specContainer = document.querySelector(".spec-fave-frame .spec-card-container");
-                        
-                        if (carTitleElement && imgElement && specContainer) {
-                            // Populate the popup with the selected car's details
-                            carTitleElement.textContent = `${variantData.Brand} ${variantData.Model}`;
-                            imgElement.src = imageUrl;
-                            imgElement.onerror = function() { this.src = '/static/resources/default_car.png'; };
-                            
-                            specContainer.innerHTML = `
-                                <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${variantData.Brand || 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${variantData.Model || 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${variantData.BodyType || 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${variantToEncode}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${variantData.DriveTrain || 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${variantData.Engine || 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${variantData.Horsepower ? variantData.Horsepower + ' HP' : 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Transmission</strong><br><span class="spec-value">${variantData.Transmission || 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Fuel Type</strong><br><span class="spec-value">${variantData.FuelType || 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Ground Clearance</strong><br><span class="spec-value">${variantData.GroundClearance ? variantData.GroundClearance + ' cm' : 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Cargo Space</strong><br><span class="spec-value">${variantData.Cargospace ? variantData.Cargospace + ' L' : 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Seating Capacity</strong><br><span class="spec-value">${variantData.SeatingCapacity ? variantData.SeatingCapacity + ' seats' : 'N/A'}</span></div>
-                                <div class="spec-card"><strong class="spec-label">Price</strong><br><span class="spec-value">${variantData.Price ? '₱' + parseInt(variantData.Price).toLocaleString() : 'N/A'}</span></div>
-                            `;
-
-                            // Check if populateColors function exists before calling it
-                            if (typeof populateColors === 'function') {
-                                populateColors(variantData.Model);
-                            }
-
-                            // Open the popup - check if togglePopup function exists
-                            if (typeof togglePopup === 'function') {
-                                togglePopup("card-popup");
-                            }
-                        } else {
-                            console.warn("❌ Popup elements not found on this page");
-                        }
-                    });
-
-                    cardContainer.appendChild(card);
-                    
-                    // Animate card appearance
-                    setTimeout(() => {
-                        card.style.opacity = "1";
-                        card.style.transform = "translateY(0)";
-                    }, i * 100); // Stagger the animations
-                    
-                    successfullyLoaded++;
-                    
-                } catch (specError) {
-                    console.error('❌ Error fetching specs for variant:', car.variant, specError);
-                    failedToLoad.push(`${car.variant}: ${specError.message}`);
-                    continue;
-                }
-            }
-            
-            console.log(`✅ Successfully loaded ${successfullyLoaded} out of ${favorites.length} favorites`);
-            
-            if (failedToLoad.length > 0) {
-                console.warn(`⚠️ Failed to load ${failedToLoad.length} favorites:`, failedToLoad);
-            }
-            
-            // If no cards were successfully loaded, show error message
-            if (successfullyLoaded === 0) {
-                cardContainer.innerHTML = `
-                    <div class="no-favorites">
-                        <i class="fas fa-exclamation-triangle"></i>
-                        <p>Could not load car details for your favorites.</p>
-                        <p><small>This might be due to data availability issues.</small></p>
-                        <details>
-                            <summary>Error Details</summary>
-                            <ul>
-                                ${failedToLoad.map(error => `<li>${error}</li>`).join('')}
-                            </ul>
-                        </details>
-                    </div>
-                `;
-            }
-            
-        } else {
-            console.log('📭 No favorites found');
+        if (favorites.length === 0) {
             cardContainer.innerHTML = `
                 <div class="no-favorites">
                     <i class="fas fa-heart"></i>
                     <p>No favorite cars yet. Start adding some!</p>
-                    <p><small>Go to the car filter page and click the heart icon on cars you like.</small></p>
                 </div>
             `;
+            return;
         }
+
+        // Clear container and start loading cars
+        cardContainer.innerHTML = "";
+        
+        for (const car of favorites) {
+            console.log('🔍 Processing car:', car.variant);
+            
+            try {
+                const encodedVariant = encodeURIComponent(car.variant.trim());
+                const specResponse = await fetch(`${baseUrl}/get_specs?variant=${encodedVariant}`);
+                
+                if (!specResponse.ok) {
+                    console.error(`❌ Failed to get specs for ${car.variant}:`, specResponse.status);
+                    continue;
+                }
+                
+                const specs = await specResponse.json();
+                console.log('✅ Got specs for', car.variant);
+                
+                // Create and add card
+                const card = document.createElement("div");
+                card.className = "card";
+                card.innerHTML = `
+                    <img src="${specs.Image || '/static/resources/default_car.png'}" 
+                         alt="${specs.Model || 'Car'}"
+                         onerror="this.src='/static/resources/default_car.png';">
+                    <div class="name">${specs.Brand || 'Unknown'} ${specs.Model || 'Model'}</div>
+                    <div class="variant-name">${car.variant}</div>
+                    <div class="favorite-actions">
+                        <button class="remove-favorite-btn" onclick="removeFavoriteFromDisplay('${car.variant.replace(/'/g, "\\'")}', this)">
+                            <i class="fas fa-heart-broken"></i> Remove
+                        </button>
+                    </div>
+                `;
+                
+                cardContainer.appendChild(card);
+                
+            } catch (error) {
+                console.error('❌ Error processing', car.variant, ':', error);
+            }
+        }
+        
+        console.log('✅ Favorites loading completed');
+        
     } catch (error) {
         console.error("❌ Error loading favorites:", error);
-        console.error("❌ Error stack:", error.stack);
-        
-        // Show user-friendly error message
-        const cardContainer = document.getElementById("card-container");
-        if (cardContainer) {
-            cardContainer.innerHTML = `
-                <div class="no-favorites">
-                    <i class="fas fa-exclamation-triangle"></i>
-                    <p>Error loading favorites. Please refresh the page.</p>
-                    <p><small>Error: ${error.message}</small></p>
-                    <button onclick="loadFavorites()" class="retry-btn">Try Again</button>
-                </div>
-            `;
-        }
+        cardContainer.innerHTML = `
+            <div class="no-favorites">
+                <i class="fas fa-exclamation-triangle"></i>
+                <p>Error loading favorites</p>
+                <button onclick="loadFavorites()" class="retry-btn">Try Again</button>
+            </div>
+        `;
     }
 }
 
