@@ -3298,9 +3298,14 @@ function addCarToComparison(carId, variant, year, specs) {
     const heartClass = isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
     const heartColor = isLiked ? '#e74c3c' : '#b49b66';
     
-    // NEW: Determine if official link is available
+    // NEW: Determine if official link is available and debug
     const hasOfficialLink = specs.OfficialLink && specs.OfficialLink.trim() !== '';
-    console.log('Official link for', variant, ':', specs.OfficialLink, 'Available:', hasOfficialLink);
+    console.log('Official link debugging for', variant, ':', {
+        OfficialLink: specs.OfficialLink,
+        trimmed: specs.OfficialLink ? specs.OfficialLink.trim() : 'null/undefined',
+        hasOfficialLink: hasOfficialLink,
+        allSpecs: specs
+    });
     
     const carColumn = document.createElement('div');
     carColumn.className = 'car-column';
