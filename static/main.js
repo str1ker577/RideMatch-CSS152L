@@ -306,7 +306,7 @@ async function checkSessionStatus() {
     try {
         console.log('🔍 Checking session status...');
         
-        // Initialize header icon immediately
+        // Initialize header icon immediately to prevent text flash
         initializeHeaderProfileIcon();
         
         const response = await fetch('/check-session', {
@@ -322,16 +322,24 @@ async function checkSessionStatus() {
             const sessionData = await response.json();
             console.log('📋 Session data received:', sessionData);
             
-            if (sessionData.authenticated) {
+            if (sessionData.authenticated && sessionData.user) {
                 userName = sessionData.email;
                 userDisplayName = sessionData.username || sessionData.email;
                 userProfilePictureUrl = sessionData.profile_picture_url;
+                
+                // Only set profile picture if it's a valid URL
+                if (userProfilePictureUrl && userProfilePictureUrl !== 'null' && userProfilePictureUrl !== 'undefined') {
+                    console.log('✅ Valid profile picture URL found:', userProfilePictureUrl);
+                } else {
+                    console.log('📷 No valid profile picture URL');
+                    userProfilePictureUrl = null;
+                }
                 
                 currentUser = {
                     uid: sessionData.user,
                     email: sessionData.email,
                     displayName: sessionData.username,
-                    photoURL: sessionData.profile_picture_url
+                    photoURL: userProfilePictureUrl
                 };
                 
                 console.log('✅ Session is valid, user is logged in:', sessionData.email);
@@ -343,12 +351,12 @@ async function checkSessionStatus() {
                 
                 return true;
             } else {
-                console.log('❌ No valid session found');
+                console.log('❌ Session not authenticated');
                 clearUserData();
                 return false;
             }
         } else {
-            console.log('⚠️ Session check request failed');
+            console.log('⚠️ Session check request failed:', response.status);
             clearUserData();
             return false;
         }
@@ -2099,36 +2107,63 @@ function updateHeaderProfilePicture(profilePictureUrl) {
         return;
     }
     
-    if (profilePictureUrl && profilePictureUrl !== 'null' && profilePictureUrl !== 'undefined') {
-        // Test image loading first with better error handling
+    // Always start with default icon visible
+    headerProfileIcon.style.display = 'block';
+    headerProfilePic.style.display = 'none';
+    headerProfilePic.src = '';
+    
+    if (profilePictureUrl && 
+        profilePictureUrl !== 'null' && 
+        profilePictureUrl !== 'undefined' && 
+        profilePictureUrl.trim() !== '') {
+        
+        console.log('🔍 Testing profile picture URL:', profilePictureUrl);
+        
+        // Test image loading with enhanced error handling
         const testImg = new Image();
         
         testImg.onload = function() {
-            console.log('✅ Header image loaded successfully');
-            headerProfilePic.src = profilePictureUrl;
-            headerProfilePic.style.display = 'block';
-            headerProfileIcon.style.display = 'none';
+            console.log('✅ Profile picture loaded successfully');
+            // Double check elements still exist
+            const pic = document.getElementById('profile-pic');
+            const icon = document.getElementById('profile-icon');
+            
+            if (pic && icon) {
+                pic.src = profilePictureUrl;
+                pic.style.display = 'block';
+                icon.style.display = 'none';
+            }
         };
         
-        testImg.onerror = function() {
-            console.warn('❌ Header image failed to load:', profilePictureUrl);
+        testImg.onerror = function(error) {
+            console.warn('❌ Profile picture failed to load:', profilePictureUrl);
+            console.warn('❌ Error details:', error);
             
             // Try to debug the issue
-            console.log('🔍 Debugging profile picture loading...');
-            debugProfilePictures();
+            debugProfilePictureIssue(profilePictureUrl);
             
-            // Fallback to default icon
-            headerProfilePic.style.display = 'none';
-            headerProfilePic.src = '';
-            headerProfileIcon.style.display = 'block';
+            // Ensure fallback to default icon
+            const pic = document.getElementById('profile-pic');
+            const icon = document.getElementById('profile-icon');
+            
+            if (pic && icon) {
+                pic.style.display = 'none';
+                pic.src = '';
+                icon.style.display = 'block';
+            }
         };
+        
+        // Set timeout for image loading
+        setTimeout(() => {
+            if (!testImg.complete) {
+                console.warn('⏰ Profile picture loading timeout');
+                testImg.onerror(new Error('Loading timeout'));
+            }
+        }, 5000);
         
         testImg.src = profilePictureUrl;
     } else {
-        console.log('📷 No profile picture URL, showing default icon');
-        headerProfilePic.style.display = 'none';
-        headerProfilePic.src = '';
-        headerProfileIcon.style.display = 'block';
+        console.log('📷 No valid profile picture URL, showing default icon');
     }
 }
 
@@ -2165,6 +2200,34 @@ async function debugProfilePictures() {
     }
 }
 
+async function debugProfilePictureIssue(profilePictureUrl) {
+    try {
+        console.log('🔍 Debugging profile picture issue for URL:', profilePictureUrl);
+        
+        // Test direct URL access
+        const response = await fetch(profilePictureUrl, { method: 'HEAD' });
+        console.log('📡 Direct URL test response:', response.status, response.statusText);
+        
+        // Get detailed debug info
+        const debugResponse = await fetch(`${baseUrl}/debug/profile-pictures-detailed`);
+        if (debugResponse.ok) {
+            const debugData = await debugResponse.json();
+            console.log('🔍 Profile picture debug data:', debugData);
+            
+            // Check if current user's file exists
+            const currentUserId = currentUser?.uid || session?.user;
+            if (currentUserId) {
+                const userInfo = debugData.database_users?.find(u => u.uid === currentUserId);
+                if (userInfo) {
+                    console.log('👤 Current user profile info:', userInfo);
+                }
+            }
+        }
+        
+    } catch (error) {
+        console.error('❌ Error debugging profile picture:', error);
+    }
+}
 
 ////////////////////////////
 // Formats the CSV file  //
@@ -5206,18 +5269,22 @@ async function addToFaveFromCalculator(event, variant) {
 
 // Load user favorites into memory for quick duplicate checking
 async function loadUserFavoritesForDuplicateCheck() {
-    // FIXED: Better authentication check
-    if (!currentUser && !session?.authenticated && !userName) {
+    console.log('🔄 Loading favorites for duplicate check...');
+    
+    // Clear existing favorites first
+    userFavorites.clear();
+    
+    // Check authentication more thoroughly
+    if (!currentUser && !session?.authenticated && !userName && !userDisplayName) {
         console.log('🔍 No authenticated user found, clearing favorites');
-        userFavorites.clear();
         return;
     }
 
     try {
-        console.log('🔄 Loading favorites for duplicate check...');
-        console.log('🔍 Auth state:', {
+        console.log('🔍 Auth state check:', {
             currentUser: !!currentUser,
             userName: !!userName,
+            userDisplayName: !!userDisplayName,
             sessionAuth: !!session?.authenticated
         });
         
@@ -5227,7 +5294,7 @@ async function loadUserFavoritesForDuplicateCheck() {
                 "Content-Type": "application/json",
                 "Cache-Control": "no-cache"
             },
-            credentials: 'same-origin' // FIXED: Include credentials
+            credentials: 'same-origin'
         });
 
         console.log('📡 Favorites response status:', response.status);
@@ -5244,10 +5311,10 @@ async function loadUserFavoritesForDuplicateCheck() {
                 favorites = result.favorites;
             } else if (result.error) {
                 console.warn('⚠️ Backend returned error for favorites:', result.error);
-                // Don't clear existing favorites for errors
-                return;
+                return; // Don't clear existing favorites for errors
             }
             
+            // Clear and rebuild favorites set
             userFavorites.clear();
             favorites.forEach(fav => {
                 if (fav && fav.variant) {
@@ -5258,22 +5325,22 @@ async function loadUserFavoritesForDuplicateCheck() {
             console.log('✅ Loaded favorites for duplicate check:', userFavorites.size, 'items');
             console.log('📋 Favorite variants:', Array.from(userFavorites));
             
-            // Update heart colors on current page
+            // Update heart colors on current page after a short delay
             setTimeout(() => {
                 updateHeartColorsOnPage();
-            }, 100);
+            }, 200);
             
         } else {
             console.warn('⚠️ Failed to load favorites, status:', response.status);
             
-            // For 401 errors, just clear favorites (user not authenticated)
+            // For 401 errors, clear favorites (user not authenticated)
             if (response.status === 401) {
                 console.log('🔐 Authentication error, clearing favorites');
                 userFavorites.clear();
                 return;
             }
             
-            // For other errors, try to get error message
+            // For other errors, try to get error message but don't clear existing favorites
             try {
                 const errorData = await response.json();
                 console.warn('⚠️ Favorites error:', errorData);
@@ -5494,12 +5561,17 @@ document.head.appendChild(styleSheet);
 async function loadFavorites() {
     console.log("🔄 Loading favorites for favorites page...");
 
-    // FIXED: Better authentication check
-    if (!currentUser && !session?.authenticated && !userName) {
+    // Check authentication more thoroughly
+    if (!currentUser && !session?.authenticated && !userName && !userDisplayName) {
         console.log('❌ User not authenticated for loading favorites');
         const cardContainer = document.getElementById("card-container");
         if (cardContainer) {
-            cardContainer.innerHTML = '<div class="no-favorites"><i class="fas fa-sign-in-alt"></i><p>Please sign in to view your favorites.</p></div>';
+            cardContainer.innerHTML = `
+                <div class="no-favorites">
+                    <i class="fas fa-sign-in-alt"></i>
+                    <p>Please sign in to view your favorites.</p>
+                </div>
+            `;
         }
         return;
     }
@@ -5507,14 +5579,13 @@ async function loadFavorites() {
     try {
         console.log('📤 Fetching favorites from backend...');
         
-        // Use Flask backend
         const response = await fetch(`${baseUrl}/get-faves`, {
             method: "POST",
             headers: { 
                 "Content-Type": "application/json",
                 "Cache-Control": "no-cache"
             },
-            credentials: 'same-origin' // FIXED: Include credentials
+            credentials: 'same-origin'
         });
 
         console.log('📡 Get favorites response status:', response.status);
@@ -5524,7 +5595,12 @@ async function loadFavorites() {
                 console.log('🔐 Authentication error on favorites page');
                 const cardContainer = document.getElementById("card-container");
                 if (cardContainer) {
-                    cardContainer.innerHTML = '<div class="no-favorites"><i class="fas fa-sign-in-alt"></i><p>Please sign in to view your favorites.</p></div>';
+                    cardContainer.innerHTML = `
+                        <div class="no-favorites">
+                            <i class="fas fa-sign-in-alt"></i>
+                            <p>Please sign in to view your favorites.</p>
+                        </div>
+                    `;
                 }
                 return;
             }
@@ -5571,7 +5647,7 @@ async function loadFavorites() {
                 console.log('🔍 Processing favorite car:', car);
                 
                 try {
-                    // FIXED: Better variant encoding for URL
+                    // Better variant encoding for URL
                     const encodedVariant = encodeURIComponent(car.variant);
                     const variantResponse = await fetch(`${baseUrl}/get_specs?variant=${encodedVariant}`, {
                         method: "GET",
@@ -5589,10 +5665,11 @@ async function loadFavorites() {
                     const variantData = await variantResponse.json();
                     console.log('📋 Got variant data:', variantData);
 
+                    // USE YOUR ORIGINAL CARD CREATION LOGIC
                     const card = document.createElement("div");
                     card.classList.add("card");
 
-                    // FIXED: Better image handling with fallback
+                    // Better image handling with fallback
                     const imageUrl = variantData.Image || '/static/resources/default_car.png';
 
                     card.innerHTML = `
@@ -5608,6 +5685,7 @@ async function loadFavorites() {
                         </div>
                     `;
 
+                    // USE YOUR ORIGINAL CLICK HANDLER LOGIC
                     card.addEventListener("click", function (e) {
                         // Don't trigger popup if remove button was clicked
                         if (e.target.closest('.remove-favorite-btn')) return;
@@ -5762,6 +5840,7 @@ async function debugFavorites() {
         console.error('❌ Debug favorites error:', error);
     }
 }
+
 
 function autoDebugIssues() {
     // Check if user is logged in but has no favorites loaded

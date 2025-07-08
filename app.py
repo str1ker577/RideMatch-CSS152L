@@ -549,6 +549,96 @@ def verify_token():
  
 @app.route('/check-session', methods=['GET'])
 def check_session():
+    """Check if user has a valid session with enhanced error handling"""
+    try:
+        session_data = {
+            'authenticated': False,
+            'user': None,
+            'email': None,
+            'username': None,
+            'profile_picture_url': None
+        }
+        
+        # Check if user is in session and authenticated
+        if 'user' in session and session.get('authenticated'):
+            user_id = session.get('user')
+            
+            # Get fresh profile data from database if available
+            if realtime_db_ref and user_id:
+                try:
+                    user_ref = realtime_db_ref.child('users').child(user_id)
+                    user_data = user_ref.get()
+                    
+                    if user_data:
+                        # Validate profile picture exists
+                        profile_pic_url = user_data.get('profilePictureUrl')
+                        if profile_pic_url:
+                            # Check if file actually exists
+                            if profile_pic_url.startswith('/static/profile_pictures/'):
+                                filename = profile_pic_url.split('/')[-1]
+                                file_path = os.path.join(UPLOAD_FOLDER, filename)
+                                if not os.path.exists(file_path):
+                                    app.logger.warning(f"Profile picture file not found: {file_path}")
+                                    profile_pic_url = None
+                                    # Update database to remove invalid URL
+                                    user_ref.update({'profilePictureUrl': None})
+                        
+                        session_data.update({
+                            'authenticated': True,
+                            'user': user_id,
+                            'email': session.get('email') or user_data.get('email'),
+                            'username': user_data.get('username'),
+                            'profile_picture_url': profile_pic_url
+                        })
+                    else:
+                        # User not found in database, create basic entry
+                        basic_user_data = {
+                            'uid': user_id,
+                            'email': session.get('email', 'Unknown'),
+                            'username': session.get('username') or session.get('email', 'User'),
+                            'memberSince': datetime.utcnow().isoformat() + 'Z',
+                            'favoriteCount': 0,
+                            'profilePictureUrl': None
+                        }
+                        user_ref.set(basic_user_data)
+                        
+                        session_data.update({
+                            'authenticated': True,
+                            'user': user_id,
+                            'email': session.get('email', 'Unknown'),
+                            'username': basic_user_data['username'],
+                            'profile_picture_url': None
+                        })
+                        
+                except Exception as db_error:
+                    app.logger.error(f"Database error in session check: {db_error}")
+                    # Return basic session data without database info
+                    session_data.update({
+                        'authenticated': True,
+                        'user': user_id,
+                        'email': session.get('email'),
+                        'username': session.get('username'),
+                        'profile_picture_url': None
+                    })
+            else:
+                # Database not available, use session data only
+                session_data.update({
+                    'authenticated': True,
+                    'user': user_id,
+                    'email': session.get('email'),
+                    'username': session.get('username'),
+                    'profile_picture_url': None  # Don't use potentially invalid URLs
+                })
+        
+        app.logger.info(f"Session check result: {session_data}")
+        return jsonify(session_data), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error in session check: {e}")
+        return jsonify({
+            'authenticated': False,
+            'error': 'Session check failed'
+        }), 500
     """Check if user has a valid session with profile picture data"""
     if 'user' in session and session.get('authenticated'):
         # Get fresh profile picture URL from database to ensure it's current
@@ -1931,9 +2021,57 @@ def profile():
     
     return render_template('profile.html')
 
-# NEW: Serve profile pictures
 @app.route('/static/profile_pictures/<path:filename>')
 def serve_profile_picture(filename):
+    """Serve profile picture files with enhanced error handling"""
+    try:
+        app.logger.info(f"Serving profile picture request: {filename}")
+        
+        # Security check - ensure filename is safe
+        if not filename or '..' in filename or '/' in filename:
+            app.logger.warning(f"Invalid filename requested: {filename}")
+            return "Invalid filename", 400
+        
+        if not os.path.exists(UPLOAD_FOLDER):
+            app.logger.error(f"Profile pictures directory not found: {UPLOAD_FOLDER}")
+            return "Profile pictures directory not found", 404
+        
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        
+        if not os.path.exists(file_path):
+            app.logger.warning(f"Profile picture not found: {file_path}")
+            
+            # List available files for debugging
+            try:
+                available_files = os.listdir(UPLOAD_FOLDER)
+                app.logger.info(f"Available profile pictures: {available_files[:10]}")  # Show first 10
+            except Exception as list_error:
+                app.logger.error(f"Error listing profile pictures: {list_error}")
+            
+            return "Profile picture not found", 404
+        
+        # Check file size and permissions
+        try:
+            file_size = os.path.getsize(file_path)
+            if file_size == 0:
+                app.logger.warning(f"Profile picture is empty: {file_path}")
+                return "Profile picture is corrupted", 404
+            
+            if not os.access(file_path, os.R_OK):
+                app.logger.error(f"Profile picture not readable: {file_path}")
+                return "Profile picture not accessible", 403
+                
+        except Exception as file_error:
+            app.logger.error(f"Error checking profile picture file: {file_error}")
+            return "Error accessing profile picture", 500
+        
+        app.logger.info(f"Successfully serving profile picture: {filename} ({file_size} bytes)")
+        return send_from_directory(UPLOAD_FOLDER, filename)
+        
+    except Exception as e:
+        app.logger.error(f"Error serving profile picture {filename}: {e}")
+        return "Error serving profile picture", 500
+
     """Serve profile picture files with better error handling"""
     try:
         app.logger.info(f"📸 Serving profile picture: {filename}")
@@ -2017,8 +2155,73 @@ def debug_users():
         app.logger.error(f"❌ Error refreshing session: {e}")
         return jsonify({"status": "error", "message": "Session refresh failed"}), 500
     
-@app.route('/debug/profile-pictures')
-def debug_profile_pictures():
+@app.route('/debug/profile-pictures-detailed')
+def debug_profile_pictures_detailed():
+    """Enhanced debug endpoint for profile picture issues"""
+    try:
+        debug_info = {
+            "upload_folder": {
+                "path": UPLOAD_FOLDER,
+                "exists": os.path.exists(UPLOAD_FOLDER),
+                "writable": os.access(UPLOAD_FOLDER, os.W_OK) if os.path.exists(UPLOAD_FOLDER) else False,
+                "readable": os.access(UPLOAD_FOLDER, os.R_OK) if os.path.exists(UPLOAD_FOLDER) else False
+            },
+            "files": [],
+            "database_users": [],
+            "session_info": {
+                "authenticated": session.get('authenticated', False),
+                "user_id": session.get('user'),
+                "email": session.get('email'),
+                "profile_picture_url": session.get('profile_picture_url')
+            }
+        }
+        
+        # List actual files
+        if os.path.exists(UPLOAD_FOLDER):
+            try:
+                for filename in os.listdir(UPLOAD_FOLDER):
+                    filepath = os.path.join(UPLOAD_FOLDER, filename)
+                    if os.path.isfile(filepath):
+                        debug_info["files"].append({
+                            "filename": filename,
+                            "size": os.path.getsize(filepath),
+                            "url": f"/static/profile_pictures/{filename}",
+                            "readable": os.access(filepath, os.R_OK),
+                            "modified": os.path.getmtime(filepath)
+                        })
+            except Exception as e:
+                debug_info["files_error"] = str(e)
+        
+        # Check database users
+        if realtime_db_ref:
+            try:
+                users_ref = realtime_db_ref.child('users')
+                users_data = users_ref.get() or {}
+                
+                for uid, user_data in users_data.items():
+                    profile_pic_url = user_data.get('profilePictureUrl')
+                    file_exists = False
+                    
+                    if profile_pic_url and profile_pic_url.startswith('/static/profile_pictures/'):
+                        filename = profile_pic_url.split('/')[-1]
+                        file_path = os.path.join(UPLOAD_FOLDER, filename)
+                        file_exists = os.path.exists(file_path)
+                    
+                    debug_info["database_users"].append({
+                        "uid": uid,
+                        "email": user_data.get('email'),
+                        "username": user_data.get('username'),
+                        "profilePictureUrl": profile_pic_url,
+                        "file_exists": file_exists
+                    })
+                    
+            except Exception as db_error:
+                debug_info["database_error"] = str(db_error)
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
     """Debug endpoint to check profile picture files and database entries"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
@@ -2075,7 +2278,7 @@ def debug_profile_pictures():
     except Exception as e:
         app.logger.error(f"Error in profile pictures debug: {e}")
         return jsonify({"error": str(e)}), 500
-    
+   
 ###################
 # HTML Page Links #
 ###################
@@ -2141,6 +2344,97 @@ def unsanitize_firebase_key(key):
 
 @app.route('/toggle-fave', methods=['POST'])
 def toggle_fave():
+    
+    """Toggle favorite status with enhanced error handling"""
+    
+    # Check authentication
+    if not session.get('authenticated') or not session.get('user'):
+        app.logger.warning("Unauthorized toggle-fave access")
+        return jsonify({"error": "User not logged in"}), 401
+    
+    if not realtime_db_ref:
+        app.logger.error("Database not available for toggle-fave")
+        return jsonify({"error": "Database temporarily unavailable"}), 503
+    
+    try:
+        user_id = session['user']
+        data = request.get_json()
+        
+        app.logger.info(f"Toggle fave request from user {user_id}: {data}")
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+            
+        variant = data.get('variant')
+        liked = data.get('liked')
+
+        if not variant:
+            return jsonify({"error": "Variant required"}), 400
+
+        # Sanitize the variant for Firebase path
+        sanitized_variant = sanitize_firebase_key(variant)
+        app.logger.info(f"Processing variant: {variant} -> {sanitized_variant}")
+
+        # Try database operation with retry logic
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+                existing_fave = favorites_ref.child(sanitized_variant).get()
+
+                app.logger.info(f"Existing favorite check (attempt {attempt + 1}): {existing_fave}")
+
+                if liked:
+                    # Add to favorites
+                    favorite_data = {
+                        'variant': variant,
+                        'sanitized_key': sanitized_variant,
+                        'timestamp': int(time.time() * 1000),
+                        'dateAdded': datetime.utcnow().isoformat() + 'Z',
+                        'userEmail': session.get('email', 'Unknown')
+                    }
+                    
+                    favorites_ref.child(sanitized_variant).set(favorite_data)
+                    app.logger.info(f"Added favorite: {variant} for user {user_id}")
+                    
+                    return jsonify({
+                        "status": "added", 
+                        "variant": variant, 
+                        "liked": True,
+                        "message": "Added to favorites"
+                    }), 200
+                else:
+                    # Remove from favorites
+                    if existing_fave:
+                        favorites_ref.child(sanitized_variant).delete()
+                        app.logger.info(f"Removed favorite: {variant} for user {user_id}")
+                        
+                        return jsonify({
+                            "status": "removed", 
+                            "variant": variant, 
+                            "liked": False,
+                            "message": "Removed from favorites"
+                        }), 200
+                    else:
+                        return jsonify({
+                            "status": "not_found", 
+                            "variant": variant, 
+                            "liked": False,
+                            "message": "Favorite not found"
+                        }), 200
+                
+                break  # Success, exit retry loop
+                
+            except Exception as db_error:
+                app.logger.warning(f"Database operation attempt {attempt + 1} failed: {db_error}")
+                if attempt == max_retries - 1:
+                    return jsonify({"error": "Database operation failed"}), 503
+                else:
+                    time.sleep(0.5 * (attempt + 1))  # Progressive delay
+            
+    except Exception as e:
+        app.logger.error(f"Error toggling favorite: {e}")
+        return jsonify({"error": "Failed to toggle favorite"}), 500
     
     """Toggle favorite status using Firebase Realtime Database with enhanced error handling"""
     
@@ -2245,6 +2539,64 @@ def toggle_fave():
         return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
 @app.route('/get-faves', methods=['POST'])
 def get_faves():
+    """Get user's favorites with enhanced error handling"""
+    
+    # Check authentication
+    if not session.get('authenticated') or not session.get('user'):
+        app.logger.warning("Unauthorized favorites access")
+        return jsonify([]), 200  # Return empty array for unauthenticated users
+    
+    if not realtime_db_ref:
+        app.logger.error("Database not available for favorites")
+        return jsonify([]), 200  # Return empty array instead of error
+    
+    try:
+        user_id = session['user']
+        app.logger.info(f"Getting favorites for user: {user_id}")
+        
+        # Try to get favorites with timeout handling
+        try:
+            favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+            favorites_data = favorites_ref.get()
+            
+            app.logger.info(f"Raw favorites data: {favorites_data}")
+            
+        except Exception as db_error:
+            app.logger.error(f"Database query failed for favorites: {db_error}")
+            return jsonify([]), 200  # Return empty array on database errors
+        
+        # Process favorites data
+        if not favorites_data:
+            app.logger.info(f"No favorites found for user {user_id}")
+            return jsonify([]), 200
+
+        # Convert to list format
+        favorite_variants = []
+        for sanitized_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                # Use the original variant name from the stored data
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
+                
+                complete_variant_data = {
+                    'variant': original_variant,
+                    'sanitized_key': sanitized_key,
+                    'timestamp': variant_data.get('timestamp', int(time.time() * 1000)),
+                    'dateAdded': variant_data.get('dateAdded', datetime.utcnow().isoformat() + 'Z'),
+                    'userEmail': variant_data.get('userEmail', session.get('email', 'Unknown'))
+                }
+                
+                favorite_variants.append(complete_variant_data)
+
+        app.logger.info(f"Successfully retrieved {len(favorite_variants)} favorites for user {user_id}")
+        
+        # Sort by timestamp (newest first)
+        favorite_variants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
+        return jsonify(favorite_variants), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error retrieving favorites: {e}")
+        return jsonify([]), 200  # Return empty array instead of error
     """Get user's favorites using Firebase Realtime Database with enhanced error handling"""
     
     # FIXED: Better session check - check for authenticated flag
