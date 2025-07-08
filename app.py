@@ -417,6 +417,78 @@ def verify_token():
         decoded_token = auth.verify_id_token(id_token)
         uid = decoded_token['uid']
         
+        # Get user profile data
+        username = None
+        profile_picture_url = None
+        
+        if realtime_db_ref:
+            try:
+                user_ref = realtime_db_ref.child('users').child(uid)
+                user_data = user_ref.get()
+                
+                if user_data:
+                    username = user_data.get('username')
+                    profile_picture_url = user_data.get('profilePictureUrl')
+                    
+                    # Ensure profile picture URL is properly formatted
+                    if profile_picture_url and not profile_picture_url.startswith('/'):
+                        if not profile_picture_url.startswith('http'):
+                            profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
+                            
+                app.logger.info(f"📱 User data retrieved: username={username}, picture={profile_picture_url}")
+                
+            except Exception as db_error:
+                app.logger.error(f"❌ Database error retrieving user data: {db_error}")
+                username = email  # Fallback to email as username
+        else:
+            app.logger.warning("⚠️ Database not available, using email as username")
+            username = email  # Fallback when database is not available
+        
+        # Set comprehensive session data
+        session['user'] = uid
+        session['email'] = email
+        session['username'] = username
+        session['profile_picture_url'] = profile_picture_url
+        session['idToken'] = id_token
+        session['authenticated'] = True
+        session['auth_time'] = int(time.time())
+        
+        # Make session permanent (expires in 30 days)
+        session.permanent = True
+        app.permanent_session_lifetime = timedelta(days=30)
+        
+        app.logger.info(f"✅ User {email} logged in successfully with username: {username}, profile_picture: {profile_picture_url}")
+        return jsonify({
+            "status": "success", 
+            "message": "Authentication successful",
+            "username": username,
+            "profile_picture_url": profile_picture_url,
+            "uid": uid
+        }), 200
+        
+    except firebase_admin.auth.InvalidIdTokenError as e:
+        app.logger.error(f"Invalid token error: {e}")
+        return jsonify({"status": "error", "message": "Invalid token"}), 401
+    except Exception as e:
+        app.logger.error(f"Token verification failed: {str(e)}")
+        return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
+    try:
+        data = request.get_json()
+        if not data:
+            app.logger.error("No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+            
+        id_token = data.get('idToken')
+        email = data.get('email')
+        
+        if not id_token:
+            app.logger.error("No token provided in request")
+            return jsonify({"status": "error", "message": "No token provided"}), 400
+        
+        # Verify token with Firebase Admin
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        
         # FIXED: Better database availability check
         username = None
         profile_picture_url = None
@@ -474,178 +546,7 @@ def verify_token():
     except Exception as e:
         app.logger.error(f"Token verification failed: {str(e)}")
         return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
-    if not realtime_db_ref:
-        app.logger.error("Database not available for token verification")
-        return jsonify({"status": "error", "message": "Database not available"}), 500
-    
-    try:
-        data = request.get_json()
-        if not data:
-            app.logger.error("No JSON data received")
-            return jsonify({"status": "error", "message": "No data provided"}), 400
-            
-        id_token = data.get('idToken')
-        email = data.get('email')
-        
-        if not id_token:
-            app.logger.error("No token provided in request")
-            return jsonify({"status": "error", "message": "No token provided"}), 400
-        
-        # Verify token with Firebase Admin
-        decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
-        
-        # Get user profile data including username AND profile picture
-        user_ref = realtime_db_ref.child('users').child(uid)
-        user_data = user_ref.get()
-        
-        username = None
-        profile_picture_url = None
-        if user_data:
-            username = user_data.get('username')
-            profile_picture_url = user_data.get('profilePictureUrl')
-            
-            # FIXED: Ensure profile picture URL is properly formatted
-            if profile_picture_url and not profile_picture_url.startswith('/'):
-                if not profile_picture_url.startswith('http'):
-                    profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
-        
-        # Set comprehensive session data
-        session['user'] = uid
-        session['email'] = email
-        session['username'] = username
-        session['profile_picture_url'] = profile_picture_url  # Store in session
-        session['idToken'] = id_token
-        session['authenticated'] = True
-        session['auth_time'] = int(time.time())
-        
-        # Make session permanent (expires in 30 days)
-        session.permanent = True
-        app.permanent_session_lifetime = timedelta(days=30)
-        
-        app.logger.info(f"✅ User {email} logged in successfully with username: {username}, profile_picture: {profile_picture_url}")
-        return jsonify({
-            "status": "success", 
-            "message": "Authentication successful",
-            "username": username,
-            "profile_picture_url": profile_picture_url,
-            "uid": uid
-        }), 200
-        
-    except firebase_admin.auth.InvalidIdTokenError as e:
-        app.logger.error(f"Invalid token error: {e}")
-        return jsonify({"status": "error", "message": "Invalid token"}), 401
-    except Exception as e:
-        app.logger.error(f"Token verification failed: {str(e)}")
-        return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
-    if not realtime_db_ref:
-        app.logger.error("Database not available for token verification")
-        return jsonify({"status": "error", "message": "Database not available"}), 500
-    
-    try:
-        data = request.get_json()
-        if not data:
-            app.logger.error("No JSON data received")
-            return jsonify({"status": "error", "message": "No data provided"}), 400
-            
-        id_token = data.get('idToken')
-        email = data.get('email')
-        
-        if not id_token:
-            app.logger.error("No token provided in request")
-            return jsonify({"status": "error", "message": "No token provided"}), 400
-        
-        # Verify token with Firebase Admin
-        decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
-        
-        # Get user profile data including username
-        user_ref = realtime_db_ref.child('users').child(uid)
-        user_data = user_ref.get()
-        
-        username = None
-        profile_picture_url = None
-        if user_data:
-            username = user_data.get('username')
-            profile_picture_url = user_data.get('profilePictureUrl')
-        
-        # Set comprehensive session data
-        session['user'] = uid
-        session['email'] = email
-        session['username'] = username
-        session['profile_picture_url'] = profile_picture_url
-        session['idToken'] = id_token
-        session['authenticated'] = True
-        session['auth_time'] = int(time.time())
-        
-        # Make session permanent (expires in 30 days)
-        session.permanent = True
-        app.permanent_session_lifetime = timedelta(days=30)
-        
-        app.logger.info(f"✅ User {email} logged in successfully with username: {username}")
-        return jsonify({
-            "status": "success", 
-            "message": "Authentication successful",
-            "username": username,
-            "profile_picture_url": profile_picture_url,
-            "uid": uid
-        }), 200
-        
-    except firebase_admin.auth.InvalidIdTokenError as e:
-        app.logger.error(f"Invalid token error: {e}")
-        return jsonify({"status": "error", "message": "Invalid token"}), 401
-    except Exception as e:
-        app.logger.error(f"Token verification failed: {str(e)}")
-        return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
-    if not firestore_db:
-        app.logger.error("Database not available for token verification")
-        return jsonify({"status": "error", "message": "Database not available"}), 500
-    
-    try:
-        data = request.get_json()
-        if not data:
-            app.logger.error("No JSON data received")
-            return jsonify({"status": "error", "message": "No data provided"}), 400
-            
-        id_token = data.get('idToken')
-        email = data.get('email')
-        
-        if not id_token:
-            app.logger.error("No token provided in request")
-            return jsonify({"status": "error", "message": "No token provided"}), 400
-        
-        # Verify token with Firebase Admin
-        decoded_token = auth.verify_id_token(id_token)
-        uid = decoded_token['uid']
-        
-        # Get user profile data including username
-        user_ref = realtime_db_ref.child('users').child(uid)
-        user_data = user_ref.get()
-        
-        username = None
-        if user_data:
-            username = user_data.get('username')
-        
-        # Set enhanced session
-        session['user'] = uid
-        session['email'] = email
-        session['username'] = username  # NEW: Store username in session
-        session['idToken'] = id_token
-        
-        app.logger.info(f"✅ User {email} logged in successfully with username: {username}")
-        return jsonify({
-            "status": "success", 
-            "message": "Authentication successful",
-            "username": username
-        }), 200
-        
-    except firebase_admin.auth.InvalidIdTokenError as e:
-        app.logger.error(f"Invalid token error: {e}")
-        return jsonify({"status": "error", "message": "Invalid token"}), 401
-    except Exception as e:
-        app.logger.error(f"Token verification failed: {str(e)}")
-        return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
-    
+ 
 @app.route('/check-session', methods=['GET'])
 def check_session():
     """Check if user has a valid session with profile picture data"""
@@ -2063,147 +1964,6 @@ def serve_profile_picture(filename):
         app.logger.error(f"❌ Error serving profile picture {filename}: {e}")
         return "Error serving profile picture", 500
 
-# NEW: Add missing refresh-session route if it doesn't exist (ADD THIS ONLY IF IT DOESN'T EXIST)
-try:
-    # Check if the route already exists by testing the URL rule
-    existing_rules = [rule.rule for rule in app.url_map.iter_rules()]
-    if '/refresh-session' not in existing_rules:
-        @app.route('/refresh-session', methods=['POST'])
-        def refresh_session():
-            """Refresh user session"""
-            try:
-                if session.get('authenticated') and session.get('user'):
-                    # Update session timestamp
-                    session['last_refresh'] = int(time.time())
-                    app.logger.info(f"✅ Session refreshed for user: {session.get('email')}")
-                    return jsonify({"status": "success", "message": "Session refreshed"}), 200
-                else:
-                    app.logger.warning("⚠️ Session refresh requested but user not authenticated")
-                    return jsonify({"status": "error", "message": "Not authenticated"}), 401
-            except Exception as e:
-                app.logger.error(f"❌ Error refreshing session: {e}")
-                return jsonify({"status": "error", "message": "Session refresh failed"}), 500
-    else:
-        app.logger.info("refresh-session route already exists, skipping creation")
-except Exception as e:
-    app.logger.warning(f"Could not check for existing refresh-session route: {e}")
-
-# NEW: Debug route for profile pictures (ADD ONLY IF IT DOESN'T EXIST)
-try:
-    existing_rules = [rule.rule for rule in app.url_map.iter_rules()]
-    if '/debug/profile-pictures' not in existing_rules:
-        @app.route('/debug/profile-pictures')
-        def debug_profile_pictures_new():
-            """Debug endpoint to check profile picture files and database entries"""
-            if not realtime_db_ref:
-                return jsonify({"error": "Database not available"}), 500
-            
-            try:
-                # Check files in upload directory
-                files_info = []
-                upload_folder_exists = os.path.exists(UPLOAD_FOLDER)
-                
-                if upload_folder_exists:
-                    try:
-                        for filename in os.listdir(UPLOAD_FOLDER):
-                            filepath = os.path.join(UPLOAD_FOLDER, filename)
-                            if os.path.isfile(filepath):
-                                files_info.append({
-                                    "filename": filename,
-                                    "size": os.path.getsize(filepath),
-                                    "url": f"/static/profile_pictures/{filename}",
-                                    "full_path": filepath
-                                })
-                    except Exception as e:
-                        app.logger.error(f"Error listing profile picture files: {e}")
-                
-                # Check database entries
-                users_ref = realtime_db_ref.child('users')
-                users_data = users_ref.get() or {}
-                
-                users_with_pictures = []
-                for uid, user_data in users_data.items():
-                    if user_data.get('profilePictureUrl'):
-                        users_with_pictures.append({
-                            "uid": uid,
-                            "email": user_data.get('email'),
-                            "username": user_data.get('username'),
-                            "profilePictureUrl": user_data.get('profilePictureUrl')
-                        })
-                
-                return jsonify({
-                    "upload_folder_exists": upload_folder_exists,
-                    "upload_folder_path": UPLOAD_FOLDER,
-                    "upload_folder_writable": os.access(UPLOAD_FOLDER, os.W_OK) if upload_folder_exists else False,
-                    "files_count": len(files_info),
-                    "files": files_info,
-                    "users_with_pictures_count": len(users_with_pictures),
-                    "users_with_pictures": users_with_pictures,
-                    "current_user_session": {
-                        "user": session.get('user'),
-                        "email": session.get('email'),
-                        "profile_picture_url": session.get('profile_picture_url'),
-                        "authenticated": session.get('authenticated')
-                    }
-                })
-                
-            except Exception as e:
-                app.logger.error(f"Error in profile pictures debug: {e}")
-                return jsonify({"error": str(e)}), 500
-    else:
-        app.logger.info("debug/profile-pictures route already exists, skipping creation")
-except Exception as e:
-    app.logger.warning(f"Could not check for existing debug/profile-pictures route: {e}")
-
-# NEW: Debug route for favorites (ADD ONLY IF IT DOESN'T EXIST)
-try:
-    existing_rules = [rule.rule for rule in app.url_map.iter_rules()]
-    if '/debug/favorites' not in existing_rules:
-        @app.route('/debug/favorites')
-        def debug_favorites_new():
-            """Debug endpoint to check favorites data"""
-            if not realtime_db_ref:
-                return jsonify({"error": "Database not available"}), 500
-            
-            try:
-                user_id = session.get('user')
-                if not user_id:
-                    return jsonify({"error": "No user in session"}), 401
-                
-                # Get favorites from database
-                favorites_ref = realtime_db_ref.child('favorites').child(user_id)
-                favorites_data = favorites_ref.get() or {}
-                
-                # Get all favorites for debugging
-                all_favorites_ref = realtime_db_ref.child('favorites')
-                all_favorites = all_favorites_ref.get() or {}
-                
-                return jsonify({
-                    "session_info": {
-                        "user": session.get('user'),
-                        "email": session.get('email'),
-                        "authenticated": session.get('authenticated')
-                    },
-                    "user_favorites": {
-                        "count": len(favorites_data),
-                        "data": favorites_data
-                    },
-                    "all_users_with_favorites": {
-                        "users": list(all_favorites.keys()),
-                        "total_count": len(all_favorites)
-                    }
-                })
-                
-            except Exception as e:
-                app.logger.error(f"Error in favorites debug: {e}")
-                return jsonify({"error": str(e)}), 500
-    else:
-        app.logger.info("debug/favorites route already exists, skipping creation")
-except Exception as e:
-    app.logger.warning(f"Could not check for existing debug/favorites route: {e}")
-
-# Add this at the end of your app.py file to log all routes
-if __name__ == "__main__":
     port = int(os.environ.get('PORT', 8000))
     app.logger.info(f"Starting app on port {port}")
     
@@ -2241,6 +2001,81 @@ def debug_users():
         
     except Exception as e:
         app.logger.error(f"Error fetching users debug info: {e}")
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/refresh-session', methods=['POST'])
+def refresh_session():
+    """Refresh user session"""
+    try:
+        if session.get('authenticated') and session.get('user'):
+            # Update session timestamp
+            session['last_refresh'] = int(time.time())
+            app.logger.info(f"✅ Session refreshed for user: {session.get('email')}")
+            return jsonify({"status": "success", "message": "Session refreshed"}), 200
+        else:
+            app.logger.warning("⚠️ Session refresh requested but user not authenticated")
+            return jsonify({"status": "error", "message": "Not authenticated"}), 401
+    except Exception as e:
+        app.logger.error(f"❌ Error refreshing session: {e}")
+        return jsonify({"status": "error", "message": "Session refresh failed"}), 500
+    
+@app.route('/debug/profile-pictures')
+def debug_profile_pictures():
+    """Debug endpoint to check profile picture files and database entries"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        # Check files in upload directory
+        files_info = []
+        upload_folder_exists = os.path.exists(UPLOAD_FOLDER)
+        
+        if upload_folder_exists:
+            try:
+                for filename in os.listdir(UPLOAD_FOLDER):
+                    filepath = os.path.join(UPLOAD_FOLDER, filename)
+                    if os.path.isfile(filepath):
+                        files_info.append({
+                            "filename": filename,
+                            "size": os.path.getsize(filepath),
+                            "url": f"/static/profile_pictures/{filename}",
+                            "full_path": filepath
+                        })
+            except Exception as e:
+                app.logger.error(f"Error listing profile picture files: {e}")
+        
+        # Check database entries
+        users_ref = realtime_db_ref.child('users')
+        users_data = users_ref.get() or {}
+        
+        users_with_pictures = []
+        for uid, user_data in users_data.items():
+            if user_data.get('profilePictureUrl'):
+                users_with_pictures.append({
+                    "uid": uid,
+                    "email": user_data.get('email'),
+                    "username": user_data.get('username'),
+                    "profilePictureUrl": user_data.get('profilePictureUrl')
+                })
+        
+        return jsonify({
+            "upload_folder_exists": upload_folder_exists,
+            "upload_folder_path": UPLOAD_FOLDER,
+            "upload_folder_writable": os.access(UPLOAD_FOLDER, os.W_OK) if upload_folder_exists else False,
+            "files_count": len(files_info),
+            "files": files_info,
+            "users_with_pictures_count": len(users_with_pictures),
+            "users_with_pictures": users_with_pictures,
+            "current_user_session": {
+                "user": session.get('user'),
+                "email": session.get('email'),
+                "profile_picture_url": session.get('profile_picture_url'),
+                "authenticated": session.get('authenticated')
+            }
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in profile pictures debug: {e}")
         return jsonify({"error": str(e)}), 500
     
 ###################
@@ -2763,6 +2598,46 @@ def initialize_firebase_safely():
         realtime_db_ref = None
         firestore_db = None
         return False
+
+@app.route('/debug/favorites')
+def debug_favorites():
+    """Debug endpoint to check favorites data"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        user_id = session.get('user')
+        if not user_id:
+            return jsonify({"error": "No user in session"}), 401
+        
+        # Get favorites from database
+        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+        favorites_data = favorites_ref.get() or {}
+        
+        # Get all favorites for debugging
+        all_favorites_ref = realtime_db_ref.child('favorites')
+        all_favorites = all_favorites_ref.get() or {}
+        
+        return jsonify({
+            "session_info": {
+                "user": session.get('user'),
+                "email": session.get('email'),
+                "authenticated": session.get('authenticated')
+            },
+            "user_favorites": {
+                "count": len(favorites_data),
+                "data": favorites_data
+            },
+            "all_users_with_favorites": {
+                "users": list(all_favorites.keys()),
+                "total_count": len(all_favorites)
+            }
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in favorites debug: {e}")
+        return jsonify({"error": str(e)}), 500
+    
 #########################
 # Filter Function Logic #
 #########################
@@ -3890,8 +3765,6 @@ def debug_profile_pictures():
         app.logger.error(f"Error in profile pictures debug: {e}")
         return jsonify({"error": str(e)}), 500
 
-@app.route('/refresh-session', methods=['POST'])
-def refresh_session():
     """Refresh user session"""
     try:
         if session.get('authenticated') and session.get('user'):
@@ -3906,9 +3779,6 @@ def refresh_session():
         app.logger.error(f"❌ Error refreshing session: {e}")
         return jsonify({"status": "error", "message": "Session refresh failed"}), 500
 
-# NEW: Debug endpoint for profile pictures (ADD THIS NEW ROUTE)
-@app.route('/debug/profile-pictures')
-def debug_profile_pictures():
     """Debug endpoint to check profile picture files and database entries"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
@@ -3966,46 +3836,6 @@ def debug_profile_pictures():
         app.logger.error(f"Error in profile pictures debug: {e}")
         return jsonify({"error": str(e)}), 500
 
-# NEW: Debug endpoint for favorites (ADD THIS NEW ROUTE)
-@app.route('/debug/favorites')
-def debug_favorites():
-    """Debug endpoint to check favorites data"""
-    if not realtime_db_ref:
-        return jsonify({"error": "Database not available"}), 500
-    
-    try:
-        user_id = session.get('user')
-        if not user_id:
-            return jsonify({"error": "No user in session"}), 401
-        
-        # Get favorites from database
-        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
-        favorites_data = favorites_ref.get() or {}
-        
-        # Get all favorites for debugging
-        all_favorites_ref = realtime_db_ref.child('favorites')
-        all_favorites = all_favorites_ref.get() or {}
-        
-        return jsonify({
-            "session_info": {
-                "user": session.get('user'),
-                "email": session.get('email'),
-                "authenticated": session.get('authenticated')
-            },
-            "user_favorites": {
-                "count": len(favorites_data),
-                "data": favorites_data
-            },
-            "all_users_with_favorites": {
-                "users": list(all_favorites.keys()),
-                "total_count": len(all_favorites)
-            }
-        })
-        
-    except Exception as e:
-        app.logger.error(f"Error in favorites debug: {e}")
-        return jsonify({"error": str(e)}), 500
-    
 ##################
 # Error handlers #
 ##################
@@ -4020,7 +3850,6 @@ def internal_error(error):
     app.logger.error(f"500 error: {error}")
     return jsonify({"error": "Internal server error"}), 500
 
-if __name__ == "__main__":
     port = int(os.environ.get('PORT', 8000))
     app.logger.info(f"Starting app on port {port}")
     app.run(host='0.0.0.0', port=port, debug=False)
@@ -4058,3 +3887,14 @@ def test_db_connection():
             "error": str(e),
             "realtime_db_ref_exists": realtime_db_ref is not None
         }), 500
+        
+if __name__ == "__main__":
+    port = int(os.environ.get('PORT', 8000))
+    app.logger.info(f"Starting app on port {port}")
+    
+    # Log all registered routes for debugging
+    app.logger.info("📋 Registered routes:")
+    for rule in app.url_map.iter_rules():
+        app.logger.info(f"  {rule.rule} -> {rule.endpoint}")
+    
+    app.run(host='0.0.0.0', port=port, debug=False)
