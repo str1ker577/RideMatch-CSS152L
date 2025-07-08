@@ -5738,7 +5738,7 @@ async function loadFavorites() {
                 const specs = await specResponse.json();
                 console.log('✅ Got specs for', car.variant, ':', specs);
                 
-                // ENHANCED: Better image URL determination with multiple fallbacks
+                // ENHANCED: Better image URL determination with comprehensive fallback
                 let imageUrl = determineCarImageUrl(specs);
                 console.log('🖼️ Using image URL for', car.variant, ':', imageUrl);
                 
@@ -5752,7 +5752,7 @@ async function loadFavorites() {
                 card.innerHTML = `
                     <img src="${imageUrl}" 
                          alt="${specs.Brand || 'Unknown'} ${specs.Model || 'Model'}"
-                         onerror="handleImageError(this, '${specs.Brand || 'Unknown'}', '${specs.Model || 'Model'}')"
+                         onerror="handleImageError(this, '${specs.Brand || 'Unknown'}', '${specs.Model || 'Model'}', '${specs.Variant || ''}')"
                          onload="console.log('✅ Image loaded for ${car.variant}')">
                     <div class="name">${specs.Brand || 'Unknown'} ${specs.Model || 'Model'}</div>
                     <div class="variant-name">${car.variant}</div>
@@ -5788,6 +5788,13 @@ async function loadFavorites() {
         
         console.log(`✅ Favorites loading completed - ${successCount}/${favorites.length} cards displayed`);
         
+        // NEW: Debug image issues if few images loaded
+        if (successCount > 0) {
+            setTimeout(() => {
+                debugImageIssues();
+            }, 2000);
+        }
+        
     } catch (error) {
         console.error("❌ Error loading favorites:", error);
         cardContainer.innerHTML = `
@@ -5810,19 +5817,35 @@ function determineCarImageUrl(specs) {
         return specs.Image;
     }
     
-    // Priority 2: Try to construct path from brand and model
+    // Priority 2: Try to construct path from brand and model with multiple patterns
     if (specs.Brand && specs.Model) {
         const brand = specs.Brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         const model = specs.Model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        const variant = specs.Variant ? specs.Variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
         
-        // Try multiple possible image paths
+        // Try multiple possible image paths with different extensions
         const possiblePaths = [
+            // Brand + Model + Variant (most specific)
+            ...(variant ? [
+                `/static/resources/${brand}_${model}_${variant}.webp`,
+                `/static/resources/${brand}_${model}_${variant}.png`,
+                `/static/resources/${brand}_${model}_${variant}.jpg`
+            ] : []),
+            
+            // Brand + Model
+            `/static/resources/${brand}_${model}.webp`,
             `/static/resources/${brand}_${model}.png`,
             `/static/resources/${brand}_${model}.jpg`,
+            
+            // Model only
+            `/static/resources/${model}.webp`,
             `/static/resources/${model}.png`,
             `/static/resources/${model}.jpg`,
-            `/static/car_images/${brand}_${model}.png`,
-            `/static/car_images/${brand}_${model}.jpg`
+            
+            // Brand only
+            `/static/resources/${brand}.webp`,
+            `/static/resources/${brand}.png`,
+            `/static/resources/${brand}.jpg`
         ];
         
         console.log('🔍 Trying constructed paths for', specs.Brand, specs.Model, ':', possiblePaths[0]);
@@ -5931,6 +5954,7 @@ function showCarSpecsPopup(specs, variant, imageUrl) {
 // Make functions globally available
 window.handleImageError = handleImageError;
 window.showCarSpecsPopup = showCarSpecsPopup;
+window.debugImageIssues = debugImageIssues;
 
 // FIXED: Better removeFavoriteFromDisplay function
 async function removeFavoriteFromDisplay(variant, buttonElement) {
@@ -6016,7 +6040,6 @@ async function debugFavorites() {
     }
 }
 
-
 function autoDebugIssues() {
     // Check if user is logged in but has no favorites loaded
     if ((currentUser || userName) && userFavorites.size === 0) {
@@ -6037,6 +6060,144 @@ function autoDebugIssues() {
         }, 3000);
     }
 }
+
+function handleImageError(imgElement, brand, model, variant = null) {
+    console.log('❌ Image failed to load for', brand, model, variant, '- trying fallbacks');
+    
+    if (!imgElement.dataset.fallbackAttempt) {
+        imgElement.dataset.fallbackAttempt = "1";
+    }
+    
+    const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
+    
+    // Clean names for filenames
+    const brand_clean = brand ? brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    const model_clean = model ? model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    const variant_clean = variant ? variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    
+    // Comprehensive fallback list with all possible combinations and extensions
+    const fallbacks = [
+        // Variant-specific attempts (if variant provided)
+        ...(variant_clean ? [
+            `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.webp`,
+            `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.png`,
+            `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.jpg`,
+        ] : []),
+        
+        // Brand + Model combinations
+        `/static/resources/${brand_clean}_${model_clean}.webp`,
+        `/static/resources/${brand_clean}_${model_clean}.png`,
+        `/static/resources/${brand_clean}_${model_clean}.jpg`,
+        `/static/resources/${brand_clean}_${model_clean}.jpeg`,
+        `/static/resources/${brand_clean}_${model_clean}.gif`,
+        
+        // Model only
+        `/static/resources/${model_clean}.webp`,
+        `/static/resources/${model_clean}.png`,
+        `/static/resources/${model_clean}.jpg`,
+        `/static/resources/${model_clean}.jpeg`,
+        
+        // Brand only
+        `/static/resources/${brand_clean}.webp`,
+        `/static/resources/${brand_clean}.png`,
+        `/static/resources/${brand_clean}.jpg`,
+        
+        // Try some common variations
+        `/static/resources/${model_clean}_${brand_clean}.webp`,
+        `/static/resources/${model_clean}_${brand_clean}.png`,
+        
+        // Last resort fallbacks
+        '/static/resources/default_car.webp',
+        '/static/resources/default_car.png',
+        '/static/resources/tesr.png',
+        '/static/resources/placeholder.png',
+        
+        // Data URL fallback (will always work)
+        'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkNhciBJbWFnZTwvdGV4dD48L3N2Zz4='
+    ];
+    
+    if (attemptIndex < fallbacks.length) {
+        const nextPath = fallbacks[attemptIndex];
+        console.log(`🔄 Trying fallback ${attemptIndex + 1}/${fallbacks.length}:`, nextPath);
+        
+        imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
+        imgElement.src = nextPath;
+        
+        // If we're at the data URL (last fallback), remove the error handler to prevent infinite loop
+        if (nextPath.startsWith('data:')) {
+            imgElement.onerror = null;
+            console.log('📷 Using final data URL fallback');
+        }
+    } else {
+        console.log('❌ All fallbacks exhausted, removing error handler');
+        imgElement.onerror = null;
+    }
+}
+
+async function testImageAvailability(imagePath) {
+    return new Promise((resolve) => {
+        const testImg = new Image();
+        testImg.onload = () => {
+            console.log('✅ Image available:', imagePath);
+            resolve(true);
+        };
+        testImg.onerror = () => {
+            console.log('❌ Image not available:', imagePath);
+            resolve(false);
+        };
+        testImg.src = imagePath;
+        
+        // Timeout after 3 seconds
+        setTimeout(() => {
+            console.log('⏰ Image test timeout:', imagePath);
+            resolve(false);
+        }, 3000);
+    });
+}
+
+async function debugImageIssues() {
+    try {
+        console.log('🔍 Debugging image issues...');
+        
+        // Test the debug endpoint
+        const response = await fetch('/debug/images');
+        if (response.ok) {
+            const imageData = await response.json();
+            console.log('📁 Available images:', imageData);
+            
+            // Test a few random images
+            if (imageData.image_files && imageData.image_files.length > 0) {
+                console.log('🧪 Testing random images...');
+                const testImages = imageData.image_files.slice(0, 3); // Test first 3 images
+                
+                for (const imageInfo of testImages) {
+                    const isAvailable = await testImageAvailability(imageInfo.url);
+                    console.log(`📸 ${imageInfo.filename}: ${isAvailable ? 'Available' : 'Not Available'}`);
+                }
+            }
+        } else {
+            console.error('❌ Failed to get image debug data');
+        }
+        
+        // Test specific car image patterns
+        const testPatterns = [
+            '/static/resources/toyota_vios.webp',
+            '/static/resources/volkswagen_id6.webp',
+            '/static/resources/civic_black.png',
+            '/static/resources/avanza_black.webp'
+        ];
+        
+        console.log('🧪 Testing specific patterns...');
+        for (const pattern of testPatterns) {
+            const isAvailable = await testImageAvailability(pattern);
+            console.log(`📸 ${pattern}: ${isAvailable ? 'Available' : 'Not Available'}`);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error debugging images:', error);
+    }
+}
+
 //////////////////////////////
 // Allows users to change  //
 // the color of the car   //
