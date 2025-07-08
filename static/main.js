@@ -5639,7 +5639,7 @@ async function loadFavorites() {
         return;
     }
 
-    // FIXED: Remove session reference and use the available auth variables
+    // Authentication check
     if (!currentUser && !userName && !userDisplayName && !(auth && auth.currentUser)) {
         console.log('❌ User not authenticated for loading favorites');
         cardContainer.innerHTML = `
@@ -5721,6 +5721,8 @@ async function loadFavorites() {
         // Clear container and start loading cars
         cardContainer.innerHTML = "";
         
+        let successCount = 0;
+        
         for (const car of favorites) {
             console.log('🔍 Processing car:', car.variant);
             
@@ -5734,15 +5736,24 @@ async function loadFavorites() {
                 }
                 
                 const specs = await specResponse.json();
-                console.log('✅ Got specs for', car.variant);
+                console.log('✅ Got specs for', car.variant, ':', specs);
+                
+                // ENHANCED: Better image URL determination with multiple fallbacks
+                let imageUrl = determineCarImageUrl(specs);
+                console.log('🖼️ Using image URL for', car.variant, ':', imageUrl);
                 
                 // Create and add card
                 const card = document.createElement("div");
                 card.className = "card";
+                card.style.opacity = "0";
+                card.style.transform = "translateY(20px)";
+                card.style.transition = "all 0.3s ease";
+                
                 card.innerHTML = `
-                    <img src="${specs.Image || '/static/resources/default_car.png'}" 
-                         alt="${specs.Model || 'Car'}"
-                         onerror="this.src='/static/resources/default_car.png';">
+                    <img src="${imageUrl}" 
+                         alt="${specs.Brand || 'Unknown'} ${specs.Model || 'Model'}"
+                         onerror="handleImageError(this, '${specs.Brand || 'Unknown'}', '${specs.Model || 'Model'}')"
+                         onload="console.log('✅ Image loaded for ${car.variant}')">
                     <div class="name">${specs.Brand || 'Unknown'} ${specs.Model || 'Model'}</div>
                     <div class="variant-name">${car.variant}</div>
                     <div class="favorite-actions">
@@ -5752,14 +5763,30 @@ async function loadFavorites() {
                     </div>
                 `;
                 
+                // Add click event for popup
+                card.addEventListener("click", function(e) {
+                    if (e.target.closest('.remove-favorite-btn')) return;
+                    
+                    console.log("🔍 Card clicked - showing specs for:", car.variant);
+                    showCarSpecsPopup(specs, car.variant, imageUrl);
+                });
+                
                 cardContainer.appendChild(card);
+                
+                // Animate card appearance
+                setTimeout(() => {
+                    card.style.opacity = "1";
+                    card.style.transform = "translateY(0)";
+                }, successCount * 100);
+                
+                successCount++;
                 
             } catch (error) {
                 console.error('❌ Error processing', car.variant, ':', error);
             }
         }
         
-        console.log('✅ Favorites loading completed');
+        console.log(`✅ Favorites loading completed - ${successCount}/${favorites.length} cards displayed`);
         
     } catch (error) {
         console.error("❌ Error loading favorites:", error);
@@ -5772,6 +5799,138 @@ async function loadFavorites() {
         `;
     }
 }
+
+// NEW: Enhanced function to determine the best image URL for a car
+function determineCarImageUrl(specs) {
+    console.log('🔍 Determining image URL for specs:', specs);
+    
+    // Priority 1: Use the Image field if it exists and is valid
+    if (specs.Image && specs.Image.trim() !== '' && specs.Image !== 'N/A') {
+        console.log('📸 Using specs.Image:', specs.Image);
+        return specs.Image;
+    }
+    
+    // Priority 2: Try to construct path from brand and model
+    if (specs.Brand && specs.Model) {
+        const brand = specs.Brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        const model = specs.Model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        
+        // Try multiple possible image paths
+        const possiblePaths = [
+            `/static/resources/${brand}_${model}.png`,
+            `/static/resources/${brand}_${model}.jpg`,
+            `/static/resources/${model}.png`,
+            `/static/resources/${model}.jpg`,
+            `/static/car_images/${brand}_${model}.png`,
+            `/static/car_images/${brand}_${model}.jpg`
+        ];
+        
+        console.log('🔍 Trying constructed paths for', specs.Brand, specs.Model, ':', possiblePaths[0]);
+        return possiblePaths[0]; // Return the first option, handleImageError will try others
+    }
+    
+    // Priority 3: Default fallback
+    console.log('📸 Using default fallback image');
+    return '/static/resources/default_car.png';
+}
+
+// NEW: Enhanced image error handler with multiple fallback attempts
+function handleImageError(imgElement, brand, model) {
+    console.log('❌ Image failed to load for', brand, model, '- trying fallbacks');
+    
+    if (!imgElement.dataset.fallbackAttempt) {
+        imgElement.dataset.fallbackAttempt = "1";
+        
+        // Try different image extensions and paths
+        const brand_clean = brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        const model_clean = model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        
+        const fallbacks = [
+            `/static/resources/${brand_clean}_${model_clean}.jpg`,
+            `/static/resources/${model_clean}.png`,
+            `/static/resources/${model_clean}.jpg`,
+            `/static/car_images/${brand_clean}_${model_clean}.png`,
+            `/static/car_images/${brand_clean}_${model_clean}.jpg`,
+            `/static/resources/tesr.png`, // Your existing fallback
+            '/static/resources/default_car.png'
+        ];
+        
+        const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
+        
+        if (attemptIndex < fallbacks.length) {
+            console.log(`🔄 Trying fallback ${attemptIndex + 1}:`, fallbacks[attemptIndex]);
+            imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
+            imgElement.src = fallbacks[attemptIndex];
+        } else {
+            console.log('❌ All fallbacks failed, using final default');
+            imgElement.src = '/static/resources/default_car.png';
+            imgElement.onerror = null; // Prevent infinite loop
+        }
+    } else {
+        // Continue with next fallback
+        const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
+        const fallbacks = [
+            `/static/resources/${brand.toLowerCase().replace(/\s+/g, '_')}_${model.toLowerCase().replace(/\s+/g, '_')}.jpg`,
+            `/static/resources/${model.toLowerCase().replace(/\s+/g, '_')}.png`,
+            `/static/resources/tesr.png`,
+            '/static/resources/default_car.png'
+        ];
+        
+        if (attemptIndex < fallbacks.length) {
+            console.log(`🔄 Trying fallback ${attemptIndex + 1}:`, fallbacks[attemptIndex]);
+            imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
+            imgElement.src = fallbacks[attemptIndex];
+        } else {
+            console.log('❌ Final fallback - removing error handler');
+            imgElement.src = '/static/resources/default_car.png';
+            imgElement.onerror = null;
+        }
+    }
+}
+
+// NEW: Function to show car specs popup (if the popup functionality exists)
+function showCarSpecsPopup(specs, variant, imageUrl) {
+    // Check if popup elements exist
+    const carTitleElement = document.querySelector(".car-title");
+    const imgElement = document.querySelector(".img-fave-frame img");
+    const specContainer = document.querySelector(".spec-fave-frame .spec-card-container");
+    
+    if (carTitleElement && imgElement && specContainer) {
+        // Populate the popup
+        carTitleElement.textContent = `${specs.Brand} ${specs.Model}`;
+        imgElement.src = imageUrl;
+        imgElement.onerror = function() { 
+            handleImageError(this, specs.Brand, specs.Model);
+        };
+        
+        specContainer.innerHTML = `
+            <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${specs.Brand || 'N/A'}</span></div>
+            <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${specs.Model || 'N/A'}</span></div>
+            <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${specs.BodyType || 'N/A'}</span></div>
+            <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${variant}</span></div>
+            <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${specs.DriveTrain || 'N/A'}</span></div>
+            <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${specs.Engine || 'N/A'}</span></div>
+            <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${specs.Horsepower ? specs.Horsepower + ' HP' : 'N/A'}</span></div>
+            <div class="spec-card"><strong class="spec-label">Transmission</strong><br><span class="spec-value">${specs.Transmission || 'N/A'}</span></div>
+            <div class="spec-card"><strong class="spec-label">Fuel Type</strong><br><span class="spec-value">${specs.FuelType || 'N/A'}</span></div>
+            <div class="spec-card"><strong class="spec-label">Ground Clearance</strong><br><span class="spec-value">${specs.GroundClearance ? specs.GroundClearance + ' cm' : 'N/A'}</span></div>
+            <div class="spec-card"><strong class="spec-label">Cargo Space</strong><br><span class="spec-value">${specs.Cargospace ? specs.Cargospace + ' L' : 'N/A'}</span></div>
+            <div class="spec-card"><strong class="spec-label">Seating Capacity</strong><br><span class="spec-value">${specs.SeatingCapacity ? specs.SeatingCapacity + ' seats' : 'N/A'}</span></div>
+            <div class="spec-card"><strong class="spec-label">Price</strong><br><span class="spec-value">${specs.Price ? '₱' + parseInt(specs.Price).toLocaleString() : 'N/A'}</span></div>
+        `;
+
+        // Open the popup if togglePopup function exists
+        if (typeof togglePopup === 'function') {
+            togglePopup("card-popup");
+        }
+    } else {
+        console.warn("❌ Popup elements not found - cannot show detailed specs");
+    }
+}
+
+// Make functions globally available
+window.handleImageError = handleImageError;
+window.showCarSpecsPopup = showCarSpecsPopup;
 
 // FIXED: Better removeFavoriteFromDisplay function
 async function removeFavoriteFromDisplay(variant, buttonElement) {
