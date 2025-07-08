@@ -2003,8 +2003,6 @@ def debug_users():
         app.logger.error(f"Error fetching users debug info: {e}")
         return jsonify({"error": str(e)}), 500
     
-@app.route('/refresh-session', methods=['POST'])
-def refresh_session():
     """Refresh user session"""
     try:
         if session.get('authenticated') and session.get('user'):
@@ -3719,8 +3717,6 @@ def debug_files():
     
     return jsonify(debug_info)  
 
-@app.route('/debug/profile-pictures')
-def debug_profile_pictures():
     """Debug endpoint to check profile picture files and database entries"""
     if not realtime_db_ref:
         return jsonify({"error": "Database not available"}), 500
