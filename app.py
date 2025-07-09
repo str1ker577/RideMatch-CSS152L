@@ -3894,6 +3894,124 @@ def test_compare():
         return jsonify({"error": str(e)})
     
 def find_car_image(model, brand=None, variant=None):
+    """Find car image based on model name with better case-insensitive matching"""
+    try:
+        # Clean inputs for filename generation
+        model_clean = model.replace(' ', '_').lower() if model else 'default'
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        variant_clean = variant.replace(' ', '_').lower() if variant else ''
+        
+        # Remove special characters more thoroughly
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        variant_clean = re.sub(r'[^a-z0-9_]', '', variant_clean)
+        
+        app.logger.info(f"🔍 Finding image for: brand={brand}, model={model}, variant={variant}")
+        
+        # FIXED: More flexible image searching with case-insensitive matching
+        image_paths = []
+        
+        # Priority 1: Exact brand-model-variant match
+        if variant_clean and brand_clean:
+            image_paths.extend([
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}',
+                f'static/resources/{model_clean}_{variant_clean}',
+                f'static/resources/{variant_clean}_{model_clean}'
+            ])
+        
+        # Priority 2: Brand-model match
+        if brand_clean:
+            image_paths.extend([
+                f'static/resources/{brand_clean}_{model_clean}',
+                f'static/resources/{model_clean}_{brand_clean}'
+            ])
+        
+        # Priority 3: Model-only files
+        image_paths.extend([
+            f'static/resources/{model_clean}',
+            f'static/resources/{model_clean.replace('_', '')}'  # Try without underscores
+        ])
+        
+        # Check each path with multiple extensions (case-insensitive)
+        extensions = ['.webp', '.png', '.jpg', '.jpeg', '.gif']
+        
+        for base_path in image_paths:
+            for ext in extensions:
+                # Try exact case first
+                full_path = base_path + ext
+                if os.path.exists(full_path):
+                    url_path = '/' + full_path.replace('\\', '/')
+                    app.logger.info(f"✅ Found exact match: {url_path}")
+                    return url_path
+        
+        # FIXED: If exact matches fail, search directory for case-insensitive matches
+        resources_dir = 'static/resources'
+        if os.path.exists(resources_dir):
+            try:
+                all_files = os.listdir(resources_dir)
+                
+                # Create a mapping of lowercase filenames to actual filenames
+                file_mapping = {}
+                for filename in all_files:
+                    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                        file_mapping[filename.lower()] = filename
+                
+                # Search for matches using the mapping
+                search_patterns = []
+                
+                # Add various search patterns
+                if brand_clean and model_clean:
+                    search_patterns.extend([
+                        f"{brand_clean}_{model_clean}",
+                        f"{model_clean}_{brand_clean}",
+                        f"{model_clean}"
+                    ])
+                elif model_clean:
+                    search_patterns.append(model_clean)
+                
+                # Search through patterns
+                for pattern in search_patterns:
+                    for ext in ['.webp', '.png', '.jpg', '.jpeg', '.gif']:
+                        search_key = pattern + ext
+                        if search_key in file_mapping:
+                            actual_filename = file_mapping[search_key]
+                            url_path = f'/static/resources/{actual_filename}'
+                            app.logger.info(f"✅ Found case-insensitive match: {url_path}")
+                            return url_path
+                
+                # FIXED: Additional flexible search for partial matches
+                for actual_filename in all_files:
+                    filename_lower = actual_filename.lower()
+                    
+                    # Skip non-image files
+                    if not filename_lower.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                        continue
+                    
+                    # Check if model name is in filename (flexible matching)
+                    if model_clean in filename_lower:
+                        # Additional validation: check if it's a reasonable match
+                        base_name = filename_lower.replace('.png', '').replace('.jpg', '').replace('.jpeg', '').replace('.webp', '').replace('.gif', '')
+                        
+                        # Make sure it's not just a substring match
+                        if (model_clean == base_name or 
+                            base_name.startswith(model_clean + '_') or 
+                            base_name.endswith('_' + model_clean) or
+                            f'_{model_clean}_' in base_name):
+                            
+                            url_path = f'/static/resources/{actual_filename}'
+                            app.logger.info(f"🎯 Found flexible match: {url_path}")
+                            return url_path
+                        
+            except Exception as list_error:
+                app.logger.error(f"❌ Error listing resources: {list_error}")
+        
+        # FALLBACK: Return safe fallback
+        app.logger.warning(f"❌ No image found for {brand} {model}")
+        return get_safe_fallback_image()
+        
+    except Exception as e:
+        app.logger.error(f"❌ Error finding image for {brand} {model}: {e}")
+        return get_safe_fallback_image()
     """Find car image based on model name with strict brand-model matching to prevent cross-contamination"""
     try:
         # Clean inputs for filename generation
@@ -4135,6 +4253,21 @@ def search_brand_specific_files(brand_clean, model_clean):
     return None
 
 def get_safe_fallback_image():
+    """Return a safe fallback image"""
+    
+    # Try these generic fallback images in order
+    fallback_images = [
+        '/static/resources/default_car.png',
+        '/static/resources/no_image.png',
+        '/static/resources/placeholder.png'
+    ]
+    
+    for fallback in fallback_images:
+        if os.path.exists(f"static{fallback.replace('/static', '')}"):
+            return fallback
+    
+    # If no physical fallback exists, return SVG data URL
+    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg=='
     """Return a safe fallback image that doesn't misrepresent any brand"""
     
     # Try these generic fallback images in order

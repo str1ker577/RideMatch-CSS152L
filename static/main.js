@@ -5883,41 +5883,41 @@ function determineCarImageUrl(specs) {
         return specs.Image;
     }
     
-    // Priority 2: Construct brand-verified path
+    // Priority 2: Construct paths with case-insensitive approach
     if (specs.Brand && specs.Model) {
         const brand = specs.Brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         const model = specs.Model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         const variant = specs.Variant ? specs.Variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
         
-        // UPDATED: Build brand-verified paths
+        // UPDATED: Try multiple case variations
         const possiblePaths = [];
         
-        // Most specific first (brand_model_variant)
+        // Try with original case handling
         if (variant) {
             possiblePaths.push(
                 `/static/resources/${brand}_${model}_${variant}.webp`,
-                `/static/resources/${brand}_${model}_${variant}.png`,
-                `/static/resources/${brand}_${model}_${variant}.jpg`
+                `/static/resources/${model}_${variant}.webp`,
+                `/static/resources/${variant}.webp`
             );
         }
         
-        // Brand + Model combinations
         possiblePaths.push(
             `/static/resources/${brand}_${model}.webp`,
-            `/static/resources/${brand}_${model}.png`,
-            `/static/resources/${brand}_${model}.jpg`,
-            
-            // Reversed order
             `/static/resources/${model}_${brand}.webp`,
-            `/static/resources/${model}_${brand}.png`,
-            `/static/resources/${model}_${brand}.jpg`
+            `/static/resources/${model}.webp`
         );
         
-        // UPDATED: Only add verified model-only files
-        const verifiedModelFiles = getVerifiedModelFiles(model, brand);
-        possiblePaths.push(...verifiedModelFiles);
+        // Try with different extensions
+        const extensions = ['.png', '.jpg', '.jpeg', '.gif'];
+        const basePaths = possiblePaths.map(path => path.replace('.webp', ''));
         
-        console.log('🔍 Will try brand-verified paths starting with:', possiblePaths[0]);
+        extensions.forEach(ext => {
+            basePaths.forEach(basePath => {
+                possiblePaths.push(basePath + ext);
+            });
+        });
+        
+        console.log('🔍 Will try paths starting with:', possiblePaths[0]);
         return possiblePaths[0]; // Return first option, handleImageError will try others
     }
     
@@ -6254,7 +6254,7 @@ function autoDebugIssues() {
 }
 
 function handleImageError(imgElement, brand, model, variant = null) {
-    console.log('❌ Image failed to load for', brand, model, variant, '- trying brand-verified fallbacks');
+    console.log('❌ Image failed to load for', brand, model, variant, '- trying case-insensitive fallbacks');
     
     if (!imgElement.dataset.fallbackAttempt) {
         imgElement.dataset.fallbackAttempt = "1";
@@ -6262,42 +6262,71 @@ function handleImageError(imgElement, brand, model, variant = null) {
     
     const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
     
-    // Clean names for filenames
+    // Clean names for filenames (case-insensitive)
     const brand_clean = brand ? brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
     const model_clean = model ? model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
     const variant_clean = variant ? variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
     
-    // UPDATED: Brand-verified fallback list - only try images that match the brand
-    const brandVerifiedFallbacks = [];
+    // UPDATED: More comprehensive fallback list with case variations
+    const fallbacks = [];
     
-    // Only add fallbacks if we have a brand to verify against
-    if (brand_clean) {
-        // Brand + Model combinations (highest priority)
-        brandVerifiedFallbacks.push(
-            `/static/resources/${brand_clean}_${model_clean}.webp`,
-            `/static/resources/${brand_clean}_${model_clean}.png`,
-            `/static/resources/${brand_clean}_${model_clean}.jpg`,
-            `/static/resources/${model_clean}_${brand_clean}.webp`,
-            `/static/resources/${model_clean}_${brand_clean}.png`,
-            `/static/resources/${model_clean}_${brand_clean}.jpg`
-        );
-        
-        // Brand + Model + Variant combinations
-        if (variant_clean) {
-            brandVerifiedFallbacks.push(
-                `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.webp`,
-                `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.png`,
-                `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.jpg`
-            );
+    // Try different case combinations and extensions
+    const extensions = ['.webp', '.png', '.jpg', '.jpeg', '.gif'];
+    const caseVariations = [
+        // All lowercase
+        { brand: brand_clean, model: model_clean, variant: variant_clean },
+        // Capitalize first letter
+        { 
+            brand: brand_clean ? capitalize(brand_clean) : '', 
+            model: model_clean ? capitalize(model_clean) : '', 
+            variant: variant_clean ? capitalize(variant_clean) : ''
+        },
+        // All uppercase
+        { 
+            brand: brand_clean ? brand_clean.toUpperCase() : '', 
+            model: model_clean ? model_clean.toUpperCase() : '', 
+            variant: variant_clean ? variant_clean.toUpperCase() : ''
         }
-        
-        // UPDATED: Only add model-only files if they're verified for this brand
-        const verifiedModelFiles = getVerifiedModelFiles(model_clean, brand_clean);
-        brandVerifiedFallbacks.push(...verifiedModelFiles);
+    ];
+    
+    // Build fallback paths with case variations
+    caseVariations.forEach(variation => {
+        extensions.forEach(ext => {
+            if (variation.brand && variation.model) {
+                fallbacks.push(`/static/resources/${variation.brand}_${variation.model}${ext}`);
+                fallbacks.push(`/static/resources/${variation.model}_${variation.brand}${ext}`);
+                
+                if (variation.variant) {
+                    fallbacks.push(`/static/resources/${variation.brand}_${variation.model}_${variation.variant}${ext}`);
+                    fallbacks.push(`/static/resources/${variation.model}_${variation.variant}${ext}`);
+                }
+            }
+            
+            if (variation.model) {
+                fallbacks.push(`/static/resources/${variation.model}${ext}`);
+            }
+        });
+    });
+    
+    // Add some common patterns your files might follow
+    if (model_clean) {
+        extensions.forEach(ext => {
+            // Try model with different color variations (since you mentioned capitalized colors)
+            const commonColors = ['black', 'white', 'red', 'blue', 'silver', 'gray', 'grey'];
+            const capitalizedColors = ['Black', 'White', 'Red', 'Blue', 'Silver', 'Gray', 'Grey'];
+            
+            commonColors.forEach(color => {
+                fallbacks.push(`/static/resources/${model_clean}_${color}${ext}`);
+            });
+            
+            capitalizedColors.forEach(color => {
+                fallbacks.push(`/static/resources/${model_clean}_${color}${ext}`);
+            });
+        });
     }
     
-    // Add safe generic fallbacks at the end
-    brandVerifiedFallbacks.push(
+    // Add final safe fallbacks
+    fallbacks.push(
         '/static/resources/default_car.png',
         '/static/resources/no_image.png',
         '/static/resources/placeholder.png'
@@ -6306,9 +6335,9 @@ function handleImageError(imgElement, brand, model, variant = null) {
     // Final data URL fallback
     const dataUrlFallback = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg==';
     
-    if (attemptIndex < brandVerifiedFallbacks.length) {
-        const nextPath = brandVerifiedFallbacks[attemptIndex];
-        console.log(`🔄 Trying brand-verified fallback ${attemptIndex + 1}/${brandVerifiedFallbacks.length}:`, nextPath);
+    if (attemptIndex < fallbacks.length) {
+        const nextPath = fallbacks[attemptIndex];
+        console.log(`🔄 Trying fallback ${attemptIndex + 1}/${fallbacks.length}:`, nextPath);
         
         imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
         imgElement.src = nextPath;
@@ -6488,6 +6517,12 @@ async function testImageAvailability(imagePath) {
             resolve(false);
         }, 3000);
     });
+}
+
+// Helper function to capitalize first letter
+function capitalize(str) {
+    if (!str) return '';
+    return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 //////////////////////////////
