@@ -3339,6 +3339,119 @@ def get_specs():
         brand = safe_get_str(car.get("Brand", ""))
         model = safe_get_str(car.get("Model", ""))
         
+        # UPDATED: Enhanced image finding with brand verification
+        image_url = find_car_image(model, brand, variant)
+        
+        # Build specs dictionary
+        specs = {
+            # Basic Information
+            "Brand": brand,
+            "Model": model,
+            "BodyType": safe_get_str(car.get("Body_Type", "")),
+            "Variant": safe_get_str(car.get("Variant", "")),
+            "Year": safe_get_int(car.get("Year", 0)),
+            
+            # Performance Specifications
+            "Horsepower": safe_get_int(car.get("Horsepower", 0)),
+            "Engine": safe_get_str(car.get("Engine", "")),
+            "Transmission": safe_get_str(car.get("Transmission", "")),
+            "DriveTrain": safe_get_str(car.get("Drive_Train", "")),
+            "FuelType": safe_get_str(car.get("Fuel_Type", "")),
+            
+            # Utility Specifications
+            "GroundClearance": safe_get_float(car.get("Ground_Clearance", 0)),
+            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),
+            "SeatingCapacity": safe_get_int(car.get("Seating_Capacity", 0)),
+            
+            # Pricing
+            "Price": safe_get_float(car.get("Price", 0)),
+            
+            # UPDATED: Better image handling with verification
+            "Image": image_url,
+            
+            # Official website link
+            "OfficialLink": safe_get_str(car.get("Link", "")) or safe_get_str(car.get("Official_Link", "")) or ""
+        }
+        
+        app.logger.info(f"✅ Specs prepared for {variant}: brand={brand}, model={model}, image={image_url}")
+        return jsonify(specs)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting specs for variant {variant}, year {year}: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500
+    if df.empty:
+        app.logger.error("Car data not available for specs")
+        return jsonify({"error": "Car data not available"}), 500
+    
+    variant = request.args.get("variant", "").strip()
+    year = request.args.get("year", "").strip()
+    
+    if not variant:
+        app.logger.warning("No variant specified for specs lookup")
+        return jsonify({"error": "Variant parameter required"}), 400
+
+    try:
+        app.logger.info(f"Looking up specs for variant: {variant}, year: {year}")
+        
+        # Build query conditions
+        query_conditions = [df["Variant"].str.lower() == variant.lower()]
+        
+        # Add year condition if provided
+        if year:
+            try:
+                year_int = int(year)
+                query_conditions.append(df["Year"] == year_int)
+                app.logger.info(f"Including year filter: {year_int}")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
+                return jsonify({"error": "Invalid year format"}), 400
+        
+        # Combine all conditions
+        combined_condition = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_condition = combined_condition & condition
+        
+        car_data = df[combined_condition]
+        
+        if car_data.empty:
+            app.logger.warning(f"No car found for variant: {variant}, year: {year}")
+            return jsonify({"error": f"Variant '{variant}' with year '{year}' not found"}), 404
+        
+        # Get the first matching car
+        car = car_data.iloc[0]
+        app.logger.info(f"Found car data for variant: {variant}, year: {year}")
+        
+        # Helper functions for safe data extraction
+        def safe_get_int(value, default=0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return int(float(value))
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_float(value, default=0.0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_str(value, default=""):
+            try:
+                if pd.isna(value) or value is None:
+                    return default
+                return str(value).strip()
+            except (ValueError, TypeError):
+                return default
+        
+        # Extract basic info for image finding
+        brand = safe_get_str(car.get("Brand", ""))
+        model = safe_get_str(car.get("Model", ""))
+        
         # ENHANCED: Better image finding with multiple parameters
         image_url = find_car_image(model, brand, variant)
         
@@ -3781,6 +3894,75 @@ def test_compare():
         return jsonify({"error": str(e)})
     
 def find_car_image(model, brand=None, variant=None):
+    """Find car image based on model name with strict brand-model matching to prevent cross-contamination"""
+    try:
+        # Clean inputs for filename generation
+        model_clean = model.replace(' ', '_').lower() if model else 'default'
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        variant_clean = variant.replace(' ', '_').lower() if variant else ''
+        
+        # Remove special characters more thoroughly
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        variant_clean = re.sub(r'[^a-z0-9_]', '', variant_clean)
+        
+        app.logger.info(f"🔍 Finding image for: brand={brand}, model={model}, variant={variant}")
+        
+        # FIXED: Strict brand-model verification to prevent cross-contamination
+        image_paths = []
+        
+        # IMPORTANT: Only proceed if we have a brand to ensure accurate matching
+        if not brand_clean:
+            app.logger.warning(f"⚠️ No brand provided for {model}, using fallback")
+            return get_safe_fallback_image()
+        
+        # Priority 1: Exact brand-model-variant match
+        if variant_clean:
+            image_paths.extend([
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.webp',
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.png',
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.jpg'
+            ])
+        
+        # Priority 2: Brand-model match (MUST include brand to prevent mismatching)
+        image_paths.extend([
+            f'static/resources/{brand_clean}_{model_clean}.webp',
+            f'static/resources/{brand_clean}_{model_clean}.png', 
+            f'static/resources/{brand_clean}_{model_clean}.jpg'
+        ])
+        
+        # Priority 3: Try reverse order (model_brand) - still brand-specific
+        image_paths.extend([
+            f'static/resources/{model_clean}_{brand_clean}.webp',
+            f'static/resources/{model_clean}_{brand_clean}.png',
+            f'static/resources/{model_clean}_{brand_clean}.jpg'
+        ])
+        
+        # UPDATED: Strict verification for model-only files
+        # Only use model-only files if we can verify they belong to the correct brand
+        verified_model_files = get_verified_model_files(model_clean, brand_clean)
+        image_paths.extend(verified_model_files)
+        
+        # Check each path in priority order
+        for image_path in image_paths:
+            if os.path.exists(image_path):
+                url_path = '/' + image_path.replace('\\', '/')
+                app.logger.info(f"✅ Found brand-verified image: {url_path} for {brand} {model}")
+                return url_path
+        
+        # FALLBACK: Search for files that definitely contain the brand name
+        brand_specific_files = search_brand_specific_files(brand_clean, model_clean)
+        if brand_specific_files:
+            app.logger.info(f"🎯 Found brand-specific file: {brand_specific_files}")
+            return brand_specific_files
+        
+        # LAST RESORT: Use safe fallback instead of potentially wrong images
+        app.logger.warning(f"❌ No brand-verified image found for {brand} {model}")
+        return get_safe_fallback_image()
+        
+    except Exception as e:
+        app.logger.error(f"❌ Error finding image for {brand} {model}: {e}")
+        return get_safe_fallback_image()
     """Enhanced car image finder with strict brand-model matching"""
     try:
         # Clean inputs for filename generation
@@ -3883,6 +4065,92 @@ def find_car_image(model, brand=None, variant=None):
         app.logger.error(f"❌ Error finding image for {brand} {model}: {e}")
         return None
     
+def get_verified_model_files(model_clean, brand_clean):
+    """Get model-only files that are verified to belong to the correct brand"""
+    verified_files = []
+    
+    # Define strict brand-model associations to prevent cross-contamination
+    brand_model_associations = {
+        'honda': ['civic', 'accord', 'crv', 'pilot', 'odyssey', 'hrv', 'city'],
+        'toyota': ['vios', 'camry', 'corolla', 'rav4', 'prius', 'avanza', 'innova', 'hilux', 'fortuner'],
+        'porsche': ['cayenne', 'panamera', 'macan', '911', 'taycan', 'boxster', 'cayman'],
+        'volkswagen': ['id6', 'passat', 'golf', 'jetta', 'tiguan', 'arteon', 'polo'],
+        'mercedes': ['amg', 'cls', 'glc', 'eqs', 'benz', 'class', 'gle', 'gla'],
+        'bmw': ['x1', 'x3', 'x5', 'i3', 'i8', 'series', '320i', '520i'],
+        'ford': ['ranger', 'explorer', 'mustang', 'fiesta', 'focus', 'ecosport'],
+        'hyundai': ['elantra', 'tucson', 'accent', 'santa', 'creta', 'kona'],
+        'kia': ['seltos', 'sportage', 'rio', 'sorento', 'picanto', 'stinger'],
+        'nissan': ['navara', 'altima', 'sentra', 'juke', 'xtrail', 'patrol'],
+        'mazda': ['cx5', 'cx3', 'mx5', 'mazda3', 'mazda6', 'bt50'],
+        'subaru': ['forester', 'outback', 'impreza', 'legacy', 'xv', 'wrx'],
+        'mitsubishi': ['montero', 'lancer', 'outlander', 'mirage', 'pajero', 'xpander'],
+        'isuzu': ['dmax', 'mux', 'crosswind', 'traviz'],
+        'suzuki': ['swift', 'vitara', 'ertiga', 'celerio', 'alto', 'jimny'],
+        'mg': ['zs', 'hs', 'mg5', 'mg6', 'marvel']
+    }
+    
+    # Only add model-only files if the model is known to belong to this brand
+    if brand_clean in brand_model_associations:
+        known_models = brand_model_associations[brand_clean]
+        
+        # Check if the model is in the known models for this brand
+        model_matches = [known_model for known_model in known_models if known_model in model_clean or model_clean in known_model]
+        
+        if model_matches:
+            # Add model-only files with different extensions
+            for ext in ['.webp', '.png', '.jpg', '.jpeg']:
+                verified_files.append(f'static/resources/{model_clean}{ext}')
+    
+    return verified_files
+
+def search_brand_specific_files(brand_clean, model_clean):
+    """Search for files that definitely contain the brand name"""
+    resources_dir = 'static/resources'
+    
+    if not os.path.exists(resources_dir):
+        return None
+    
+    try:
+        all_files = os.listdir(resources_dir)
+        
+        # Look for files that start with the brand name
+        for img_file in all_files:
+            img_file_lower = img_file.lower()
+            
+            # Skip non-image files
+            if not img_file_lower.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                continue
+            
+            # Must start with brand name to avoid cross-contamination
+            if img_file_lower.startswith(brand_clean + '_'):
+                # Check if it also contains the model
+                if model_clean in img_file_lower:
+                    url_path = f'/static/resources/{img_file}'
+                    app.logger.info(f"🎯 Found brand-specific match: {url_path}")
+                    return url_path
+                    
+    except Exception as list_error:
+        app.logger.error(f"❌ Error listing resources: {list_error}")
+    
+    return None
+
+def get_safe_fallback_image():
+    """Return a safe fallback image that doesn't misrepresent any brand"""
+    
+    # Try these generic fallback images in order
+    fallback_images = [
+        '/static/resources/default_car.png',
+        '/static/resources/no_image.png',
+        '/static/resources/placeholder.png'
+    ]
+    
+    for fallback in fallback_images:
+        if os.path.exists(f"static{fallback.replace('/static', '')}"):
+            return fallback
+    
+    # If no physical fallback exists, return SVG data URL
+    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg=='
+
 ###############################
 # Testimonials Function Logic #
 ###############################   
@@ -4870,6 +5138,56 @@ def debug_images():
                     debug_info["alternative_directories"][alt_path]["file_count"] = len(files)
                 except:
                     pass
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/debug/image-paths')
+def debug_image_paths():
+    """Debug endpoint to check available images and their brand associations"""
+    try:
+        debug_info = {
+            "resources_directory_exists": os.path.exists("static/resources"),
+            "available_images": [],
+            "brand_associations": {},
+            "potential_conflicts": []
+        }
+        
+        resources_path = "static/resources"
+        if os.path.exists(resources_path):
+            all_files = os.listdir(resources_path)
+            image_extensions = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg')
+            
+            for filename in all_files:
+                if filename.lower().endswith(image_extensions):
+                    debug_info["available_images"].append({
+                        "filename": filename,
+                        "url": f"/static/resources/{filename}",
+                        "size": os.path.getsize(os.path.join(resources_path, filename))
+                    })
+                    
+                    # Analyze filename for brand association
+                    filename_lower = filename.lower()
+                    detected_brands = []
+                    
+                    # Check for brand names in filename
+                    brands = ['honda', 'toyota', 'porsche', 'volkswagen', 'mercedes', 'bmw', 'ford', 'hyundai', 'kia', 'nissan', 'mazda', 'subaru', 'mitsubishi', 'isuzu', 'suzuki', 'mg']
+                    
+                    for brand in brands:
+                        if brand in filename_lower:
+                            detected_brands.append(brand)
+                    
+                    if detected_brands:
+                        debug_info["brand_associations"][filename] = detected_brands
+                        
+                        # Check for potential conflicts (multiple brands in one file)
+                        if len(detected_brands) > 1:
+                            debug_info["potential_conflicts"].append({
+                                "filename": filename,
+                                "detected_brands": detected_brands
+                            })
         
         return jsonify(debug_info)
         

@@ -5805,9 +5805,9 @@ async function loadFavorites() {
                 const specs = await specResponse.json();
                 console.log('✅ Got specs for', car.variant, ':', specs);
                 
-                // ENHANCED: Better image URL determination
+                // UPDATED: Enhanced image URL determination with brand verification
                 let imageUrl = determineCarImageUrl(specs);
-                console.log('🖼️ Using image URL for', car.variant, ':', imageUrl);
+                console.log('🖼️ Using brand-verified image URL for', car.variant, ':', imageUrl);
                 
                 // Create and add card
                 const card = document.createElement("div");
@@ -5867,7 +5867,6 @@ async function loadFavorites() {
     }
 }
 
-
 /////////////////////////
 // CarImages function //
 ///////////////////////
@@ -5879,27 +5878,31 @@ function determineCarImageUrl(specs) {
     if (specs.Image && 
         specs.Image.trim() !== '' && 
         specs.Image !== 'N/A' && 
-        !specs.Image.startsWith('data:image/svg+xml')) {  // FIXED: Reject data URL placeholders
+        !specs.Image.startsWith('data:image/svg+xml')) {
         console.log('📸 Using specs.Image:', specs.Image);
         return specs.Image;
     }
     
-    // Priority 2: Construct from brand and model with multiple patterns
+    // Priority 2: Construct brand-verified path
     if (specs.Brand && specs.Model) {
         const brand = specs.Brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         const model = specs.Model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         const variant = specs.Variant ? specs.Variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
         
-        // Try multiple possible image paths
-        const possiblePaths = [
-            // Most specific first
-            ...(variant ? [
+        // UPDATED: Build brand-verified paths
+        const possiblePaths = [];
+        
+        // Most specific first (brand_model_variant)
+        if (variant) {
+            possiblePaths.push(
                 `/static/resources/${brand}_${model}_${variant}.webp`,
                 `/static/resources/${brand}_${model}_${variant}.png`,
                 `/static/resources/${brand}_${model}_${variant}.jpg`
-            ] : []),
-            
-            // Brand + Model combinations
+            );
+        }
+        
+        // Brand + Model combinations
+        possiblePaths.push(
             `/static/resources/${brand}_${model}.webp`,
             `/static/resources/${brand}_${model}.png`,
             `/static/resources/${brand}_${model}.jpg`,
@@ -5907,25 +5910,20 @@ function determineCarImageUrl(specs) {
             // Reversed order
             `/static/resources/${model}_${brand}.webp`,
             `/static/resources/${model}_${brand}.png`,
-            `/static/resources/${model}_${brand}.jpg`,
-            
-            // Model only
-            `/static/resources/${model}.webp`,
-            `/static/resources/${model}.png`,
-            `/static/resources/${model}.jpg`,
-            
-            // Known working images as fallbacks
-            '/static/resources/civic_black.png',
-            '/static/resources/avanza_black.webp'
-        ];
+            `/static/resources/${model}_${brand}.jpg`
+        );
         
-        console.log('🔍 Will try constructed paths starting with:', possiblePaths[0]);
+        // UPDATED: Only add verified model-only files
+        const verifiedModelFiles = getVerifiedModelFiles(model, brand);
+        possiblePaths.push(...verifiedModelFiles);
+        
+        console.log('🔍 Will try brand-verified paths starting with:', possiblePaths[0]);
         return possiblePaths[0]; // Return first option, handleImageError will try others
     }
     
-    // Priority 3: Known good fallback
-    console.log('📸 Using known good fallback');
-    return '/static/resources/civic_black.png';
+    // Priority 3: Safe fallback
+    console.log('📸 Using safe fallback');
+    return '/static/resources/default_car.png';
 }
 
 // NEW: Enhanced image error handler with multiple fallback attempts
@@ -6146,6 +6144,10 @@ window.handleImageError = handleImageError;
 window.showCarSpecsPopup = showCarSpecsPopup;
 window.debugImageIssues = debugImageIssues;
 
+window.determineCarImageUrl = determineCarImageUrl;
+window.debugImagePaths = debugImagePaths;
+window.testImageAvailability = testImageAvailability;
+
 // FIXED: Better removeFavoriteFromDisplay function
 async function removeFavoriteFromDisplay(variant, buttonElement) {
     if (!currentUser && !session?.authenticated && !userName) {
@@ -6252,7 +6254,7 @@ function autoDebugIssues() {
 }
 
 function handleImageError(imgElement, brand, model, variant = null) {
-    console.log('❌ Image failed to load for', brand, model, variant, '- trying fallbacks');
+    console.log('❌ Image failed to load for', brand, model, variant, '- trying brand-verified fallbacks');
     
     if (!imgElement.dataset.fallbackAttempt) {
         imgElement.dataset.fallbackAttempt = "1";
@@ -6265,61 +6267,55 @@ function handleImageError(imgElement, brand, model, variant = null) {
     const model_clean = model ? model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
     const variant_clean = variant ? variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
     
-    // ENHANCED: Comprehensive fallback list with known working images prioritized
-    const fallbacks = [
-        // Known working images first (from your debug output)
-        '/static/resources/civic_black.png',
-        '/static/resources/avanza_black.webp',
-        
-        // Then try constructed paths
-        ...(variant_clean && brand_clean ? [
-            `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.webp`,
-            `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.png`,
-            `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.jpg`
-        ] : []),
-        
-        // Brand + Model combinations
-        ...(brand_clean ? [
+    // UPDATED: Brand-verified fallback list - only try images that match the brand
+    const brandVerifiedFallbacks = [];
+    
+    // Only add fallbacks if we have a brand to verify against
+    if (brand_clean) {
+        // Brand + Model combinations (highest priority)
+        brandVerifiedFallbacks.push(
             `/static/resources/${brand_clean}_${model_clean}.webp`,
             `/static/resources/${brand_clean}_${model_clean}.png`,
             `/static/resources/${brand_clean}_${model_clean}.jpg`,
             `/static/resources/${model_clean}_${brand_clean}.webp`,
             `/static/resources/${model_clean}_${brand_clean}.png`,
             `/static/resources/${model_clean}_${brand_clean}.jpg`
-        ] : []),
+        );
         
-        // Model only
-        `/static/resources/${model_clean}.webp`,
-        `/static/resources/${model_clean}.png`,
-        `/static/resources/${model_clean}.jpg`,
+        // Brand + Model + Variant combinations
+        if (variant_clean) {
+            brandVerifiedFallbacks.push(
+                `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.webp`,
+                `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.png`,
+                `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.jpg`
+            );
+        }
         
-        // Alternative directory
-        `/static/car_images/${brand_clean}_${model_clean}.png`,
-        `/static/car_images/${model_clean}.png`,
-        
-        // Generic fallbacks
-        '/static/resources/default_car.png',
-        '/static/resources/tesr.png',
-        
-        // Final data URL fallback
-        'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg=='
-    ];
+        // UPDATED: Only add model-only files if they're verified for this brand
+        const verifiedModelFiles = getVerifiedModelFiles(model_clean, brand_clean);
+        brandVerifiedFallbacks.push(...verifiedModelFiles);
+    }
     
-    if (attemptIndex < fallbacks.length) {
-        const nextPath = fallbacks[attemptIndex];
-        console.log(`🔄 Trying fallback ${attemptIndex + 1}/${fallbacks.length}:`, nextPath);
+    // Add safe generic fallbacks at the end
+    brandVerifiedFallbacks.push(
+        '/static/resources/default_car.png',
+        '/static/resources/no_image.png',
+        '/static/resources/placeholder.png'
+    );
+    
+    // Final data URL fallback
+    const dataUrlFallback = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg==';
+    
+    if (attemptIndex < brandVerifiedFallbacks.length) {
+        const nextPath = brandVerifiedFallbacks[attemptIndex];
+        console.log(`🔄 Trying brand-verified fallback ${attemptIndex + 1}/${brandVerifiedFallbacks.length}:`, nextPath);
         
         imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
         imgElement.src = nextPath;
-        
-        // If we're at the data URL (last fallback), remove the error handler
-        if (nextPath.startsWith('data:')) {
-            imgElement.onerror = null;
-            console.log('📷 Using final data URL fallback');
-        }
     } else {
-        console.log('❌ All fallbacks exhausted');
-        imgElement.onerror = null;
+        console.log('📷 Using final data URL fallback');
+        imgElement.src = dataUrlFallback;
+        imgElement.onerror = null; // Remove error handler to prevent infinite loop
     }
 }
 
@@ -6385,6 +6381,113 @@ async function debugImageIssues() {
     } catch (error) {
         console.error('❌ Error debugging images:', error);
     }
+}
+
+function getVerifiedModelFiles(model_clean, brand_clean) {
+    // Define strict brand-model associations to prevent cross-contamination
+    const brandModelAssociations = {
+        'honda': ['civic', 'accord', 'crv', 'pilot', 'odyssey', 'hrv', 'city'],
+        'toyota': ['vios', 'camry', 'corolla', 'rav4', 'prius', 'avanza', 'innova', 'hilux', 'fortuner'],
+        'porsche': ['cayenne', 'panamera', 'macan', '911', 'taycan', 'boxster', 'cayman'],
+        'volkswagen': ['id6', 'passat', 'golf', 'jetta', 'tiguan', 'arteon', 'polo'],
+        'mercedes': ['amg', 'cls', 'glc', 'eqs', 'benz', 'class', 'gle', 'gla'],
+        'bmw': ['x1', 'x3', 'x5', 'i3', 'i8', 'series', '320i', '520i'],
+        'ford': ['ranger', 'explorer', 'mustang', 'fiesta', 'focus', 'ecosport'],
+        'hyundai': ['elantra', 'tucson', 'accent', 'santa', 'creta', 'kona'],
+        'kia': ['seltos', 'sportage', 'rio', 'sorento', 'picanto', 'stinger'],
+        'nissan': ['navara', 'altima', 'sentra', 'juke', 'xtrail', 'patrol'],
+        'mazda': ['cx5', 'cx3', 'mx5', 'mazda3', 'mazda6', 'bt50'],
+        'subaru': ['forester', 'outback', 'impreza', 'legacy', 'xv', 'wrx'],
+        'mitsubishi': ['montero', 'lancer', 'outlander', 'mirage', 'pajero', 'xpander'],
+        'isuzu': ['dmax', 'mux', 'crosswind', 'traviz'],
+        'suzuki': ['swift', 'vitara', 'ertiga', 'celerio', 'alto', 'jimny'],
+        'mg': ['zs', 'hs', 'mg5', 'mg6', 'marvel']
+    };
+    
+    const verifiedFiles = [];
+    
+    // Only add model-only files if the model is known to belong to this brand
+    if (brandModelAssociations[brand_clean]) {
+        const knownModels = brandModelAssociations[brand_clean];
+        
+        // Check if the model is in the known models for this brand
+        const modelMatches = knownModels.some(knownModel => 
+            knownModel.includes(model_clean) || model_clean.includes(knownModel)
+        );
+        
+        if (modelMatches) {
+            // Add model-only files with different extensions
+            verifiedFiles.push(
+                `/static/resources/${model_clean}.webp`,
+                `/static/resources/${model_clean}.png`,
+                `/static/resources/${model_clean}.jpg`,
+                `/static/resources/${model_clean}.jpeg`
+            );
+            
+            console.log(`✅ Added verified model files for ${brand_clean} ${model_clean}`);
+        } else {
+            console.log(`⚠️ Model ${model_clean} not verified for brand ${brand_clean}`);
+        }
+    }
+    
+    return verifiedFiles;
+}
+
+async function debugImagePaths() {
+    try {
+        console.log('🔍 Debugging image paths...');
+        
+        const response = await fetch(`${baseUrl}/debug/image-paths`);
+        if (response.ok) {
+            const debugData = await response.json();
+            console.log('📁 Image paths debug data:', debugData);
+            
+            // Test some images from the debug data
+            if (debugData.available_images && debugData.available_images.length > 0) {
+                console.log('🧪 Testing first few images...');
+                
+                const testImages = debugData.available_images.slice(0, 5);
+                for (const imageInfo of testImages) {
+                    const isAvailable = await testImageAvailability(imageInfo.url);
+                    console.log(`📸 ${imageInfo.filename}: ${isAvailable ? '✅ Available' : '❌ Not Available'}`);
+                }
+            }
+            
+            // Show brand association info
+            if (debugData.brand_associations) {
+                console.log('🏷️ Brand associations:', debugData.brand_associations);
+            }
+            
+            // Show potential conflicts
+            if (debugData.potential_conflicts && debugData.potential_conflicts.length > 0) {
+                console.log('⚠️ Potential brand conflicts:', debugData.potential_conflicts);
+            }
+            
+            return debugData;
+        } else {
+            console.error('❌ Failed to get image paths debug data');
+            return null;
+        }
+        
+    } catch (error) {
+        console.error('❌ Error debugging image paths:', error);
+        return null;
+    }
+}
+
+// Helper function to test image availability
+async function testImageAvailability(imagePath) {
+    return new Promise((resolve) => {
+        const testImg = new Image();
+        testImg.onload = () => resolve(true);
+        testImg.onerror = () => resolve(false);
+        testImg.src = imagePath;
+        
+        // Timeout after 3 seconds
+        setTimeout(() => {
+            resolve(false);
+        }, 3000);
+    });
 }
 
 //////////////////////////////

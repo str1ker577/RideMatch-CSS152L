@@ -2059,7 +2059,7 @@ select option[disabled] {
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
     max-width: 95%;
     max-height: 95%;
-    width: 900px;
+    width: 1000px; /* UPDATED: Increased width from 900px to 1000px */
     height: auto;
     position: relative;
     overflow-y: auto;
@@ -2111,7 +2111,7 @@ select option[disabled] {
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 50%;
+    width: 45%; /* UPDATED: Reduced from 50% to 45% */
 }
 
 .img-fave-frame {
@@ -2177,7 +2177,7 @@ select option[disabled] {
 
 /* SPECIFICATIONS SECTION */
 .spec-fave-frame {
-    width: 50%;
+    width: 55%; /* UPDATED: Increased from 50% to 55% */
     padding-left: 20px;
 }
 
@@ -2194,9 +2194,9 @@ select option[disabled] {
     justify-content: space-between;
 }
 
-/* INDIVIDUAL SPEC CARDS */
+/* INDIVIDUAL SPEC CARDS - REMOVED HOVER COLOR CHANGES */
 .spec-card {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(249, 246, 238, 0.7));
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(249, 246, 238, 0.8));
     border: 2px solid #b49b66;
     color: var(--second-color, #333);
     border-radius: 10px;
@@ -2207,15 +2207,14 @@ select option[disabled] {
     display: flex;
     flex-direction: column;
     justify-content: center;
-    transition: all 0.3s ease;
+    transition: transform 0.3s ease, box-shadow 0.3s ease; /* UPDATED: Removed color transitions */
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
+/* UPDATED: Simplified hover effect - only transform and shadow */
 .spec-card:hover {
     transform: translateY(-3px);
     box-shadow: 0 8px 25px rgba(180, 155, 102, 0.2);
-    background: linear-gradient(135deg, #b49b66, rgba(180, 155, 102, 0.8));
-    color: white;
 }
 
 .spec-card.price-card {
@@ -2254,7 +2253,7 @@ select option[disabled] {
     box-shadow: none;
 }
 
-/* SPEC LABELS AND VALUES */
+/* SPEC LABELS AND VALUES - REMOVED HOVER COLOR CHANGES */
 .spec-label {
     font-weight: bold;
     color: #666;
@@ -2265,10 +2264,6 @@ select option[disabled] {
     display: block;
 }
 
-.spec-card:hover .spec-label {
-    color: rgba(255, 255, 255, 0.9);
-}
-
 .spec-value {
     font-size: 16px;
     color: #333;
@@ -2276,20 +2271,11 @@ select option[disabled] {
     line-height: 1.2;
 }
 
-.spec-card:hover .spec-value {
-    color: white;
-}
-
 .spec-value.price-value {
     color: #d4af37;
     font-weight: bold;
     font-size: 20px;
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.spec-card.price-card:hover .spec-value.price-value {
-    color: white;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 /* CLOSE BUTTON */
