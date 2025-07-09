@@ -1742,7 +1742,7 @@ function initializeProfilePage() {
 function handleProfilePageAccess() {
     console.log('🔒 Checking profile page access...');
     
-    // Give more time for auth to load
+    // Give time for auth to load, but don't be too aggressive
     setTimeout(() => {
         if (!currentUser && !userName && !userDisplayName) {
             console.log('❌ User not authenticated, redirecting to home');
@@ -1755,7 +1755,7 @@ function handleProfilePageAccess() {
         if (typeof loadUserProfile === 'function') {
             loadUserProfile();
         }
-    }, 2000); // Increased wait time
+    }, 1500); // Shorter wait time
 }
 
 function loadProfilePage() {
@@ -1775,7 +1775,7 @@ async function loadUserProfile() {
     
     console.log('🔄 Loading user profile data...');
     
-    // Initialize profile page icons immediately to prevent text flash
+    // FIXED: Initialize profile page icons immediately to prevent text flash
     initializeProfilePageIcons();
 
     try {
@@ -1814,7 +1814,7 @@ async function loadUserProfile() {
                 totalFavoritesElement.textContent = profile.favoriteCount || '0';
             }
             
-            // Update profile page picture
+            // FIXED: Update profile page picture
             const currentPic = document.getElementById('current-profile-pic');
             const defaultIcon = document.getElementById('default-profile-icon');
             
@@ -1848,10 +1848,10 @@ async function loadUserProfile() {
                 }
             }
             
-            // Update header profile picture with persistence
+            // FIXED: Update header profile picture with persistence
             updateHeaderProfilePicture(profile.profilePictureUrl);
             
-            // Store profile picture URL globally for persistence
+            // FIXED: Store profile picture URL globally for persistence
             userProfilePictureUrl = profile.profilePictureUrl;
             
         } else {
@@ -1877,28 +1877,10 @@ function enableUsernameEdit() {
 }
 
 function cancelUsernameEdit() {
-    console.log('🔧 Canceling username edit');
-    
-    const currentUsernameInput = document.getElementById('current-username');
-    const editBtn = document.getElementById('edit-username-btn');
-    const editForm = document.getElementById('username-edit-form');
-    const validation = document.getElementById('username-validation');
-    
-    if (!currentUsernameInput || !editBtn || !editForm) {
-        console.error('❌ Required elements not found for cancel username edit');
-        return;
-    }
-    
-    currentUsernameInput.style.display = 'block';
-    editBtn.style.display = 'block';
-    editForm.style.display = 'none';
-    
-    if (validation) {
-        validation.textContent = '';
-        validation.className = 'username-validation';
-    }
-    
-    console.log('✅ Username edit canceled');
+    document.getElementById('current-username').style.display = 'block';
+    document.getElementById('edit-username-btn').style.display = 'block';
+    document.getElementById('username-edit-form').style.display = 'none';
+    document.getElementById('username-validation').textContent = '';
 }
 
 async function saveUsername() {
@@ -1928,79 +1910,40 @@ async function saveUsername() {
         validation.textContent = 'Saving...';
         validation.className = 'username-validation';
         
-        // Enhanced logging
-        console.log('🔄 Saving username:', newUsername);
-        console.log('🔍 Current user:', currentUser);
-        
-        if (!currentUser || !currentUser.uid) {
-            throw new Error('User not authenticated');
-        }
-        
         const response = await fetch(`${baseUrl}/update-username`, {
             method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 uid: currentUser.uid,
                 newUsername: newUsername 
             })
         });
         
-        console.log('📡 Response status:', response.status);
-        
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ Server error:', errorText);
-            throw new Error(`Server error: ${response.status}`);
-        }
-        
         const result = await response.json();
-        console.log('✅ Username update result:', result);
         
-        if (result.error) {
-            throw new Error(result.error);
+        if (response.ok) {
+            document.getElementById('current-username').value = newUsername;
+            userDisplayName = newUsername;
+            
+            // Update Firebase user profile
+            await currentUser.updateProfile({ displayName: newUsername });
+            
+            // Update UI
+            updateUIForAuthState();
+            
+            validation.textContent = 'Username updated successfully!';
+            validation.className = 'username-validation valid';
+            
+            setTimeout(() => {
+                cancelUsernameEdit();
+            }, 2000);
+        } else {
+            validation.textContent = result.message || 'Failed to update username';
+            validation.className = 'username-validation invalid';
         }
-        
-        // Update the display
-        document.getElementById('current-username').value = newUsername;
-        userDisplayName = newUsername;
-        
-        // Update Firebase user profile
-        if (currentUser && currentUser.updateProfile) {
-            try {
-                await currentUser.updateProfile({ displayName: newUsername });
-                console.log('✅ Firebase profile updated');
-            } catch (profileError) {
-                console.warn('⚠️ Firebase profile update failed:', profileError);
-            }
-        }
-        
-        // Update session
-        try {
-            await fetch(`${baseUrl}/refresh-session`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin'
-            });
-        } catch (sessionError) {
-            console.warn('⚠️ Session refresh failed:', sessionError);
-        }
-        
-        // Update UI
-        updateUIForAuthState();
-        
-        validation.textContent = 'Username updated successfully!';
-        validation.className = 'username-validation valid';
-        
-        setTimeout(() => {
-            cancelUsernameEdit();
-        }, 2000);
-        
     } catch (error) {
-        console.error('❌ Error updating username:', error);
-        validation.textContent = error.message || 'Error updating username';
+        console.error('Error updating username:', error);
+        validation.textContent = 'Error updating username';
         validation.className = 'username-validation invalid';
     }
 }
@@ -2318,41 +2261,6 @@ async function debugProfilePictureIssue(profilePictureUrl) {
         console.error('❌ Error debugging profile picture:', error);
     }
 }
-
-function checkAuthenticationForProfile() {
-    console.log('🔍 Checking authentication for profile page...');
-    
-    const authStates = {
-        currentUser: !!currentUser,
-        userName: !!userName,
-        userDisplayName: !!userDisplayName,
-        sessionUser: !!session?.user,
-        sessionAuth: !!session?.authenticated
-    };
-    
-    console.log('🔍 Auth states:', authStates);
-    
-    // Check if any authentication method is available
-    const isAuthenticated = authStates.currentUser || 
-                           authStates.userName || 
-                           authStates.userDisplayName || 
-                           authStates.sessionUser;
-    
-    if (!isAuthenticated) {
-        console.log('❌ No authentication found, redirecting...');
-        alert('Please sign in to access your profile.');
-        window.location.href = '/';
-        return false;
-    }
-    
-    console.log('✅ Authentication confirmed');
-    return true;
-}
-
-// Make functions globally available
-window.enableUsernameEdit = enableUsernameEdit;
-window.cancelUsernameEdit = cancelUsernameEdit;
-window.saveUsername = saveUsername;
 
 ////////////////////////////
 // Formats the CSV file  //
@@ -5966,7 +5874,7 @@ async function loadFavorites() {
 function determineCarImageUrl(specs) {
     console.log('🔍 Determining image URL for specs:', specs);
     
-    // Priority 1: Use the Image field if it exists and is valid
+    // Priority 1: Use the Image field if it exists and is NOT a data URL placeholder
     if (specs.Image && 
         specs.Image.trim() !== '' && 
         specs.Image !== 'N/A' && 
@@ -5975,78 +5883,124 @@ function determineCarImageUrl(specs) {
         return specs.Image;
     }
     
-    // Priority 2: Construct path based on your actual file naming
-    if (specs.Brand && specs.Model && specs.Variant) {
-        const brand = specs.Brand.toLowerCase();
-        const model = specs.Model.toLowerCase();
-        const variant = specs.Variant.toLowerCase();
+    // Priority 2: Construct most likely path
+    if (specs.Brand && specs.Model) {
+        const brand = specs.Brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        const model = specs.Model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         
-        // Handle specific Porsche models based on your actual files
-        if (brand === 'porsche') {
-            if (model.includes('cayenne')) {
-                // For Cayenne models, try specific patterns
-                if (variant.includes('e-hybrid') || variant.includes('ehybrid')) {
-                    return '/static/resources/CayenneE_Black.webp'; // Your actual file
-                }
-                if (variant.includes('turbo')) {
-                    return '/static/resources/CayenneTurbo_Red.webp'; // Your actual file
-                }
-                // Default Cayenne
-                return '/static/resources/CayenneS_White.webp';
-            }
-            
-            if (model.includes('panamera')) {
-                return '/static/resources/Panamera_Black.webp'; // Your actual file
-            }
-        }
-        
-        // For other brands, use simplified pattern
-        const modelClean = model.replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
-        return `/static/resources/${modelClean}.webp`;
+        // Try the most common pattern first
+        const primaryPath = `/static/resources/${model}.webp`;
+        console.log('🔍 Primary path attempt:', primaryPath);
+        return primaryPath;
     }
     
-    // Priority 3: Return null to let frontend handle
-    console.log('📷 No suitable image found, returning null');
-    return null;
+    // Priority 3: Safe fallback
+    console.log('📸 Using safe fallback');
+    return getFinalFallbackImage();
+}
+
+
+// NEW: Enhanced image error handler with multiple fallback attempts
+function handleImageError(imgElement, brand, model) {
+    console.log('❌ Image failed to load for', brand, model, '- trying fallbacks');
+    
+    if (!imgElement.dataset.fallbackAttempt) {
+        imgElement.dataset.fallbackAttempt = "1";
+        
+        // Try different image extensions and paths
+        const brand_clean = brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        const model_clean = model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+        
+        const fallbacks = [
+            `/static/resources/${brand_clean}_${model_clean}.jpg`,
+            `/static/resources/${model_clean}.png`,
+            `/static/resources/${model_clean}.jpg`,
+            `/static/car_images/${brand_clean}_${model_clean}.png`,
+            `/static/car_images/${brand_clean}_${model_clean}.jpg`,
+            `/static/resources/tesr.png`, // Your existing fallback
+            '/static/resources/default_car.png'
+        ];
+        
+        const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
+        
+        if (attemptIndex < fallbacks.length) {
+            console.log(`🔄 Trying fallback ${attemptIndex + 1}:`, fallbacks[attemptIndex]);
+            imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
+            imgElement.src = fallbacks[attemptIndex];
+        } else {
+            console.log('❌ All fallbacks failed, using final default');
+            imgElement.src = '/static/resources/default_car.png';
+            imgElement.onerror = null; // Prevent infinite loop
+        }
+    } else {
+        // Continue with next fallback
+        const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
+        const fallbacks = [
+            `/static/resources/${brand.toLowerCase().replace(/\s+/g, '_')}_${model.toLowerCase().replace(/\s+/g, '_')}.jpg`,
+            `/static/resources/${model.toLowerCase().replace(/\s+/g, '_')}.png`,
+            `/static/resources/tesr.png`,
+            '/static/resources/default_car.png'
+        ];
+        
+        if (attemptIndex < fallbacks.length) {
+            console.log(`🔄 Trying fallback ${attemptIndex + 1}:`, fallbacks[attemptIndex]);
+            imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
+            imgElement.src = fallbacks[attemptIndex];
+        } else {
+            console.log('❌ Final fallback - removing error handler');
+            imgElement.src = '/static/resources/default_car.png';
+            imgElement.onerror = null;
+        }
+    }
 }
 
 // NEW: Function to show car specs popup (if the popup functionality exists)
 function handleImageError(imgElement, brand, model, variant = null) {
-    console.log('❌ Image failed to load for', brand, model, variant);
+    console.log('❌ Image failed to load for', brand, model, variant, '- trying case-insensitive fallbacks');
     
-    // Check attempt count
     if (!imgElement.dataset.fallbackAttempt) {
         imgElement.dataset.fallbackAttempt = "1";
     }
     
     const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
-    const maxAttempts = 3; // Reduced to prevent 404 spam
+    
+    // FIXED: Limit fallback attempts to prevent excessive 404s
+    const maxAttempts = 5; // Reduced from unlimited attempts
     
     if (attemptIndex >= maxAttempts) {
         console.log('🛑 Max fallback attempts reached, using final fallback');
         imgElement.src = getFinalFallbackImage();
-        imgElement.onerror = null; // Remove error handler
+        imgElement.onerror = null; // Remove error handler to prevent infinite loop
         return;
     }
     
-    // Limited fallback list based on your actual files
-    const brand_clean = brand ? brand.toLowerCase() : '';
-    const model_clean = model ? model.toLowerCase().replace(/\s+/g, '') : '';
+    // Clean names for filenames (case-insensitive)
+    const brand_clean = brand ? brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    const model_clean = model ? model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    const variant_clean = variant ? variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
     
+    // UPDATED: Strategic fallback list - most likely to least likely
     const fallbacks = [
-        // Attempt 1: Try exact filename patterns from your folder
+        // Most likely patterns first
         `/static/resources/${model_clean}.webp`,
-        // Attempt 2: Try with brand prefix
         `/static/resources/${brand_clean}_${model_clean}.webp`,
-        // Attempt 3: Use safe fallback
+        `/static/resources/${model_clean}.png`,
+        `/static/resources/${brand_clean}_${model_clean}.jpg`,
+        // Generic fallback
         getFinalFallbackImage()
     ];
     
-    const nextPath = fallbacks[attemptIndex];
-    console.log(`🔄 Trying fallback ${attemptIndex + 1}/${maxAttempts}:`, nextPath);
-    
-    imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
-    imgElement.src = nextPath;
+    if (attemptIndex < fallbacks.length) {
+        const nextPath = fallbacks[attemptIndex];
+        console.log(`🔄 Trying fallback ${attemptIndex + 1}/${maxAttempts}:`, nextPath);
+        
+        imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
+        imgElement.src = nextPath;
+    } else {
+        console.log('📷 Using final fallback image');
+        imgElement.src = getFinalFallbackImage();
+        imgElement.onerror = null;
+    }
 }
 
 function showColorChangeError(message) {
@@ -6093,14 +6047,19 @@ function getFinalFallbackImage() {
 }
 
 
+// Make functions globally available
+window.populateColors = populateColors;
+window.handleColorChange = handleColorChange;
+window.showCarSpecsPopup = showCarSpecsPopup;
+
+// Make functions globally available
 window.handleImageError = handleImageError;
+window.showCarSpecsPopup = showCarSpecsPopup;
+window.debugImageIssues = debugImageIssues;
+
 window.determineCarImageUrl = determineCarImageUrl;
-window.createOptimizedCarCard = createOptimizedCarCard;
-window.validateAllCarImages = validateAllCarImages;
-window.getFinalFallbackImage = getFinalFallbackImage;
-window.preloadCriticalImages = preloadCriticalImages;
+window.debugImagePaths = debugImagePaths;
 window.testImageAvailability = testImageAvailability;
-window.initializeImageOptimization = initializeImageOptimization;
 
 // FIXED: Better removeFavoriteFromDisplay function
 async function removeFavoriteFromDisplay(variant, buttonElement) {
@@ -6305,34 +6264,21 @@ function handleImageError(imgElement, brand, model, variant = null) {
 async function testImageAvailability(imagePath) {
     return new Promise((resolve) => {
         const testImg = new Image();
-        let resolved = false;
-        
         testImg.onload = () => {
-            if (!resolved) {
-                resolved = true;
-                console.log('✅ Image available:', imagePath);
-                resolve(true);
-            }
+            console.log('✅ Image available:', imagePath);
+            resolve(true);
         };
-        
         testImg.onerror = () => {
-            if (!resolved) {
-                resolved = true;
-                console.log('❌ Image not available:', imagePath);
-                resolve(false);
-            }
+            console.log('❌ Image not available:', imagePath);
+            resolve(false);
         };
-        
-        // Set timeout to prevent hanging
-        setTimeout(() => {
-            if (!resolved) {
-                resolved = true;
-                console.log('⏰ Image test timeout:', imagePath);
-                resolve(false);
-            }
-        }, 2000); // Reduced timeout to 2 seconds
-        
         testImg.src = imagePath;
+        
+        // Timeout after 3 seconds
+        setTimeout(() => {
+            console.log('⏰ Image test timeout:', imagePath);
+            resolve(false);
+        }, 3000);
     });
 }
 
@@ -6490,189 +6436,6 @@ async function testImageAvailability(imagePath) {
 function capitalize(str) {
     if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-async function preloadCriticalImages() {
-    console.log('🔄 Preloading critical car images...');
-    
-    // List of most common car models that should have images
-    const criticalImages = [
-        '/static/resources/vios.webp',
-        '/static/resources/innova.webp', 
-        '/static/resources/fortuner.webp',
-        '/static/resources/civic.webp',
-        '/static/resources/accord.webp',
-        '/static/resources/cayenne.webp',
-        '/static/resources/panamera.webp'
-    ];
-    
-    let loadedCount = 0;
-    const results = [];
-    
-    for (const imagePath of criticalImages) {
-        try {
-            const isAvailable = await testImageAvailability(imagePath);
-            if (isAvailable) {
-                loadedCount++;
-                results.push({ path: imagePath, status: 'available' });
-            } else {
-                results.push({ path: imagePath, status: 'missing' });
-            }
-        } catch (error) {
-            results.push({ path: imagePath, status: 'error', error: error.message });
-        }
-    }
-    
-    console.log(`✅ Preload complete: ${loadedCount}/${criticalImages.length} images available`);
-    console.log('📋 Preload results:', results);
-    
-    return results;
-}
-
-function createOptimizedCarCard(car, cardType = 'default') {
-    const brand = car.Brand || 'Unknown';
-    const model = car.Model || 'Unknown';
-    const variant = car.Variant || 'Unknown';
-    const imageUrl = determineCarImageUrl(car);
-    
-    // Check if car is already liked
-    const isLiked = userFavorites && userFavorites.has(variant);
-    const heartClass = isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
-    const heartColor = isLiked ? '#e74c3c' : '#b49b66';
-    
-    const cardElement = document.createElement("div");
-    cardElement.className = "card";
-    
-    cardElement.innerHTML = `
-        <img src="${imageUrl}" 
-             alt="${brand} ${model}"
-             loading="lazy"
-             onerror="handleImageError(this, '${brand}', '${model}', '${variant}')"
-             onload="console.log('✅ Image loaded successfully for ${variant}')">
-        <div class="name">${brand} ${model}</div>
-        <div class="variant-name">${variant}</div>
-        ${cardType === 'favorites' ? `
-            <div class="favorite-actions">
-                <button class="remove-favorite-btn" onclick="removeFavoriteFromDisplay('${variant.replace(/'/g, "\\'")}', this)">
-                    <i class="fas fa-heart-broken"></i> Remove
-                </button>
-            </div>
-        ` : `
-            <div class="heart-container">
-                <i class="${heartClass}" 
-                   id="like-icon" 
-                   style="color: ${heartColor}; cursor: pointer;" 
-                   onclick="addToFave(event, '${variant}')"></i>
-            </div>
-        `}
-    `;
-    
-    return cardElement;
-}
-
-// NEW: Bulk image validator for debugging
-async function validateAllCarImages() {
-    console.log('🔍 Starting bulk image validation...');
-    
-    if (!currentCarData || currentCarData.length === 0) {
-        console.log('⚠️ No car data available for validation');
-        return;
-    }
-    
-    const validationResults = {
-        total: currentCarData.length,
-        available: 0,
-        missing: 0,
-        details: []
-    };
-    
-    // Test first 10 cars to avoid overwhelming the server
-    const testCars = currentCarData.slice(0, 10);
-    
-    for (const car of testCars) {
-        const imageUrl = determineCarImageUrl(car);
-        const isAvailable = await testImageAvailability(imageUrl);
-        
-        validationResults.details.push({
-            brand: car.Brand,
-            model: car.Model,
-            variant: car.Variant,
-            imageUrl: imageUrl,
-            available: isAvailable
-        });
-        
-        if (isAvailable) {
-            validationResults.available++;
-        } else {
-            validationResults.missing++;
-        }
-    }
-    
-    console.log('📊 Image validation results:', validationResults);
-    return validationResults;
-}
-
-// NEW: Image loading performance monitor
-function monitorImageLoadingPerformance() {
-    let imageLoadCount = 0;
-    let imageErrorCount = 0;
-    let totalLoadTime = 0;
-    
-    const originalImageConstructor = window.Image;
-    
-    window.Image = function(...args) {
-        const img = new originalImageConstructor(...args);
-        const startTime = performance.now();
-        
-        const originalOnLoad = img.onload;
-        const originalOnError = img.onerror;
-        
-        img.onload = function(...loadArgs) {
-            imageLoadCount++;
-            totalLoadTime += performance.now() - startTime;
-            console.log(`📈 Image load metrics: ${imageLoadCount} loaded, ${imageErrorCount} failed, avg: ${(totalLoadTime/imageLoadCount).toFixed(2)}ms`);
-            
-            if (originalOnLoad) {
-                originalOnLoad.apply(this, loadArgs);
-            }
-        };
-        
-        img.onerror = function(...errorArgs) {
-            imageErrorCount++;
-            console.log(`📉 Image error metrics: ${imageLoadCount} loaded, ${imageErrorCount} failed`);
-            
-            if (originalOnError) {
-                originalOnError.apply(this, errorArgs);
-            }
-        };
-        
-        return img;
-    };
-    
-    console.log('📊 Image loading performance monitoring enabled');
-}
-
-// NEW: Initialize image optimization system
-function initializeImageOptimization() {
-    console.log('🚀 Initializing image optimization system...');
-    
-    // Enable performance monitoring in development
-    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        monitorImageLoadingPerformance();
-    }
-    
-    // Preload critical images
-    setTimeout(() => {
-        preloadCriticalImages();
-    }, 2000);
-    
-    console.log('✅ Image optimization system initialized');
-}
-
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', initializeImageOptimization);
-} else {
-    initializeImageOptimization();
 }
 
 //////////////////////////////
