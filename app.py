@@ -98,7 +98,6 @@ except Exception as e:
     firebase_config = {}
     api_key = None
 
-
 ########################
 # Load CSV data safely #
 ########################
@@ -2319,6 +2318,7 @@ def forum():
 #################################
 # Toggle Favorite/Like Function #
 #################################
+
 def sanitize_firebase_key(key):
     """Sanitize a string to be used as a Firebase key"""
     # Replace illegal characters with safe alternatives
@@ -3304,6 +3304,120 @@ def get_specs():
         
         if car_data.empty:
             app.logger.warning(f"No car found for variant: {variant}, year: {year}")
+            return jsonify({"error": f"Variant '{variant}' with year '{year}' not found"}), 404
+        
+        # Get the first matching car
+        car = car_data.iloc[0]
+        app.logger.info(f"Found car data for variant: {variant}, year: {year}")
+        
+        # Helper functions for safe data extraction
+        def safe_get_int(value, default=0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return int(float(value))
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_float(value, default=0.0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_str(value, default=""):
+            try:
+                if pd.isna(value) or value is None:
+                    return default
+                return str(value).strip()
+            except (ValueError, TypeError):
+                return default
+        
+        # Extract basic info for image finding
+        brand = safe_get_str(car.get("Brand", ""))
+        model = safe_get_str(car.get("Model", ""))
+        
+        # ENHANCED: Better image finding with multiple parameters
+        image_url = find_car_image(model, brand, variant)
+        
+        # Build specs dictionary
+        specs = {
+            # Basic Information
+            "Brand": brand,
+            "Model": model,
+            "BodyType": safe_get_str(car.get("Body_Type", "")),
+            "Variant": safe_get_str(car.get("Variant", "")),
+            "Year": safe_get_int(car.get("Year", 0)),
+            
+            # Performance Specifications
+            "Horsepower": safe_get_int(car.get("Horsepower", 0)),
+            "Engine": safe_get_str(car.get("Engine", "")),
+            "Transmission": safe_get_str(car.get("Transmission", "")),
+            "DriveTrain": safe_get_str(car.get("Drive_Train", "")),
+            "FuelType": safe_get_str(car.get("Fuel_Type", "")),
+            
+            # Utility Specifications
+            "GroundClearance": safe_get_float(car.get("Ground_Clearance", 0)),
+            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),
+            "SeatingCapacity": safe_get_int(car.get("Seating_Capacity", 0)),
+            
+            # Pricing
+            "Price": safe_get_float(car.get("Price", 0)),
+            
+            # ENHANCED: Better image handling
+            "Image": image_url,
+            
+            # Official website link
+            "OfficialLink": safe_get_str(car.get("Link", "")) or safe_get_str(car.get("Official_Link", "")) or ""
+        }
+        
+        app.logger.info(f"✅ Specs prepared for {variant}: image={image_url}")
+        return jsonify(specs)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting specs for variant {variant}, year {year}: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500
+
+    if df.empty:
+        app.logger.error("Car data not available for specs")
+        return jsonify({"error": "Car data not available"}), 500
+    
+    variant = request.args.get("variant", "").strip()
+    year = request.args.get("year", "").strip()
+    
+    if not variant:
+        app.logger.warning("No variant specified for specs lookup")
+        return jsonify({"error": "Variant parameter required"}), 400
+
+    try:
+        app.logger.info(f"Looking up specs for variant: {variant}, year: {year}")
+        
+        # Build query conditions
+        query_conditions = [df["Variant"].str.lower() == variant.lower()]
+        
+        # Add year condition if provided
+        if year:
+            try:
+                year_int = int(year)
+                query_conditions.append(df["Year"] == year_int)
+                app.logger.info(f"Including year filter: {year_int}")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
+                return jsonify({"error": "Invalid year format"}), 400
+        
+        # Combine all conditions
+        combined_condition = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_condition = combined_condition & condition
+        
+        car_data = df[combined_condition]
+        
+        if car_data.empty:
+            app.logger.warning(f"No car found for variant: {variant}, year: {year}")
             available_variants = df["Variant"].unique().tolist()[:10]
             app.logger.info(f"Available variants (sample): {available_variants}")
             return jsonify({"error": f"Variant '{variant}' with year '{year}' not found"}), 404
@@ -3666,11 +3780,110 @@ def test_compare():
     except Exception as e:
         return jsonify({"error": str(e)})
     
+def find_car_image(model, brand=None, variant=None):
+    """Enhanced car image finder with multiple fallback options"""
+    try:
+        # Clean inputs for filename generation
+        model_clean = model.replace(' ', '_').lower() if model else 'default'
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        variant_clean = variant.replace(' ', '_').lower() if variant else ''
+        
+        # Remove special characters
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        variant_clean = re.sub(r'[^a-z0-9_]', '', variant_clean)
+        
+        app.logger.info(f"🔍 Finding image for: brand={brand}, model={model}, variant={variant}")
+        
+        # Priority list of image paths to try
+        image_paths = []
+        
+        # Most specific to least specific
+        if variant_clean and brand_clean:
+            image_paths.extend([
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.webp',
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.png',
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.jpg'
+            ])
+        
+        if brand_clean:
+            image_paths.extend([
+                f'static/resources/{brand_clean}_{model_clean}.webp',
+                f'static/resources/{brand_clean}_{model_clean}.png',
+                f'static/resources/{brand_clean}_{model_clean}.jpg',
+                f'static/resources/{model_clean}_{brand_clean}.webp',
+                f'static/resources/{model_clean}_{brand_clean}.png',
+                f'static/resources/{model_clean}_{brand_clean}.jpg'
+            ])
+        
+        # Model only
+        image_paths.extend([
+            f'static/resources/{model_clean}.webp',
+            f'static/resources/{model_clean}.png',
+            f'static/resources/{model_clean}.jpg',
+            f'static/resources/{model_clean}.jpeg'
+        ])
+        
+        # Alternative directory structures
+        if brand_clean:
+            image_paths.extend([
+                f'static/car_images/{brand_clean}_{model_clean}.webp',
+                f'static/car_images/{brand_clean}_{model_clean}.png',
+                f'static/car_images/{brand_clean}_{model_clean}.jpg'
+            ])
+        
+        # Check each path
+        for image_path in image_paths:
+            if os.path.exists(image_path):
+                # Convert to URL path
+                url_path = '/' + image_path.replace('\\', '/')
+                app.logger.info(f"✅ Found image: {url_path}")
+                return url_path
+        
+        # Check if any car images exist at all for debugging
+        resources_dir = 'static/resources'
+        if os.path.exists(resources_dir):
+            try:
+                all_files = os.listdir(resources_dir)
+                image_files = [f for f in all_files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif'))]
+                app.logger.info(f"📁 Available images in resources: {len(image_files)} files")
+                app.logger.info(f"📋 Sample files: {image_files[:5]}")
+                
+                # Try to find a partial match
+                for img_file in image_files:
+                    img_lower = img_file.lower()
+                    if model_clean in img_lower or (brand_clean and brand_clean in img_lower):
+                        url_path = f'/static/resources/{img_file}'
+                        app.logger.info(f"🎯 Found partial match: {url_path}")
+                        return url_path
+                        
+            except Exception as list_error:
+                app.logger.error(f"❌ Error listing resources: {list_error}")
+        
+        # If we have existing working images, use one as fallback
+        known_good_images = [
+            '/static/resources/civic_black.png',
+            '/static/resources/avanza_black.webp',
+            '/static/resources/tesr.png'
+        ]
+        
+        for fallback in known_good_images:
+            if os.path.exists(fallback.lstrip('/')):
+                app.logger.info(f"🔄 Using known good fallback: {fallback}")
+                return fallback
+        
+        # Final fallback - return None to let frontend handle
+        app.logger.warning(f"❌ No image found for {brand} {model}, returning None")
+        return None
+        
+    except Exception as e:
+        app.logger.error(f"❌ Error finding image for model {model}: {e}")
+        return None
+    
 ###############################
 # Testimonials Function Logic #
 ###############################   
     
-
 @app.route('/api/testimonials', methods=['GET'])
 def get_testimonials():
     """Get all testimonials"""
@@ -3882,7 +4095,6 @@ def create_forum_post():
     except Exception as e:
         app.logger.error(f"Error creating forum post: {e}")
         return jsonify({'error': 'Failed to create post'}), 500
-
 
 @app.route('/api/forum/comments/<comment_id>/vote', methods=['POST'])
 def vote_on_comment(comment_id):
@@ -4188,6 +4400,7 @@ def favicon():
 ###################
 # Car Brand Logos #
 ###################
+
 @app.route('/static/brand_logo/<path:filename>')
 def serve_brand_logo(filename):
     """Serve brand logo files"""
@@ -4217,6 +4430,7 @@ def serve_brand_logo(filename):
 ############################
 # Enhanced debug endpoints #
 ############################
+
 @app.route('/debug/csv-detailed')
 def debug_csv_detailed():
     """Detailed CSV debug information"""
@@ -4488,6 +4702,73 @@ def debug_favorites_detailed():
         
     except Exception as e:
         app.logger.error(f"Error in detailed favorites debug: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/debug/images')
+def debug_images():
+    """Debug endpoint to check available images"""
+    try:
+        debug_info = {
+            "resources_directory": {
+                "path": "static/resources",
+                "exists": os.path.exists("static/resources"),
+                "writable": os.access("static/resources", os.W_OK) if os.path.exists("static/resources") else False
+            },
+            "image_files": [],
+            "total_files": 0
+        }
+        
+        # Check static/resources directory
+        resources_path = "static/resources"
+        if os.path.exists(resources_path):
+            try:
+                all_files = os.listdir(resources_path)
+                image_extensions = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg')
+                
+                for filename in all_files:
+                    if filename.lower().endswith(image_extensions):
+                        filepath = os.path.join(resources_path, filename)
+                        file_size = os.path.getsize(filepath) if os.path.exists(filepath) else 0
+                        
+                        debug_info["image_files"].append({
+                            "filename": filename,
+                            "url": f"/static/resources/{filename}",
+                            "size": file_size,
+                            "extension": filename.split('.')[-1].lower()
+                        })
+                
+                debug_info["total_files"] = len(debug_info["image_files"])
+                
+                # Group by extension
+                extensions = {}
+                for img in debug_info["image_files"]:
+                    ext = img["extension"]
+                    extensions[ext] = extensions.get(ext, 0) + 1
+                
+                debug_info["extensions_count"] = extensions
+                
+            except Exception as list_error:
+                debug_info["list_error"] = str(list_error)
+        
+        # Check alternative directories
+        alt_paths = ["static/car_images", "static/img", "resources"]
+        debug_info["alternative_directories"] = {}
+        
+        for alt_path in alt_paths:
+            debug_info["alternative_directories"][alt_path] = {
+                "exists": os.path.exists(alt_path),
+                "file_count": 0
+            }
+            if os.path.exists(alt_path):
+                try:
+                    files = os.listdir(alt_path)
+                    debug_info["alternative_directories"][alt_path]["file_count"] = len(files)
+                except:
+                    pass
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
         return jsonify({"error": str(e)}), 500
     
 ##################

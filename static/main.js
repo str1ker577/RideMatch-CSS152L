@@ -5702,13 +5702,7 @@ document.head.appendChild(styleSheet);
 
 async function loadFavorites() {
     console.log("🔄 Loading favorites for favorites page...");
-    console.log("🔍 Current auth state:", {
-        currentUser: !!currentUser,
-        userName: !!userName,
-        userDisplayName: !!userDisplayName,
-        authCurrentUser: !!(auth && auth.currentUser)
-    });
-
+    
     // Check if we're actually on the favorites page
     const cardContainer = document.getElementById("card-container");
     if (!cardContainer) {
@@ -5749,8 +5743,6 @@ async function loadFavorites() {
             credentials: 'same-origin'
         });
 
-        console.log('📡 Get favorites response status:', response.status);
-
         if (!response.ok) {
             const errorText = await response.text();
             console.error('❌ Get favorites error:', response.status, errorText);
@@ -5782,8 +5774,6 @@ async function loadFavorites() {
             `;
             return;
         }
-        
-        console.log('📋 Processing', favorites.length, 'favorites');
 
         if (favorites.length === 0) {
             cardContainer.innerHTML = `
@@ -5815,7 +5805,7 @@ async function loadFavorites() {
                 const specs = await specResponse.json();
                 console.log('✅ Got specs for', car.variant, ':', specs);
                 
-                // ENHANCED: Better image URL determination with comprehensive fallback
+                // ENHANCED: Better image URL determination
                 let imageUrl = determineCarImageUrl(specs);
                 console.log('🖼️ Using image URL for', car.variant, ':', imageUrl);
                 
@@ -5865,13 +5855,6 @@ async function loadFavorites() {
         
         console.log(`✅ Favorites loading completed - ${successCount}/${favorites.length} cards displayed`);
         
-        // NEW: Debug image issues if few images loaded
-        if (successCount > 0) {
-            setTimeout(() => {
-                debugImageIssues();
-            }, 2000);
-        }
-        
     } catch (error) {
         console.error("❌ Error loading favorites:", error);
         cardContainer.innerHTML = `
@@ -5884,54 +5867,60 @@ async function loadFavorites() {
     }
 }
 
-// NEW: Enhanced function to determine the best image URL for a car
 function determineCarImageUrl(specs) {
     console.log('🔍 Determining image URL for specs:', specs);
     
-    // Priority 1: Use the Image field if it exists and is valid
-    if (specs.Image && specs.Image.trim() !== '' && specs.Image !== 'N/A') {
+    // Priority 1: Use the Image field if it exists and is NOT a data URL placeholder
+    if (specs.Image && 
+        specs.Image.trim() !== '' && 
+        specs.Image !== 'N/A' && 
+        !specs.Image.startsWith('data:image/svg+xml')) {  // FIXED: Reject data URL placeholders
         console.log('📸 Using specs.Image:', specs.Image);
         return specs.Image;
     }
     
-    // Priority 2: Try to construct path from brand and model with multiple patterns
+    // Priority 2: Construct from brand and model with multiple patterns
     if (specs.Brand && specs.Model) {
         const brand = specs.Brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         const model = specs.Model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         const variant = specs.Variant ? specs.Variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
         
-        // Try multiple possible image paths with different extensions
+        // Try multiple possible image paths
         const possiblePaths = [
-            // Brand + Model + Variant (most specific)
+            // Most specific first
             ...(variant ? [
                 `/static/resources/${brand}_${model}_${variant}.webp`,
                 `/static/resources/${brand}_${model}_${variant}.png`,
                 `/static/resources/${brand}_${model}_${variant}.jpg`
             ] : []),
             
-            // Brand + Model
+            // Brand + Model combinations
             `/static/resources/${brand}_${model}.webp`,
             `/static/resources/${brand}_${model}.png`,
             `/static/resources/${brand}_${model}.jpg`,
+            
+            // Reversed order
+            `/static/resources/${model}_${brand}.webp`,
+            `/static/resources/${model}_${brand}.png`,
+            `/static/resources/${model}_${brand}.jpg`,
             
             // Model only
             `/static/resources/${model}.webp`,
             `/static/resources/${model}.png`,
             `/static/resources/${model}.jpg`,
             
-            // Brand only
-            `/static/resources/${brand}.webp`,
-            `/static/resources/${brand}.png`,
-            `/static/resources/${brand}.jpg`
+            // Known working images as fallbacks
+            '/static/resources/civic_black.png',
+            '/static/resources/avanza_black.webp'
         ];
         
-        console.log('🔍 Trying constructed paths for', specs.Brand, specs.Model, ':', possiblePaths[0]);
-        return possiblePaths[0]; // Return the first option, handleImageError will try others
+        console.log('🔍 Will try constructed paths starting with:', possiblePaths[0]);
+        return possiblePaths[0]; // Return first option, handleImageError will try others
     }
     
-    // Priority 3: Default fallback
-    console.log('📸 Using default fallback image');
-    return '/static/resources/default_car.png';
+    // Priority 3: Known good fallback
+    console.log('📸 Using known good fallback');
+    return '/static/resources/civic_black.png';
 }
 
 // NEW: Enhanced image error handler with multiple fallback attempts
@@ -5990,6 +5979,8 @@ function handleImageError(imgElement, brand, model) {
 
 // NEW: Function to show car specs popup (if the popup functionality exists)
 function showCarSpecsPopup(specs, variant, imageUrl) {
+    console.log('🔍 Showing car specs popup for:', variant);
+    
     // Check if popup elements exist
     const carTitleElement = document.querySelector(".car-title");
     const imgElement = document.querySelector(".img-fave-frame img");
@@ -5998,25 +5989,95 @@ function showCarSpecsPopup(specs, variant, imageUrl) {
     if (carTitleElement && imgElement && specContainer) {
         // Populate the popup
         carTitleElement.textContent = `${specs.Brand} ${specs.Model}`;
-        imgElement.src = imageUrl;
+        
+        // ENHANCED: Better image handling
+        if (imageUrl && !imageUrl.startsWith('data:image/svg+xml')) {
+            imgElement.src = imageUrl;
+        } else {
+            // Use the enhanced image determination
+            const betterImageUrl = determineCarImageUrl(specs);
+            imgElement.src = betterImageUrl;
+        }
+        
         imgElement.onerror = function() { 
-            handleImageError(this, specs.Brand, specs.Model);
+            handleImageError(this, specs.Brand, specs.Model, specs.Variant);
         };
         
+        // ENHANCED: Better organized spec cards with improved styling
         specContainer.innerHTML = `
-            <div class="spec-card"><strong class="spec-label">Brand</strong><br><span class="spec-value">${specs.Brand || 'N/A'}</span></div>
-            <div class="spec-card"><strong class="spec-label">Model</strong><br><span class="spec-value">${specs.Model || 'N/A'}</span></div>
-            <div class="spec-card"><strong class="spec-label">Body Type</strong><br><span class="spec-value">${specs.BodyType || 'N/A'}</span></div>
-            <div class="spec-card"><strong class="spec-label">Variant</strong><br><span class="spec-value">${variant}</span></div>
-            <div class="spec-card"><strong class="spec-label">Drive Train</strong><br><span class="spec-value">${specs.DriveTrain || 'N/A'}</span></div>
-            <div class="spec-card"><strong class="spec-label">Engine</strong><br><span class="spec-value">${specs.Engine || 'N/A'}</span></div>
-            <div class="spec-card"><strong class="spec-label">Horsepower</strong><br><span class="spec-value">${specs.Horsepower ? specs.Horsepower + ' HP' : 'N/A'}</span></div>
-            <div class="spec-card"><strong class="spec-label">Transmission</strong><br><span class="spec-value">${specs.Transmission || 'N/A'}</span></div>
-            <div class="spec-card"><strong class="spec-label">Fuel Type</strong><br><span class="spec-value">${specs.FuelType || 'N/A'}</span></div>
-            <div class="spec-card"><strong class="spec-label">Ground Clearance</strong><br><span class="spec-value">${specs.GroundClearance ? specs.GroundClearance + ' cm' : 'N/A'}</span></div>
-            <div class="spec-card"><strong class="spec-label">Cargo Space</strong><br><span class="spec-value">${specs.Cargospace ? specs.Cargospace + ' L' : 'N/A'}</span></div>
-            <div class="spec-card"><strong class="spec-label">Seating Capacity</strong><br><span class="spec-value">${specs.SeatingCapacity ? specs.SeatingCapacity + ' seats' : 'N/A'}</span></div>
-            <div class="spec-card"><strong class="spec-label">Price</strong><br><span class="spec-value">${specs.Price ? '₱' + parseInt(specs.Price).toLocaleString() : 'N/A'}</span></div>
+            <div class="spec-row">
+                <div class="spec-card">
+                    <strong class="spec-label">Brand</strong>
+                    <span class="spec-value">${specs.Brand || 'N/A'}</span>
+                </div>
+                <div class="spec-card">
+                    <strong class="spec-label">Model</strong>
+                    <span class="spec-value">${specs.Model || 'N/A'}</span>
+                </div>
+                <div class="spec-card">
+                    <strong class="spec-label">Body Type</strong>
+                    <span class="spec-value">${specs.BodyType || 'N/A'}</span>
+                </div>
+            </div>
+            
+            <div class="spec-row">
+                <div class="spec-card">
+                    <strong class="spec-label">Variant</strong>
+                    <span class="spec-value">${variant}</span>
+                </div>
+                <div class="spec-card">
+                    <strong class="spec-label">Year</strong>
+                    <span class="spec-value">${specs.Year || 'N/A'}</span>
+                </div>
+                <div class="spec-card">
+                    <strong class="spec-label">Drive Train</strong>
+                    <span class="spec-value">${specs.DriveTrain || 'N/A'}</span>
+                </div>
+            </div>
+            
+            <div class="spec-row">
+                <div class="spec-card">
+                    <strong class="spec-label">Engine</strong>
+                    <span class="spec-value">${specs.Engine || 'N/A'}</span>
+                </div>
+                <div class="spec-card">
+                    <strong class="spec-label">Horsepower</strong>
+                    <span class="spec-value">${specs.Horsepower ? specs.Horsepower + ' HP' : 'N/A'}</span>
+                </div>
+                <div class="spec-card">
+                    <strong class="spec-label">Transmission</strong>
+                    <span class="spec-value">${specs.Transmission || 'N/A'}</span>
+                </div>
+            </div>
+            
+            <div class="spec-row">
+                <div class="spec-card">
+                    <strong class="spec-label">Fuel Type</strong>
+                    <span class="spec-value">${specs.FuelType || 'N/A'}</span>
+                </div>
+                <div class="spec-card">
+                    <strong class="spec-label">Ground Clearance</strong>
+                    <span class="spec-value">${specs.GroundClearance ? specs.GroundClearance + ' cm' : 'N/A'}</span>
+                </div>
+                <div class="spec-card">
+                    <strong class="spec-label">Cargo Space</strong>
+                    <span class="spec-value">${specs.Cargospace ? specs.Cargospace + ' L' : 'N/A'}</span>
+                </div>
+            </div>
+            
+            <div class="spec-row">
+                <div class="spec-card">
+                    <strong class="spec-label">Seating Capacity</strong>
+                    <span class="spec-value">${specs.SeatingCapacity ? specs.SeatingCapacity + ' seats' : 'N/A'}</span>
+                </div>
+                <div class="spec-card price-card">
+                    <strong class="spec-label">Price</strong>
+                    <span class="spec-value price-value">${specs.Price ? '₱' + parseInt(specs.Price).toLocaleString() : 'N/A'}</span>
+                </div>
+                <div class="spec-card empty-card">
+                    <!-- Empty card for layout balance -->
+                </div>
+            </div>
         `;
 
         // Open the popup if togglePopup function exists
@@ -6152,45 +6213,44 @@ function handleImageError(imgElement, brand, model, variant = null) {
     const model_clean = model ? model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
     const variant_clean = variant ? variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
     
-    // Comprehensive fallback list with all possible combinations and extensions
+    // ENHANCED: Comprehensive fallback list with known working images prioritized
     const fallbacks = [
-        // Variant-specific attempts (if variant provided)
-        ...(variant_clean ? [
+        // Known working images first (from your debug output)
+        '/static/resources/civic_black.png',
+        '/static/resources/avanza_black.webp',
+        
+        // Then try constructed paths
+        ...(variant_clean && brand_clean ? [
             `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.webp`,
             `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.png`,
-            `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.jpg`,
+            `/static/resources/${brand_clean}_${model_clean}_${variant_clean}.jpg`
         ] : []),
         
         // Brand + Model combinations
-        `/static/resources/${brand_clean}_${model_clean}.webp`,
-        `/static/resources/${brand_clean}_${model_clean}.png`,
-        `/static/resources/${brand_clean}_${model_clean}.jpg`,
-        `/static/resources/${brand_clean}_${model_clean}.jpeg`,
-        `/static/resources/${brand_clean}_${model_clean}.gif`,
+        ...(brand_clean ? [
+            `/static/resources/${brand_clean}_${model_clean}.webp`,
+            `/static/resources/${brand_clean}_${model_clean}.png`,
+            `/static/resources/${brand_clean}_${model_clean}.jpg`,
+            `/static/resources/${model_clean}_${brand_clean}.webp`,
+            `/static/resources/${model_clean}_${brand_clean}.png`,
+            `/static/resources/${model_clean}_${brand_clean}.jpg`
+        ] : []),
         
         // Model only
         `/static/resources/${model_clean}.webp`,
         `/static/resources/${model_clean}.png`,
         `/static/resources/${model_clean}.jpg`,
-        `/static/resources/${model_clean}.jpeg`,
         
-        // Brand only
-        `/static/resources/${brand_clean}.webp`,
-        `/static/resources/${brand_clean}.png`,
-        `/static/resources/${brand_clean}.jpg`,
+        // Alternative directory
+        `/static/car_images/${brand_clean}_${model_clean}.png`,
+        `/static/car_images/${model_clean}.png`,
         
-        // Try some common variations
-        `/static/resources/${model_clean}_${brand_clean}.webp`,
-        `/static/resources/${model_clean}_${brand_clean}.png`,
-        
-        // Last resort fallbacks
-        '/static/resources/default_car.webp',
+        // Generic fallbacks
         '/static/resources/default_car.png',
         '/static/resources/tesr.png',
-        '/static/resources/placeholder.png',
         
-        // Data URL fallback (will always work)
-        'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkNhciBJbWFnZTwvdGV4dD48L3N2Zz4='
+        // Final data URL fallback
+        'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg=='
     ];
     
     if (attemptIndex < fallbacks.length) {
@@ -6200,13 +6260,13 @@ function handleImageError(imgElement, brand, model, variant = null) {
         imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
         imgElement.src = nextPath;
         
-        // If we're at the data URL (last fallback), remove the error handler to prevent infinite loop
+        // If we're at the data URL (last fallback), remove the error handler
         if (nextPath.startsWith('data:')) {
             imgElement.onerror = null;
             console.log('📷 Using final data URL fallback');
         }
     } else {
-        console.log('❌ All fallbacks exhausted, removing error handler');
+        console.log('❌ All fallbacks exhausted');
         imgElement.onerror = null;
     }
 }
@@ -6310,6 +6370,42 @@ async function populateColors(model) {
     });
 }
 
+async function debugAvailableImages() {
+    try {
+        console.log('🔍 Debugging available images...');
+        
+        const response = await fetch(`${baseUrl}/debug/images`);
+        if (response.ok) {
+            const imageData = await response.json();
+            console.log('📁 Available images debug data:', imageData);
+            
+            // Test some random images
+            if (imageData.image_files && imageData.image_files.length > 0) {
+                console.log('🧪 Testing first few images...');
+                const testImages = imageData.image_files.slice(0, 5);
+                
+                for (const imageInfo of testImages) {
+                    const isAvailable = await testImageAvailability(imageInfo.url);
+                    console.log(`📸 ${imageInfo.filename}: ${isAvailable ? '✅ Available' : '❌ Not Available'}`);
+                }
+            }
+            
+            return imageData;
+        } else {
+            console.error('❌ Failed to get image debug data');
+            return null;
+        }
+        
+    } catch (error) {
+        console.error('❌ Error debugging images:', error);
+        return null;
+    }
+}
+
+// Make the new functions globally available
+window.debugAvailableImages = debugAvailableImages;
+window.printPopup = printPopup;
+
 ////////////////////////////////
 // Allows users to print     //
 // or save the favorite     //
@@ -6317,43 +6413,198 @@ async function populateColors(model) {
 ////////////////////////////
 
 function printPopup() {
-    const printContent = document.getElementById("printable-popup").innerHTML;
-    const originalContent = document.body.innerHTML;
-
-    // Create a new iframe to hold the print content
-    const iframe = document.createElement('iframe');
-    iframe.style.visibility = 'hidden';
-    iframe.style.position = 'absolute';
-    iframe.style.top = '0';
-    iframe.style.left = '0';
-    iframe.style.width = '100%';
-    iframe.style.height = '100%';
-
-    // Add the iframe to the body
-    document.body.appendChild(iframe);
-
-    // Add the print content to the iframe
-    iframe.contentWindow.document.body.innerHTML = `
+    console.log('🖨️ Preparing to print popup...');
+    
+    // Get the printable content
+    const printableElement = document.getElementById("printable-popup");
+    
+    if (!printableElement) {
+        console.error('❌ Printable popup element not found');
+        alert('Print content not available. Please try again.');
+        return;
+    }
+    
+    // Get the content
+    const printContent = printableElement.innerHTML;
+    
+    if (!printContent || printContent.trim() === '') {
+        console.error('❌ No content to print');
+        alert('No content available to print.');
+        return;
+    }
+    
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    if (!printWindow) {
+        console.error('❌ Could not open print window');
+        alert('Print window blocked. Please allow popups and try again.');
+        return;
+    }
+    
+    // ENHANCED: Better print styling
+    const printHTML = `
+        <!DOCTYPE html>
         <html>
-            <head>
-                <link rel="stylesheet" href="style.css"> <!-- Link to your stylesheet file -->
-            </head>
-            <body>
-                ${printContent}
-            </body>
+        <head>
+            <title>Car Specifications - RideMatch</title>
+            <style>
+                * {
+                    box-sizing: border-box;
+                    margin: 0;
+                    padding: 0;
+                }
+                
+                body {
+                    font-family: Arial, sans-serif;
+                    line-height: 1.6;
+                    padding: 20px;
+                    background: white;
+                    color: #333;
+                }
+                
+                .car-title {
+                    font-size: 24px;
+                    font-weight: bold;
+                    text-align: center;
+                    margin-bottom: 20px;
+                    color: #2c3e50;
+                    border-bottom: 2px solid #b49b66;
+                    padding-bottom: 10px;
+                }
+                
+                .img-fave-frame {
+                    text-align: center;
+                    margin-bottom: 30px;
+                }
+                
+                .img-fave-frame img {
+                    max-width: 400px;
+                    max-height: 250px;
+                    border: 2px solid #ddd;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+                }
+                
+                .spec-card-container {
+                    width: 100%;
+                }
+                
+                .spec-row {
+                    display: flex;
+                    justify-content: space-between;
+                    margin-bottom: 15px;
+                    gap: 15px;
+                }
+                
+                .spec-card {
+                    flex: 1;
+                    padding: 15px;
+                    border: 1px solid #ddd;
+                    border-radius: 6px;
+                    background: #f9f9f9;
+                    min-height: 60px;
+                    display: flex;
+                    flex-direction: column;
+                    justify-content: center;
+                }
+                
+                .spec-card.price-card {
+                    background: #fff5e6;
+                    border-color: #b49b66;
+                }
+                
+                .spec-card.empty-card {
+                    opacity: 0;
+                    border: none;
+                    background: none;
+                }
+                
+                .spec-label {
+                    font-weight: bold;
+                    color: #555;
+                    font-size: 12px;
+                    text-transform: uppercase;
+                    letter-spacing: 0.5px;
+                    margin-bottom: 5px;
+                }
+                
+                .spec-value {
+                    font-size: 14px;
+                    color: #333;
+                    font-weight: 500;
+                }
+                
+                .spec-value.price-value {
+                    color: #b49b66;
+                    font-weight: bold;
+                    font-size: 16px;
+                }
+                
+                .print-footer {
+                    margin-top: 40px;
+                    text-align: center;
+                    font-size: 12px;
+                    color: #666;
+                    border-top: 1px solid #ddd;
+                    padding-top: 15px;
+                }
+                
+                @media print {
+                    body {
+                        padding: 10px;
+                    }
+                    
+                    .spec-row {
+                        break-inside: avoid;
+                    }
+                    
+                    .img-fave-frame img {
+                        max-width: 300px;
+                        max-height: 200px;
+                    }
+                    
+                    .spec-card {
+                        page-break-inside: avoid;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            ${printContent}
+            <div class="print-footer">
+                <p>Generated by RideMatch Car Filtering System</p>
+                <p>Printed on: ${new Date().toLocaleDateString()}</p>
+            </div>
+        </body>
         </html>
     `;
-
-    // Print the iframe content
-    iframe.contentWindow.print();
-
-    // Remove the iframe
-    document.body.removeChild(iframe);
-
-    // Restore the original content
-    document.body.innerHTML = originalContent;
-    location.reload(); // Reload to restore event listeners
+    
+    // Write content to print window
+    printWindow.document.write(printHTML);
+    printWindow.document.close();
+    
+    // Wait for content to load, then print
+    printWindow.onload = function() {
+        console.log('✅ Print window loaded, initiating print...');
+        setTimeout(() => {
+            printWindow.print();
+            
+            // Close the print window after printing
+            setTimeout(() => {
+                printWindow.close();
+            }, 1000);
+        }, 500);
+    };
+    
+    // Fallback - try to print even if onload doesn't fire
+    setTimeout(() => {
+        if (printWindow && !printWindow.closed) {
+            printWindow.print();
+        }
+    }, 2000);
 }
+
 
 //////////////////////
 //PRICE CALCULATOR  //
