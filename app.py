@@ -6004,9 +6004,6 @@ def refresh_session():
         app.logger.error(f"❌ Error refreshing session: {e}")
         return jsonify({"status": "error", "message": "Session refresh failed"}), 500
 
-# UPDATED: Enhanced update-username route with better error handling
-@app.route('/update-username', methods=['POST'])
-def update_username():
     """Update user's username with enhanced error handling"""
     app.logger.info("🔄 Update username request received")
     
