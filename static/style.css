@@ -1881,204 +1881,642 @@ select option[disabled] {
 /*******************/
 /* FAVORITES CARDS */
 /*******************/
-#card-container{
+/* FAVORITES CARDS CONTAINER */
+#card-container {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
+    gap: 20px;
+    padding: 20px;
+    min-height: 400px;
 }
 
+/* INDIVIDUAL FAVORITE CARDS */
 .card {
-    width: 250px;
-    margin: 10px auto;
+    width: 280px;
+    margin: 10px;
     background: white;
-    border-radius: 10px;
+    border-radius: 15px;
     overflow: hidden;
-    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+    box-shadow: 0px 6px 20px rgba(0, 0, 0, 0.1);
     transition: transform 0.3s ease, box-shadow 0.3s ease;
     cursor: pointer;
     text-align: center;
+    border: 2px solid transparent;
 }
 
 .card:hover {
-    transform: scale(1.05);
-    box-shadow: 0px 8px 15px rgba(0, 0, 0, 0.2);
+    transform: translateY(-10px);
+    box-shadow: 0px 15px 35px rgba(0, 0, 0, 0.2);
+    border-color: #b49b66;
 }
 
 .card img {
     width: 100%;
-    height: 150px;
+    height: 180px;
     object-fit: cover;
+    transition: transform 0.3s ease;
+}
+
+.card:hover img {
+    transform: scale(1.05);
 }
 
 .card .name {
-    padding: 15px;
+    padding: 15px 10px 5px;
     font-size: 18px;
     font-weight: bold;
     color: #333;
+    border-bottom: 1px solid #eee;
 }
 
-/* Outer Frame (Main Container) */
-#card-popup .popup{
+.card .variant-name {
+    padding: 5px 10px 10px;
+    font-size: 14px;
+    color: #666;
+    font-style: italic;
+}
+
+/* FAVORITE ACTIONS */
+.favorite-actions {
+    padding: 15px;
+    background: #f9f9f9;
+}
+
+.remove-favorite-btn {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 8px 15px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 12px;
+    transition: all 0.3s ease;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0 auto;
+}
+
+.remove-favorite-btn:hover {
+    background: #c0392b;
+    transform: scale(1.05);
+}
+
+/* NO FAVORITES STATE */
+.no-favorites {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+    color: #666;
+    background: rgba(249, 246, 238, 0.5);
+    border-radius: 15px;
+    margin: 40px auto;
+    max-width: 500px;
+    border: 2px dashed #b49b66;
+}
+
+.no-favorites i {
+    font-size: 4rem;
+    color: #b49b66;
+    margin-bottom: 20px;
+}
+
+.no-favorites p {
+    font-size: 1.2rem;
+    margin-bottom: 20px;
+}
+
+.sign-in-btn, .retry-btn {
+    background: #b49b66;
+    color: white;
+    border: none;
+    padding: 12px 25px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+}
+
+.sign-in-btn:hover, .retry-btn:hover {
+    background: #95844f;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(180, 155, 102, 0.3);
+}
+
+/* LOADING STATE */
+.loading-favorites {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 20px;
+    text-align: center;
+    color: #b49b66;
+}
+
+.loading-favorites i {
+    font-size: 3rem;
+    margin-bottom: 20px;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* POPUP STYLES FOR FAVORITES */
+#card-popup .popup {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
-    height: 60%;
-    margin: 0 auto;
-    background: rgba(0, 0, 0, 0.5);
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
     display: flex;
     justify-content: center;
     align-items: center;
     visibility: hidden;
     opacity: 0;
-    transition: opacity 0.3s ease;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
     z-index: 1001;
 }
 
+#card-popup .popup.active {
+    visibility: visible;
+    opacity: 1;
+}
+
 #card-popup .popup-content {
-    background: var(--background-color);
+    background: var(--background-color, #fff);
     padding: 2rem;
-    border-radius: 0.5rem;
-    box-shadow: var(--box-shadow);
-    max-width: 100%;
-    max-height: 100%;
-    width: 80%;
-    height: 90%;
+    border-radius: 15px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    max-width: 95%;
+    max-height: 95%;
+    width: 900px;
+    height: auto;
     position: relative;
+    overflow-y: auto;
 }
 
-.outer-fave-frame {
-    width: 100%;
-    margin: 25px auto;
-    padding: 0;
-    border: 2px solid #b49b66;
-    border-radius: 10px;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(18px);
-}
-
-/* Title & Printer Icon Row */
+/* POPUP HEADER */
 .header-row {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 20px;
+    padding-bottom: 15px;
+    border-bottom: 2px solid #b49b66;
 }
 
-/* Car Title */
 .car-title {
     text-align: center;
     color: #b49b66;
-    font-size: 24px;
+    font-size: 28px;
+    font-weight: bold;
     flex-grow: 1;
 }
 
-/* Printer Icon */
 .header-row i {
     font-size: 1.8rem;
     color: #b49b66 !important;
     cursor: pointer;
-    transition: all .55s ease;
+    transition: all 0.3s ease;
+    padding: 5px;
+    border-radius: 5px;
 }
 
 .header-row i:hover {
     transform: translateY(-3px);
+    background: rgba(180, 155, 102, 0.1);
 }
 
-/* Horizontal Line Under Title */
-.header-divider {
-    width: 100%;
-    height: 2px;
-    background-color: #b49b66;
-    margin-bottom: 15px;
-}
-
-/* Inner Frame: Image + Specs */
+/* POPUP CONTENT LAYOUT */
 .inner-fave-frame {
-    margin-left: 5px;
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
+    gap: 30px;
+    margin-top: 20px;
 }
 
-/* Image Container */
+/* IMAGE SECTION */
 .img-container {
     display: flex;
     flex-direction: column;
     align-items: center;
-    width: 60%;
+    width: 50%;
 }
 
-/* Image Frame */
 .img-fave-frame {
-    border: 2px solid #b49b66;
-    border-radius: 10px;
+    border: 3px solid #b49b66;
+    border-radius: 15px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.1);
     display: flex;
     align-items: center;
     justify-content: center;
+    margin-bottom: 15px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
 }
 
-/* Image Styling (Fixes Gap Issue) */
 .img-fave-frame img {
     width: 100%;
-    height: 100%;
+    height: auto;
+    min-height: 200px;
     object-fit: cover;
+    transition: transform 0.3s ease;
 }
 
-/* Dropdown Below Image (Centered) */
+.img-fave-frame:hover img {
+    transform: scale(1.02);
+}
+
+/* COLOR VARIANT DROPDOWN */
 .bottom-options {
     width: 100%;
     display: flex;
     justify-content: center;
-    margin-top: 10px;
-    margin-bottom: 5px;
+    margin-top: 15px;
 }
 
-/* Dropdown Styling */
 .variant-dropdown {
-    padding: 10px;
+    padding: 12px 20px;
     border: 2px solid #b49b66;
-    border-radius: 5px;
+    border-radius: 25px;
     font-size: 16px;
-    background: rgba(255, 255, 255, 0.2);
-    color: #b49b66;
-    width: 50%;
-    max-width: 200px;
+    background: rgba(255, 255, 255, 0.9);
+    color: #333;
+    width: 80%;
+    max-width: 250px;
     text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    outline: none;
 }
 
-/* Right Side: Specs */
+.variant-dropdown:hover,
+.variant-dropdown:focus {
+    background: #b49b66;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(180, 155, 102, 0.3);
+}
+
+.variant-dropdown option {
+    background: white;
+    color: #333;
+    padding: 10px;
+}
+
+/* SPECIFICATIONS SECTION */
 .spec-fave-frame {
     width: 50%;
     padding-left: 20px;
-    padding-right: 5px;
-    padding-bottom: 5px;
 }
 
-/* Spec Card Container */
 .spec-card-container {
     display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
+    flex-direction: column;
+    gap: 15px;
 }
 
-/* Individual Spec Card */
+/* SPECIFICATION ROWS */
+.spec-row {
+    display: flex;
+    gap: 15px;
+    justify-content: space-between;
+}
+
+/* INDIVIDUAL SPEC CARDS */
 .spec-card {
-    background: rgba(255, 255, 255, 0.3);
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.9), rgba(249, 246, 238, 0.7));
     border: 2px solid #b49b66;
-    color: var(--second-color);
-    border-radius: 5px;
-    padding: 10px;
+    color: var(--second-color, #333);
+    border-radius: 10px;
+    padding: 15px;
     text-align: center;
-    min-width: 120px;
-    flex: 1 1 calc(33.33% - 10px);
+    flex: 1;
+    min-height: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 
-.spec-card br + span {
-    color: black; /* Toyota text color */
+.spec-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(180, 155, 102, 0.2);
+    background: linear-gradient(135deg, #b49b66, rgba(180, 155, 102, 0.8));
+    color: white;
+}
+
+.spec-card.price-card {
+    background: linear-gradient(135deg, #fff5e6, #f0e6d2);
+    border-color: #d4af37;
+    position: relative;
+    overflow: hidden;
+}
+
+.spec-card.price-card:before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: linear-gradient(45deg, transparent, rgba(212, 175, 55, 0.1), transparent);
+    transform: rotate(45deg);
+    transition: all 0.3s ease;
+}
+
+.spec-card.price-card:hover:before {
+    animation: shimmer 1.5s ease-in-out;
+}
+
+@keyframes shimmer {
+    0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+    100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+}
+
+.spec-card.empty-card {
+    opacity: 0;
+    pointer-events: none;
+    border: none;
+    background: none;
+    box-shadow: none;
+}
+
+/* SPEC LABELS AND VALUES */
+.spec-label {
+    font-weight: bold;
+    color: #666;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+    display: block;
+}
+
+.spec-card:hover .spec-label {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.spec-value {
+    font-size: 16px;
+    color: #333;
+    font-weight: 600;
+    line-height: 1.2;
+}
+
+.spec-card:hover .spec-value {
+    color: white;
+}
+
+.spec-value.price-value {
+    color: #d4af37;
+    font-weight: bold;
+    font-size: 20px;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.spec-card.price-card:hover .spec-value.price-value {
+    color: white;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* CLOSE BUTTON */
+.popup-content .close-btn {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 28px;
+    color: #b49b66;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 50%;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.popup-content .close-btn:hover {
+    background: rgba(180, 155, 102, 0.1);
+    transform: rotate(90deg);
+}
+
+/* RESPONSIVE DESIGN */
+@media (max-width: 768px) {
+    #card-container {
+        padding: 10px;
+        gap: 15px;
+    }
+    
+    .card {
+        width: 100%;
+        max-width: 350px;
+        margin: 0 auto;
+    }
+    
+    #card-popup .popup-content {
+        width: 95%;
+        height: 90%;
+        padding: 1rem;
+        margin: 20px;
+    }
+    
+    .inner-fave-frame {
+        flex-direction: column;
+        gap: 20px;
+    }
+    
+    .img-container,
+    .spec-fave-frame {
+        width: 100%;
+        padding-left: 0;
+    }
+    
+    .spec-row {
+        flex-direction: column;
+        gap: 10px;
+    }
+    
+    .spec-card {
+        min-height: 60px;
+        padding: 12px;
+    }
+    
+    .car-title {
+        font-size: 22px;
+    }
+    
+    .variant-dropdown {
+        width: 100%;
+        max-width: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .card {
+        width: 100%;
+        margin: 0;
+    }
+    
+    .card .name {
+        font-size: 16px;
+        padding: 12px 8px 5px;
+    }
+    
+    .card .variant-name {
+        font-size: 12px;
+        padding: 5px 8px 8px;
+    }
+    
+    #card-popup .popup-content {
+        padding: 0.5rem;
+        border-radius: 10px;
+    }
+    
+    .car-title {
+        font-size: 18px;
+    }
+    
+    .spec-card {
+        padding: 10px;
+        min-height: 50px;
+    }
+    
+    .spec-label {
+        font-size: 11px;
+        margin-bottom: 5px;
+    }
+    
+    .spec-value {
+        font-size: 14px;
+    }
+    
+    .spec-value.price-value {
+        font-size: 16px;
+    }
+}
+
+/* ANIMATION UTILITIES */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOutRight {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+}
+
+/* CARD ENTRANCE ANIMATION */
+.card {
+    animation: fadeIn 0.6s ease forwards;
+}
+
+/* STAGGER ANIMATION FOR MULTIPLE CARDS */
+.card:nth-child(1) { animation-delay: 0.1s; }
+.card:nth-child(2) { animation-delay: 0.2s; }
+.card:nth-child(3) { animation-delay: 0.3s; }
+.card:nth-child(4) { animation-delay: 0.4s; }
+.card:nth-child(5) { animation-delay: 0.5s; }
+.card:nth-child(6) { animation-delay: 0.6s; }
+
+/* ERROR MESSAGES */
+.color-change-error {
+    animation: slideInRight 0.3s ease;
+}
+
+/* IMPROVED SCROLLBAR FOR POPUP */
+.popup-content::-webkit-scrollbar {
+    width: 8px;
+}
+
+.popup-content::-webkit-scrollbar-track {
+    background: rgba(180, 155, 102, 0.1);
+    border-radius: 4px;
+}
+
+.popup-content::-webkit-scrollbar-thumb {
+    background: #b49b66;
+    border-radius: 4px;
+}
+
+.popup-content::-webkit-scrollbar-thumb:hover {
+    background: #95844f;
+}
+
+/* LOADING SPINNER */
+.loading-spinner {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.loading-spinner i {
+    animation: spin 1s linear infinite;
+}
+
+/* PRINT STYLES */
+@media print {
+    .popup-content {
+        box-shadow: none;
+        border: 2px solid #b49b66;
+    }
+    
+    .header-row i,
+    .close-btn,
+    .variant-dropdown {
+        display: none;
+    }
+    
+    .spec-card {
+        break-inside: avoid;
+        background: white !important;
+        color: black !important;
+    }
+    
+    .car-title {
+        color: black !important;
+    }
 }
 
 /*******************/

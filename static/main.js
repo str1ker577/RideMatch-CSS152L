@@ -5867,6 +5867,11 @@ async function loadFavorites() {
     }
 }
 
+
+/////////////////////////
+// CarImages function //
+///////////////////////
+
 function determineCarImageUrl(specs) {
     console.log('🔍 Determining image URL for specs:', specs);
     
@@ -5990,11 +5995,10 @@ function showCarSpecsPopup(specs, variant, imageUrl) {
         // Populate the popup
         carTitleElement.textContent = `${specs.Brand} ${specs.Model}`;
         
-        // ENHANCED: Better image handling
+        // Set initial image
         if (imageUrl && !imageUrl.startsWith('data:image/svg+xml')) {
             imgElement.src = imageUrl;
         } else {
-            // Use the enhanced image determination
             const betterImageUrl = determineCarImageUrl(specs);
             imgElement.src = betterImageUrl;
         }
@@ -6003,7 +6007,12 @@ function showCarSpecsPopup(specs, variant, imageUrl) {
             handleImageError(this, specs.Brand, specs.Model, specs.Variant);
         };
         
-        // ENHANCED: Better organized spec cards with improved styling
+        // ENHANCED: Auto-populate colors when popup opens
+        setTimeout(() => {
+            populateColors(specs.Model, specs.Brand);
+        }, 100);
+        
+        // Build spec cards (rest of the existing code...)
         specContainer.innerHTML = `
             <div class="spec-row">
                 <div class="spec-card">
@@ -6088,6 +6097,49 @@ function showCarSpecsPopup(specs, variant, imageUrl) {
         console.warn("❌ Popup elements not found - cannot show detailed specs");
     }
 }
+
+function showColorChangeError(message) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'color-change-error';
+    errorDiv.innerHTML = `
+        <i class="fas fa-exclamation-triangle"></i>
+        <span>${message}</span>
+    `;
+    errorDiv.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: #e74c3c;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        z-index: 10001;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        animation: slideInRight 0.3s ease;
+    `;
+    
+    document.body.appendChild(errorDiv);
+    
+    setTimeout(() => {
+        if (errorDiv.parentNode) {
+            errorDiv.style.animation = 'slideOutRight 0.3s ease';
+            setTimeout(() => {
+                if (errorDiv.parentNode) {
+                    errorDiv.parentNode.removeChild(errorDiv);
+                }
+            }, 300);
+        }
+    }, 3000);
+}
+
+// Make functions globally available
+window.populateColors = populateColors;
+window.handleColorChange = handleColorChange;
+window.showCarSpecsPopup = showCarSpecsPopup;
 
 // Make functions globally available
 window.handleImageError = handleImageError;
@@ -6341,33 +6393,61 @@ async function debugImageIssues() {
 // image being displayed //
 //////////////////////////
 
-async function populateColors(model) {
-    const selectedModel = model;
-    if (!selectedModel) return; // Exit if no model is selected
-    console.log(model);
-    const response = await fetch(`${baseUrl}/get_colors?model=${selectedModel}`);
-
-    const colors = await response.json();
-
-    console.log(colors);
-
-    const colorSelect = document.querySelector('.variant-dropdown');
-    colorSelect.innerHTML = '<option value="">Select Color</option>'; // Reset colors
-
-    colors.forEach(color => {
-        const option = document.createElement('option');
-        option.value = color.color;
-        option.textContent = color.color;
-        option.dataset.imagePath = color.image_path;
-        colorSelect.appendChild(option);
-    });
-
-    colorSelect.addEventListener('change', (e) => {
-        const selectedColor = e.target.value;
-        const selectedOption = colorSelect.querySelector(`option[value="${selectedColor}"]`);
-        const imageUrl = selectedOption.dataset.imagePath;
-        document.querySelector(".img-fave-frame img").src = imageUrl;
-    });
+async function populateColors(model, brand = null) {
+    if (!model) return;
+    
+    console.log(`🎨 Populating colors for: ${brand} ${model}`);
+    
+    try {
+        // Build URL with brand parameter for better matching
+        const url = new URL(`${baseUrl}/get_colors`);
+        url.searchParams.append('model', model);
+        if (brand) {
+            url.searchParams.append('brand', brand);
+        }
+        
+        const response = await fetch(url);
+        const colors = await response.json();
+        
+        console.log(`📋 Received ${colors.length} color variants:`, colors);
+        
+        const colorSelect = document.querySelector('.variant-dropdown');
+        if (!colorSelect) {
+            console.error('❌ Color dropdown not found');
+            return;
+        }
+        
+        // Clear existing options
+        colorSelect.innerHTML = '<option value="">Select Color</option>';
+        
+        if (colors.length === 0) {
+            console.log('⚠️ No color variants found');
+            colorSelect.innerHTML = '<option value="">No color variants available</option>';
+            return;
+        }
+        
+        // Add color options
+        colors.forEach(colorData => {
+            const option = document.createElement('option');
+            option.value = colorData.color;
+            option.textContent = colorData.color;
+            option.dataset.imagePath = colorData.image_path;
+            colorSelect.appendChild(option);
+        });
+        
+        // ENHANCED: Add change event listener with better error handling
+        colorSelect.removeEventListener('change', handleColorChange); // Remove existing listener
+        colorSelect.addEventListener('change', handleColorChange);
+        
+        console.log(`✅ Successfully populated ${colors.length} color variants`);
+        
+    } catch (error) {
+        console.error('❌ Error fetching colors:', error);
+        const colorSelect = document.querySelector('.variant-dropdown');
+        if (colorSelect) {
+            colorSelect.innerHTML = '<option value="">Error loading colors</option>';
+        }
+    }
 }
 
 async function debugAvailableImages() {
@@ -6400,6 +6480,58 @@ async function debugAvailableImages() {
         console.error('❌ Error debugging images:', error);
         return null;
     }
+}
+
+function handleColorChange(event) {
+    const selectedColor = event.target.value;
+    const selectedOption = event.target.querySelector(`option[value="${selectedColor}"]`);
+    
+    if (!selectedOption || !selectedColor) {
+        console.log('🔄 No color selected or invalid selection');
+        return;
+    }
+    
+    const imageUrl = selectedOption.dataset.imagePath;
+    console.log(`🎨 Color changed to: ${selectedColor}, Image: ${imageUrl}`);
+    
+    if (!imageUrl) {
+        console.error('❌ No image path found for selected color');
+        return;
+    }
+    
+    // Find the image element in the popup
+    const imageElement = document.querySelector(".img-fave-frame img");
+    if (!imageElement) {
+        console.error('❌ Image element not found in popup');
+        return;
+    }
+    
+    // ENHANCED: Add loading state and error handling
+    imageElement.style.opacity = '0.5';
+    imageElement.style.transition = 'opacity 0.3s ease';
+    
+    // Test if image loads before setting it
+    const testImg = new Image();
+    
+    testImg.onload = function() {
+        console.log(`✅ Color variant image loaded successfully: ${imageUrl}`);
+        imageElement.src = imageUrl;
+        imageElement.style.opacity = '1';
+        
+        // Update any data attributes for consistency
+        imageElement.dataset.currentColor = selectedColor;
+    };
+    
+    testImg.onerror = function() {
+        console.error(`❌ Failed to load color variant image: ${imageUrl}`);
+        // Revert to original state
+        imageElement.style.opacity = '1';
+        
+        // Show error message
+        showColorChangeError(`Failed to load ${selectedColor} variant image`);
+    };
+    
+    testImg.src = imageUrl;
 }
 
 // Make the new functions globally available
@@ -6604,7 +6736,6 @@ function printPopup() {
         }
     }, 2000);
 }
-
 
 //////////////////////
 //PRICE CALCULATOR  //

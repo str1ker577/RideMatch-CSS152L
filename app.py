@@ -3781,7 +3781,7 @@ def test_compare():
         return jsonify({"error": str(e)})
     
 def find_car_image(model, brand=None, variant=None):
-    """Enhanced car image finder with multiple fallback options"""
+    """Enhanced car image finder with strict brand-model matching"""
     try:
         # Clean inputs for filename generation
         model_clean = model.replace(' ', '_').lower() if model else 'default'
@@ -3795,10 +3795,10 @@ def find_car_image(model, brand=None, variant=None):
         
         app.logger.info(f"🔍 Finding image for: brand={brand}, model={model}, variant={variant}")
         
-        # Priority list of image paths to try
+        # FIXED: Brand-specific matching to prevent cross-brand image usage
         image_paths = []
         
-        # Most specific to least specific
+        # Priority 1: Exact brand-model-variant match
         if variant_clean and brand_clean:
             image_paths.extend([
                 f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.webp',
@@ -3806,78 +3806,81 @@ def find_car_image(model, brand=None, variant=None):
                 f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.jpg'
             ])
         
+        # Priority 2: Brand-model match (MUST include brand to prevent mismatching)
         if brand_clean:
             image_paths.extend([
                 f'static/resources/{brand_clean}_{model_clean}.webp',
-                f'static/resources/{brand_clean}_{model_clean}.png',
-                f'static/resources/{brand_clean}_{model_clean}.jpg',
+                f'static/resources/{brand_clean}_{model_clean}.png', 
+                f'static/resources/{brand_clean}_{model_clean}.jpg'
+            ])
+            
+            # Also try reverse order (model_brand)
+            image_paths.extend([
                 f'static/resources/{model_clean}_{brand_clean}.webp',
                 f'static/resources/{model_clean}_{brand_clean}.png',
                 f'static/resources/{model_clean}_{brand_clean}.jpg'
             ])
         
-        # Model only
-        image_paths.extend([
-            f'static/resources/{model_clean}.webp',
-            f'static/resources/{model_clean}.png',
-            f'static/resources/{model_clean}.jpg',
-            f'static/resources/{model_clean}.jpeg'
-        ])
-        
-        # Alternative directory structures
+        # Priority 3: ONLY if brand is available, try model-only WITH brand verification
         if brand_clean:
-            image_paths.extend([
-                f'static/car_images/{brand_clean}_{model_clean}.webp',
-                f'static/car_images/{brand_clean}_{model_clean}.png',
-                f'static/car_images/{brand_clean}_{model_clean}.jpg'
-            ])
+            # Check model-only files but verify they don't belong to other brands
+            potential_model_files = [
+                f'static/resources/{model_clean}.webp',
+                f'static/resources/{model_clean}.png', 
+                f'static/resources/{model_clean}.jpg'
+            ]
+            
+            # Only add model-only files if we can verify they're for the correct brand
+            # This prevents Honda Civic images from showing for other brands
+            for model_file in potential_model_files:
+                if os.path.exists(model_file):
+                    # Additional verification: check if this model is commonly associated with the brand
+                    brand_model_combinations = {
+                        'honda': ['civic', 'accord', 'crv', 'pilot', 'odyssey'],
+                        'toyota': ['vios', 'camry', 'corolla', 'rav4', 'prius'],
+                        'porsche': ['cayenne', 'panamera', 'macan', '911', 'taycan'],
+                        'volkswagen': ['id6', 'passat', 'golf', 'jetta', 'tiguan'],
+                        'mercedes': ['amg', 'cls', 'glc', 'eqs'],
+                        'bmw': ['x1', 'x3', 'x5', 'i3', 'i8']
+                    }
+                    
+                    # Only use model-only image if the model is known to belong to this brand
+                    if brand_clean in brand_model_combinations:
+                        known_models = brand_model_combinations[brand_clean]
+                        if model_clean in known_models:
+                            image_paths.append(model_file)
         
-        # Check each path
+        # Check each path in priority order
         for image_path in image_paths:
             if os.path.exists(image_path):
-                # Convert to URL path
                 url_path = '/' + image_path.replace('\\', '/')
-                app.logger.info(f"✅ Found image: {url_path}")
+                app.logger.info(f"✅ Found brand-verified image: {url_path} for {brand} {model}")
                 return url_path
         
-        # Check if any car images exist at all for debugging
+        # FALLBACK: Search for exact filename matches in directory
         resources_dir = 'static/resources'
-        if os.path.exists(resources_dir):
+        if os.path.exists(resources_dir) and brand_clean:
             try:
                 all_files = os.listdir(resources_dir)
-                image_files = [f for f in all_files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif'))]
-                app.logger.info(f"📁 Available images in resources: {len(image_files)} files")
-                app.logger.info(f"📋 Sample files: {image_files[:5]}")
                 
-                # Try to find a partial match
-                for img_file in image_files:
-                    img_lower = img_file.lower()
-                    if model_clean in img_lower or (brand_clean and brand_clean in img_lower):
+                # Look for files that start with the brand name
+                brand_specific_files = [f for f in all_files if f.lower().startswith(brand_clean)]
+                
+                for img_file in brand_specific_files:
+                    if model_clean in img_file.lower():
                         url_path = f'/static/resources/{img_file}'
-                        app.logger.info(f"🎯 Found partial match: {url_path}")
+                        app.logger.info(f"🎯 Found brand-specific match: {url_path}")
                         return url_path
                         
             except Exception as list_error:
                 app.logger.error(f"❌ Error listing resources: {list_error}")
         
-        # If we have existing working images, use one as fallback
-        known_good_images = [
-            '/static/resources/civic_black.png',
-            '/static/resources/avanza_black.webp',
-            '/static/resources/tesr.png'
-        ]
-        
-        for fallback in known_good_images:
-            if os.path.exists(fallback.lstrip('/')):
-                app.logger.info(f"🔄 Using known good fallback: {fallback}")
-                return fallback
-        
-        # Final fallback - return None to let frontend handle
-        app.logger.warning(f"❌ No image found for {brand} {model}, returning None")
+        # LAST RESORT: Return None instead of wrong brand image
+        app.logger.warning(f"❌ No brand-verified image found for {brand} {model}")
         return None
         
     except Exception as e:
-        app.logger.error(f"❌ Error finding image for model {model}: {e}")
+        app.logger.error(f"❌ Error finding image for {brand} {model}: {e}")
         return None
     
 ###############################
@@ -4384,6 +4387,108 @@ def debug_csv_status():
     
 @app.route('/get_colors')
 def get_colors():
+    """Get color variants for a specific model with actual image checking"""
+    if df.empty:
+        app.logger.warning("No car data available for colors")
+        return jsonify([])
+    
+    model = request.args.get('model', '').strip()
+    brand = request.args.get('brand', '').strip()  # NEW: Add brand parameter
+    
+    if not model:
+        app.logger.warning("No model specified for color lookup")
+        return jsonify([])
+
+    try:
+        app.logger.info(f"🎨 Getting colors for model: {model}, brand: {brand}")
+        
+        # Clean model and brand names
+        model_clean = model.replace(' ', '_').lower()
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        
+        # Remove special characters
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        
+        colors = []
+        resources_dir = 'static/resources'
+        
+        if os.path.exists(resources_dir):
+            all_files = os.listdir(resources_dir)
+            
+            # Look for image files that match the model
+            for filename in all_files:
+                filename_lower = filename.lower()
+                
+                # Skip non-image files
+                if not filename_lower.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                    continue
+                
+                # FIXED: Check for brand-model combination first
+                if brand_clean:
+                    # Look for brand_model_color pattern
+                    brand_model_pattern = f"{brand_clean}_{model_clean}"
+                    if brand_model_pattern in filename_lower:
+                        # Extract color from filename
+                        # Pattern: brand_model_color.ext
+                        base_name = filename_lower.replace(f"{brand_model_pattern}_", "").split('.')[0]
+                        if base_name and base_name not in [brand_clean, model_clean]:
+                            color_name = base_name.replace('_', ' ').title()
+                            colors.append({
+                                'color': color_name,
+                                'image_path': f'/static/resources/{filename}'
+                            })
+                            app.logger.info(f"🎨 Found color variant: {color_name} -> {filename}")
+                    
+                    # Also check model_brand_color pattern
+                    model_brand_pattern = f"{model_clean}_{brand_clean}"
+                    if model_brand_pattern in filename_lower:
+                        base_name = filename_lower.replace(f"{model_brand_pattern}_", "").split('.')[0]
+                        if base_name and base_name not in [brand_clean, model_clean]:
+                            color_name = base_name.replace('_', ' ').title()
+                            colors.append({
+                                'color': color_name,
+                                'image_path': f'/static/resources/{filename}'
+                            })
+                
+                # Fallback: Look for model_color pattern (only if brand matches known associations)
+                elif model_clean in filename_lower:
+                    # Verify this is the right brand's model
+                    brand_model_associations = {
+                        'civic': 'honda',
+                        'vios': 'toyota', 
+                        'cayenne': 'porsche',
+                        'id6': 'volkswagen'
+                    }
+                    
+                    expected_brand = brand_model_associations.get(model_clean)
+                    if not brand or brand_clean == expected_brand:
+                        # Extract color
+                        parts = filename_lower.split('_')
+                        if len(parts) >= 2:
+                            color_part = parts[-1].split('.')[0]
+                            if color_part != model_clean:
+                                color_name = color_part.replace('_', ' ').title()
+                                colors.append({
+                                    'color': color_name,
+                                    'image_path': f'/static/resources/{filename}'
+                                })
+        
+        # Remove duplicates
+        unique_colors = []
+        seen_colors = set()
+        for color in colors:
+            if color['color'] not in seen_colors:
+                unique_colors.append(color)
+                seen_colors.add(color['color'])
+        
+        app.logger.info(f"✅ Found {len(unique_colors)} color variants for {brand} {model}")
+        return jsonify(unique_colors)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting colors for {brand} {model}: {e}")
+        return jsonify([])
+    
     """Placeholder for car color variants - currently not implemented"""
     model = request.args.get('model', '')
     app.logger.info(f"Color variants requested for model: {model}")
