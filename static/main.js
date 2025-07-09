@@ -6005,7 +6005,7 @@ async function loadFavorites() {
                 const specs = await specResponse.json();
                 console.log('✅ Got specs for', car.variant, ':', specs);
                 
-                // UPDATED: Enhanced image URL determination with brand verification
+                // Enhanced image URL determination with brand verification
                 let imageUrl = determineCarImageUrl(specs);
                 console.log('🖼️ Using brand-verified image URL for', car.variant, ':', imageUrl);
                 
@@ -6030,12 +6030,15 @@ async function loadFavorites() {
                     </div>
                 `;
                 
-                // Add click event for popup
+                // FIXED: Add click event for your existing popup using addEventListener
                 card.addEventListener("click", function(e) {
-                    if (e.target.closest('.remove-favorite-btn')) return;
+                    // Don't trigger popup if clicking on remove button
+                    if (e.target.closest('.remove-favorite-btn')) {
+                        return;
+                    }
                     
                     console.log("🔍 Card clicked - showing specs for:", car.variant);
-                    showCarSpecsPopup(specs, car.variant, imageUrl);
+                    showCarSpecsInExistingPopup(specs, car.variant, imageUrl);
                 });
                 
                 cardContainer.appendChild(card);
@@ -6120,41 +6123,100 @@ function determineCarImageUrl(specs) {
 
 // NEW: Function to show car specs popup (if the popup functionality exists)
 function handleImageError(imgElement, brand, model, variant = null) {
-    console.log('❌ Image failed to load for', brand, model, variant);
+    console.log('❌ Image failed to load for', brand, model, variant, '- trying case-insensitive fallbacks');
     
-    // Check attempt count
     if (!imgElement.dataset.fallbackAttempt) {
         imgElement.dataset.fallbackAttempt = "1";
     }
     
     const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
-    const maxAttempts = 3; // Reduced to prevent 404 spam
     
-    if (attemptIndex >= maxAttempts) {
-        console.log('🛑 Max fallback attempts reached, using final fallback');
-        imgElement.src = getFinalFallbackImage();
-        imgElement.onerror = null; // Remove error handler
-        return;
-    }
+    // Clean names for filenames (case-insensitive)
+    const brand_clean = brand ? brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    const model_clean = model ? model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    const variant_clean = variant ? variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
     
-    // Limited fallback list based on your actual files
-    const brand_clean = brand ? brand.toLowerCase() : '';
-    const model_clean = model ? model.toLowerCase().replace(/\s+/g, '') : '';
-    
-    const fallbacks = [
-        // Attempt 1: Try exact filename patterns from your folder
-        `/static/resources/${model_clean}.webp`,
-        // Attempt 2: Try with brand prefix
-        `/static/resources/${brand_clean}_${model_clean}.webp`,
-        // Attempt 3: Use safe fallback
-        getFinalFallbackImage()
+    // Build fallback paths with case variations
+    const fallbacks = [];
+    const extensions = ['.webp', '.png', '.jpg', '.jpeg', '.gif'];
+    const caseVariations = [
+        // All lowercase
+        { brand: brand_clean, model: model_clean, variant: variant_clean },
+        // Capitalize first letter
+        { 
+            brand: brand_clean ? capitalize(brand_clean) : '', 
+            model: model_clean ? capitalize(model_clean) : '', 
+            variant: variant_clean ? capitalize(variant_clean) : ''
+        },
+        // All uppercase
+        { 
+            brand: brand_clean ? brand_clean.toUpperCase() : '', 
+            model: model_clean ? model_clean.toUpperCase() : '', 
+            variant: variant_clean ? variant_clean.toUpperCase() : ''
+        }
     ];
     
-    const nextPath = fallbacks[attemptIndex];
-    console.log(`🔄 Trying fallback ${attemptIndex + 1}/${maxAttempts}:`, nextPath);
+    // Build fallback paths with case variations
+    caseVariations.forEach(variation => {
+        extensions.forEach(ext => {
+            if (variation.brand && variation.model) {
+                fallbacks.push(`/static/resources/${variation.brand}_${variation.model}${ext}`);
+                fallbacks.push(`/static/resources/${variation.model}_${variation.brand}${ext}`);
+                
+                if (variation.variant) {
+                    fallbacks.push(`/static/resources/${variation.brand}_${variation.model}_${variation.variant}${ext}`);
+                    fallbacks.push(`/static/resources/${variation.model}_${variation.variant}${ext}`);
+                }
+            }
+            
+            if (variation.model) {
+                fallbacks.push(`/static/resources/${variation.model}${ext}`);
+            }
+        });
+    });
     
-    imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
-    imgElement.src = nextPath;
+    // Add some common patterns your files might follow
+    if (model_clean) {
+        extensions.forEach(ext => {
+            const commonColors = ['black', 'white', 'red', 'blue', 'silver', 'gray', 'grey'];
+            const capitalizedColors = ['Black', 'White', 'Red', 'Blue', 'Silver', 'Gray', 'Grey'];
+            
+            commonColors.forEach(color => {
+                fallbacks.push(`/static/resources/${model_clean}_${color}${ext}`);
+            });
+            
+            capitalizedColors.forEach(color => {
+                fallbacks.push(`/static/resources/${model_clean}_${color}${ext}`);
+            });
+        });
+    }
+    
+    // Add final safe fallbacks
+    fallbacks.push(
+        '/static/resources/default_car.png',
+        '/static/resources/no_image.png',
+        '/static/resources/placeholder.png'
+    );
+    
+    // Final data URL fallback
+    const dataUrlFallback = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg==';
+    
+    if (attemptIndex < fallbacks.length) {
+        const nextPath = fallbacks[attemptIndex];
+        console.log(`🔄 Trying fallback ${attemptIndex + 1}/${fallbacks.length}:`, nextPath);
+        
+        imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
+        
+        // FIXED: Only change the src, don't touch any other properties
+        // This preserves the original onclick and other event handlers
+        imgElement.src = nextPath;
+    } else {
+        console.log('📷 Using final data URL fallback');
+        imgElement.src = dataUrlFallback;
+        
+        // FIXED: Only remove onerror to prevent infinite loop, preserve everything else
+        imgElement.onerror = null;
+    }
 }
 
 function showColorChangeError(message) {
