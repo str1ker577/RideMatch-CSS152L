@@ -3894,6 +3894,112 @@ def test_compare():
         return jsonify({"error": str(e)})
     
 def find_car_image(model, brand=None, variant=None):
+    """Find car image with enhanced variant and color support"""
+    try:
+        # Clean inputs for filename generation
+        model_clean = model.replace(' ', '_').lower() if model else 'default'
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        variant_clean = variant.replace(' ', '_').lower() if variant else ''
+        
+        # Remove special characters
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        variant_clean = re.sub(r'[^a-z0-9_]', '', variant_clean)
+        
+        app.logger.info(f"🔍 Finding image for: brand={brand}, model={model}, variant={variant}")
+        
+        resources_dir = 'static/resources'
+        if not os.path.exists(resources_dir):
+            app.logger.error(f"Resources directory not found: {resources_dir}")
+            return get_safe_fallback_image()
+        
+        # Get all image files in the directory
+        try:
+            all_files = os.listdir(resources_dir)
+            image_files = [f for f in all_files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif'))]
+        except Exception as e:
+            app.logger.error(f"Error listing files: {e}")
+            return get_safe_fallback_image()
+        
+        app.logger.info(f"📁 Found {len(image_files)} image files in resources")
+        
+        # FIXED: Enhanced pattern matching for complex variants
+        best_match = None
+        best_score = 0
+        
+        for filename in image_files:
+            filename_lower = filename.lower()
+            base_name = filename_lower.replace('.png', '').replace('.jpg', '').replace('.jpeg', '').replace('.webp', '').replace('.gif', '')
+            
+            score = 0
+            
+            # Model matching (highest priority)
+            if model_clean in base_name:
+                score += 100
+                
+                # Exact model match at start
+                if base_name.startswith(model_clean):
+                    score += 50
+                
+                # Brand matching (if available)
+                if brand_clean and brand_clean in base_name:
+                    score += 30
+                
+                # Variant matching (if available)
+                if variant_clean:
+                    # Try different variant matching approaches for complex names
+                    variant_parts = variant_clean.split('_')
+                    
+                    # Check if full variant matches
+                    if variant_clean in base_name:
+                        score += 40
+                    else:
+                        # Check individual parts of variant
+                        matched_parts = sum(1 for part in variant_parts if part in base_name and len(part) > 2)
+                        score += matched_parts * 10
+                
+                # Prefer files with fewer extra parts (more specific match)
+                file_parts = base_name.split('_')
+                if len(file_parts) <= 4:  # Reasonable number of parts
+                    score += 10
+                
+                # Check for exact pattern matches
+                expected_patterns = [
+                    f"{model_clean}_{variant_clean}",
+                    f"{brand_clean}_{model_clean}",
+                    f"{model_clean}",
+                    f"{variant_clean}"
+                ]
+                
+                for pattern in expected_patterns:
+                    if pattern and pattern in base_name:
+                        score += 20
+                        break
+                
+                app.logger.info(f"📊 File: {filename} - Score: {score}")
+                
+                if score > best_score:
+                    best_score = score
+                    best_match = filename
+        
+        if best_match:
+            url_path = f'/static/resources/{best_match}'
+            app.logger.info(f"✅ Best match found: {url_path} (score: {best_score})")
+            return url_path
+        
+        # FALLBACK: If no good match, try basic model search
+        for filename in image_files:
+            if model_clean in filename.lower():
+                url_path = f'/static/resources/{filename}'
+                app.logger.info(f"🎯 Fallback match: {url_path}")
+                return url_path
+        
+        app.logger.warning(f"❌ No image found for {brand} {model} {variant}")
+        return get_safe_fallback_image()
+        
+    except Exception as e:
+        app.logger.error(f"❌ Error finding image: {e}")
+        return get_safe_fallback_image()
     """Find car image based on model name with better case-insensitive matching"""
     try:
         # Clean inputs for filename generation
@@ -4253,6 +4359,19 @@ def search_brand_specific_files(brand_clean, model_clean):
     return None
 
 def get_safe_fallback_image():
+    """Return a safe fallback image"""
+    fallback_images = [
+        '/static/resources/default_car.png',
+        '/static/resources/no_image.png',
+        '/static/resources/placeholder.png'
+    ]
+    
+    for fallback in fallback_images:
+        if os.path.exists(f"static{fallback.replace('/static', '')}"):
+            return fallback
+    
+    # SVG fallback
+    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg=='
     """Return a safe fallback image"""
     
     # Try these generic fallback images in order
@@ -4788,6 +4907,125 @@ def debug_csv_status():
     
 @app.route('/get_colors')
 def get_colors():
+    """UPDATED: Get color variants for a specific model with enhanced detection"""
+    if df.empty:
+        app.logger.warning("No car data available for colors")
+        return jsonify([])
+    
+    model = request.args.get('model', '').strip()
+    brand = request.args.get('brand', '').strip()
+    
+    if not model:
+        app.logger.warning("No model specified for color lookup")
+        return jsonify([])
+
+    try:
+        app.logger.info(f"🎨 Getting colors for model: {model}, brand: {brand}")
+        
+        # Clean model and brand names
+        model_clean = model.replace(' ', '_').lower()
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        
+        # Remove special characters
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        
+        colors = []
+        resources_dir = 'static/resources'
+        
+        if os.path.exists(resources_dir):
+            all_files = os.listdir(resources_dir)
+            
+            # FIXED: Enhanced color detection logic
+            for filename in all_files:
+                filename_lower = filename.lower()
+                
+                # Skip non-image files
+                if not filename_lower.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                    continue
+                
+                # Check if this file belongs to our model
+                if model_clean in filename_lower:
+                    # Remove extension
+                    base_name = filename_lower
+                    for ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif']:
+                        base_name = base_name.replace(ext, '')
+                    
+                    # Split filename into parts
+                    parts = base_name.split('_')
+                    
+                    # Look for color patterns
+                    potential_colors = []
+                    
+                    # Common color patterns
+                    known_colors = [
+                        'black', 'white', 'red', 'blue', 'silver', 'gray', 'grey', 
+                        'green', 'yellow', 'orange', 'purple', 'brown', 'gold',
+                        'beige', 'cream', 'pearl', 'metallic', 'matte', 'glossy'
+                    ]
+                    
+                    # Check each part for colors
+                    for part in parts:
+                        # Skip brand, model, and variant parts
+                        if part in [brand_clean, model_clean]:
+                            continue
+                            
+                        # Check if it's a known color
+                        if part in known_colors:
+                            potential_colors.append(part)
+                        # Check if it contains a color (like "pearlwhite")
+                        else:
+                            for color in known_colors:
+                                if color in part and len(part) > len(color):
+                                    potential_colors.append(part)
+                                    break
+                            else:
+                                # If it's not a known technical term, consider it a potential color
+                                if (len(part) > 2 and 
+                                    part not in ['suv', 'sedan', 'hatchback', 'turbo', 'hybrid', 'electric', 'manual', 'auto']):
+                                    potential_colors.append(part)
+                    
+                    # Add colors found in this file
+                    for color in potential_colors:
+                        color_name = color.replace('_', ' ').title()
+                        
+                        # Check if we already have this color
+                        if not any(c['color'] == color_name for c in colors):
+                            colors.append({
+                                'color': color_name,
+                                'image_path': f'/static/resources/{filename}'
+                            })
+                            app.logger.info(f"🎨 Found color variant: {color_name} -> {filename}")
+                    
+                    # SPECIAL CASE: If no specific color detected but filename suggests it's a color variant
+                    if not potential_colors and len(parts) >= 2:
+                        # Last part might be a color (especially for files like "vios_black")
+                        last_part = parts[-1]
+                        if last_part not in [brand_clean, model_clean] and len(last_part) > 2:
+                            color_name = last_part.replace('_', ' ').title()
+                            if not any(c['color'] == color_name for c in colors):
+                                colors.append({
+                                    'color': color_name,
+                                    'image_path': f'/static/resources/{filename}'
+                                })
+                                app.logger.info(f"🎨 Found potential color: {color_name} -> {filename}")
+        
+        # Remove duplicates and sort
+        unique_colors = []
+        seen_colors = set()
+        for color in colors:
+            if color['color'] not in seen_colors:
+                unique_colors.append(color)
+                seen_colors.add(color['color'])
+        
+        unique_colors.sort(key=lambda x: x['color'])
+        
+        app.logger.info(f"✅ Found {len(unique_colors)} color variants for {brand} {model}")
+        return jsonify(unique_colors)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting colors for {brand} {model}: {e}")
+        return jsonify([])
     """Get color variants for a specific model with actual image checking"""
     if df.empty:
         app.logger.warning("No car data available for colors")

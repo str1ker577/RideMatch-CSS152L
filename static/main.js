@@ -6010,7 +6010,7 @@ function showCarSpecsPopup(specs, variant, imageUrl) {
             populateColors(specs.Model, specs.Brand);
         }, 100);
         
-        // Build spec cards (rest of the existing code...)
+        // Build spec cards
         specContainer.innerHTML = `
             <div class="spec-row">
                 <div class="spec-card">
@@ -6574,7 +6574,7 @@ async function populateColors(model, brand = null) {
         });
         
         // ENHANCED: Add change event listener with better error handling
-        colorSelect.removeEventListener('change', handleColorChange); // Remove existing listener
+        colorSelect.removeEventListener('change', handleColorChange);
         colorSelect.addEventListener('change', handleColorChange);
         
         console.log(`✅ Successfully populated ${colors.length} color variants`);
