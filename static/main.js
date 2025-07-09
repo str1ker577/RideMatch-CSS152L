@@ -5883,48 +5883,22 @@ function determineCarImageUrl(specs) {
         return specs.Image;
     }
     
-    // Priority 2: Construct paths with case-insensitive approach
+    // Priority 2: Construct most likely path
     if (specs.Brand && specs.Model) {
         const brand = specs.Brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
         const model = specs.Model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-        const variant = specs.Variant ? specs.Variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
         
-        // UPDATED: Try multiple case variations
-        const possiblePaths = [];
-        
-        // Try with original case handling
-        if (variant) {
-            possiblePaths.push(
-                `/static/resources/${brand}_${model}_${variant}.webp`,
-                `/static/resources/${model}_${variant}.webp`,
-                `/static/resources/${variant}.webp`
-            );
-        }
-        
-        possiblePaths.push(
-            `/static/resources/${brand}_${model}.webp`,
-            `/static/resources/${model}_${brand}.webp`,
-            `/static/resources/${model}.webp`
-        );
-        
-        // Try with different extensions
-        const extensions = ['.png', '.jpg', '.jpeg', '.gif'];
-        const basePaths = possiblePaths.map(path => path.replace('.webp', ''));
-        
-        extensions.forEach(ext => {
-            basePaths.forEach(basePath => {
-                possiblePaths.push(basePath + ext);
-            });
-        });
-        
-        console.log('🔍 Will try paths starting with:', possiblePaths[0]);
-        return possiblePaths[0]; // Return first option, handleImageError will try others
+        // Try the most common pattern first
+        const primaryPath = `/static/resources/${model}.webp`;
+        console.log('🔍 Primary path attempt:', primaryPath);
+        return primaryPath;
     }
     
     // Priority 3: Safe fallback
     console.log('📸 Using safe fallback');
-    return '/static/resources/default_car.png';
+    return getFinalFallbackImage();
 }
+
 
 // NEW: Enhanced image error handler with multiple fallback attempts
 function handleImageError(imgElement, brand, model) {
@@ -5981,118 +5955,51 @@ function handleImageError(imgElement, brand, model) {
 }
 
 // NEW: Function to show car specs popup (if the popup functionality exists)
-function showCarSpecsPopup(specs, variant, imageUrl) {
-    console.log('🔍 Showing car specs popup for:', variant);
+function handleImageError(imgElement, brand, model, variant = null) {
+    console.log('❌ Image failed to load for', brand, model, variant, '- trying case-insensitive fallbacks');
     
-    // Check if popup elements exist
-    const carTitleElement = document.querySelector(".car-title");
-    const imgElement = document.querySelector(".img-fave-frame img");
-    const specContainer = document.querySelector(".spec-fave-frame .spec-card-container");
+    if (!imgElement.dataset.fallbackAttempt) {
+        imgElement.dataset.fallbackAttempt = "1";
+    }
     
-    if (carTitleElement && imgElement && specContainer) {
-        // Populate the popup
-        carTitleElement.textContent = `${specs.Brand} ${specs.Model}`;
+    const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
+    
+    // FIXED: Limit fallback attempts to prevent excessive 404s
+    const maxAttempts = 5; // Reduced from unlimited attempts
+    
+    if (attemptIndex >= maxAttempts) {
+        console.log('🛑 Max fallback attempts reached, using final fallback');
+        imgElement.src = getFinalFallbackImage();
+        imgElement.onerror = null; // Remove error handler to prevent infinite loop
+        return;
+    }
+    
+    // Clean names for filenames (case-insensitive)
+    const brand_clean = brand ? brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    const model_clean = model ? model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    const variant_clean = variant ? variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    
+    // UPDATED: Strategic fallback list - most likely to least likely
+    const fallbacks = [
+        // Most likely patterns first
+        `/static/resources/${model_clean}.webp`,
+        `/static/resources/${brand_clean}_${model_clean}.webp`,
+        `/static/resources/${model_clean}.png`,
+        `/static/resources/${brand_clean}_${model_clean}.jpg`,
+        // Generic fallback
+        getFinalFallbackImage()
+    ];
+    
+    if (attemptIndex < fallbacks.length) {
+        const nextPath = fallbacks[attemptIndex];
+        console.log(`🔄 Trying fallback ${attemptIndex + 1}/${maxAttempts}:`, nextPath);
         
-        // Set initial image
-        if (imageUrl && !imageUrl.startsWith('data:image/svg+xml')) {
-            imgElement.src = imageUrl;
-        } else {
-            const betterImageUrl = determineCarImageUrl(specs);
-            imgElement.src = betterImageUrl;
-        }
-        
-        imgElement.onerror = function() { 
-            handleImageError(this, specs.Brand, specs.Model, specs.Variant);
-        };
-        
-        // ENHANCED: Auto-populate colors when popup opens
-        setTimeout(() => {
-            populateColors(specs.Model, specs.Brand);
-        }, 100);
-        
-        // Build spec cards
-        specContainer.innerHTML = `
-            <div class="spec-row">
-                <div class="spec-card">
-                    <strong class="spec-label">Brand</strong>
-                    <span class="spec-value">${specs.Brand || 'N/A'}</span>
-                </div>
-                <div class="spec-card">
-                    <strong class="spec-label">Model</strong>
-                    <span class="spec-value">${specs.Model || 'N/A'}</span>
-                </div>
-                <div class="spec-card">
-                    <strong class="spec-label">Body Type</strong>
-                    <span class="spec-value">${specs.BodyType || 'N/A'}</span>
-                </div>
-            </div>
-            
-            <div class="spec-row">
-                <div class="spec-card">
-                    <strong class="spec-label">Variant</strong>
-                    <span class="spec-value">${variant}</span>
-                </div>
-                <div class="spec-card">
-                    <strong class="spec-label">Year</strong>
-                    <span class="spec-value">${specs.Year || 'N/A'}</span>
-                </div>
-                <div class="spec-card">
-                    <strong class="spec-label">Drive Train</strong>
-                    <span class="spec-value">${specs.DriveTrain || 'N/A'}</span>
-                </div>
-            </div>
-            
-            <div class="spec-row">
-                <div class="spec-card">
-                    <strong class="spec-label">Engine</strong>
-                    <span class="spec-value">${specs.Engine || 'N/A'}</span>
-                </div>
-                <div class="spec-card">
-                    <strong class="spec-label">Horsepower</strong>
-                    <span class="spec-value">${specs.Horsepower ? specs.Horsepower + ' HP' : 'N/A'}</span>
-                </div>
-                <div class="spec-card">
-                    <strong class="spec-label">Transmission</strong>
-                    <span class="spec-value">${specs.Transmission || 'N/A'}</span>
-                </div>
-            </div>
-            
-            <div class="spec-row">
-                <div class="spec-card">
-                    <strong class="spec-label">Fuel Type</strong>
-                    <span class="spec-value">${specs.FuelType || 'N/A'}</span>
-                </div>
-                <div class="spec-card">
-                    <strong class="spec-label">Ground Clearance</strong>
-                    <span class="spec-value">${specs.GroundClearance ? specs.GroundClearance + ' cm' : 'N/A'}</span>
-                </div>
-                <div class="spec-card">
-                    <strong class="spec-label">Cargo Space</strong>
-                    <span class="spec-value">${specs.Cargospace ? specs.Cargospace + ' L' : 'N/A'}</span>
-                </div>
-            </div>
-            
-            <div class="spec-row">
-                <div class="spec-card">
-                    <strong class="spec-label">Seating Capacity</strong>
-                    <span class="spec-value">${specs.SeatingCapacity ? specs.SeatingCapacity + ' seats' : 'N/A'}</span>
-                </div>
-                <div class="spec-card price-card">
-                    <strong class="spec-label">Price</strong>
-                    <span class="spec-value price-value">${specs.Price ? '₱' + parseInt(specs.Price).toLocaleString() : 'N/A'}</span>
-                </div>
-                <div class="spec-card empty-card">
-                    <!-- Empty card for layout balance -->
-                </div>
-            </div>
-        `;
-
-        // Open the popup if togglePopup function exists
-        if (typeof togglePopup === 'function') {
-            togglePopup("card-popup");
-        }
+        imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
+        imgElement.src = nextPath;
     } else {
-        console.warn("❌ Popup elements not found - cannot show detailed specs");
+        console.log('📷 Using final fallback image');
+        imgElement.src = getFinalFallbackImage();
+        imgElement.onerror = null;
     }
 }
 
@@ -6134,19 +6041,20 @@ function showColorChangeError(message) {
     }, 3000);
 }
 
-// Make functions globally available
-window.populateColors = populateColors;
-window.handleColorChange = handleColorChange;
-window.showCarSpecsPopup = showCarSpecsPopup;
+function getFinalFallbackImage() {
+    // Return a data URL that will always work
+    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg==';
+}
 
-// Make functions globally available
+
 window.handleImageError = handleImageError;
-window.showCarSpecsPopup = showCarSpecsPopup;
-window.debugImageIssues = debugImageIssues;
-
 window.determineCarImageUrl = determineCarImageUrl;
-window.debugImagePaths = debugImagePaths;
+window.createOptimizedCarCard = createOptimizedCarCard;
+window.validateAllCarImages = validateAllCarImages;
+window.getFinalFallbackImage = getFinalFallbackImage;
+window.preloadCriticalImages = preloadCriticalImages;
 window.testImageAvailability = testImageAvailability;
+window.initializeImageOptimization = initializeImageOptimization;
 
 // FIXED: Better removeFavoriteFromDisplay function
 async function removeFavoriteFromDisplay(variant, buttonElement) {
@@ -6351,21 +6259,34 @@ function handleImageError(imgElement, brand, model, variant = null) {
 async function testImageAvailability(imagePath) {
     return new Promise((resolve) => {
         const testImg = new Image();
-        testImg.onload = () => {
-            console.log('✅ Image available:', imagePath);
-            resolve(true);
-        };
-        testImg.onerror = () => {
-            console.log('❌ Image not available:', imagePath);
-            resolve(false);
-        };
-        testImg.src = imagePath;
+        let resolved = false;
         
-        // Timeout after 3 seconds
+        testImg.onload = () => {
+            if (!resolved) {
+                resolved = true;
+                console.log('✅ Image available:', imagePath);
+                resolve(true);
+            }
+        };
+        
+        testImg.onerror = () => {
+            if (!resolved) {
+                resolved = true;
+                console.log('❌ Image not available:', imagePath);
+                resolve(false);
+            }
+        };
+        
+        // Set timeout to prevent hanging
         setTimeout(() => {
-            console.log('⏰ Image test timeout:', imagePath);
-            resolve(false);
-        }, 3000);
+            if (!resolved) {
+                resolved = true;
+                console.log('⏰ Image test timeout:', imagePath);
+                resolve(false);
+            }
+        }, 2000); // Reduced timeout to 2 seconds
+        
+        testImg.src = imagePath;
     });
 }
 
@@ -6523,6 +6444,189 @@ async function testImageAvailability(imagePath) {
 function capitalize(str) {
     if (!str) return '';
     return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+async function preloadCriticalImages() {
+    console.log('🔄 Preloading critical car images...');
+    
+    // List of most common car models that should have images
+    const criticalImages = [
+        '/static/resources/vios.webp',
+        '/static/resources/innova.webp', 
+        '/static/resources/fortuner.webp',
+        '/static/resources/civic.webp',
+        '/static/resources/accord.webp',
+        '/static/resources/cayenne.webp',
+        '/static/resources/panamera.webp'
+    ];
+    
+    let loadedCount = 0;
+    const results = [];
+    
+    for (const imagePath of criticalImages) {
+        try {
+            const isAvailable = await testImageAvailability(imagePath);
+            if (isAvailable) {
+                loadedCount++;
+                results.push({ path: imagePath, status: 'available' });
+            } else {
+                results.push({ path: imagePath, status: 'missing' });
+            }
+        } catch (error) {
+            results.push({ path: imagePath, status: 'error', error: error.message });
+        }
+    }
+    
+    console.log(`✅ Preload complete: ${loadedCount}/${criticalImages.length} images available`);
+    console.log('📋 Preload results:', results);
+    
+    return results;
+}
+
+function createOptimizedCarCard(car, cardType = 'default') {
+    const brand = car.Brand || 'Unknown';
+    const model = car.Model || 'Unknown';
+    const variant = car.Variant || 'Unknown';
+    const imageUrl = determineCarImageUrl(car);
+    
+    // Check if car is already liked
+    const isLiked = userFavorites && userFavorites.has(variant);
+    const heartClass = isLiked ? 'fa-solid fa-heart' : 'fa-regular fa-heart';
+    const heartColor = isLiked ? '#e74c3c' : '#b49b66';
+    
+    const cardElement = document.createElement("div");
+    cardElement.className = "card";
+    
+    cardElement.innerHTML = `
+        <img src="${imageUrl}" 
+             alt="${brand} ${model}"
+             loading="lazy"
+             onerror="handleImageError(this, '${brand}', '${model}', '${variant}')"
+             onload="console.log('✅ Image loaded successfully for ${variant}')">
+        <div class="name">${brand} ${model}</div>
+        <div class="variant-name">${variant}</div>
+        ${cardType === 'favorites' ? `
+            <div class="favorite-actions">
+                <button class="remove-favorite-btn" onclick="removeFavoriteFromDisplay('${variant.replace(/'/g, "\\'")}', this)">
+                    <i class="fas fa-heart-broken"></i> Remove
+                </button>
+            </div>
+        ` : `
+            <div class="heart-container">
+                <i class="${heartClass}" 
+                   id="like-icon" 
+                   style="color: ${heartColor}; cursor: pointer;" 
+                   onclick="addToFave(event, '${variant}')"></i>
+            </div>
+        `}
+    `;
+    
+    return cardElement;
+}
+
+// NEW: Bulk image validator for debugging
+async function validateAllCarImages() {
+    console.log('🔍 Starting bulk image validation...');
+    
+    if (!currentCarData || currentCarData.length === 0) {
+        console.log('⚠️ No car data available for validation');
+        return;
+    }
+    
+    const validationResults = {
+        total: currentCarData.length,
+        available: 0,
+        missing: 0,
+        details: []
+    };
+    
+    // Test first 10 cars to avoid overwhelming the server
+    const testCars = currentCarData.slice(0, 10);
+    
+    for (const car of testCars) {
+        const imageUrl = determineCarImageUrl(car);
+        const isAvailable = await testImageAvailability(imageUrl);
+        
+        validationResults.details.push({
+            brand: car.Brand,
+            model: car.Model,
+            variant: car.Variant,
+            imageUrl: imageUrl,
+            available: isAvailable
+        });
+        
+        if (isAvailable) {
+            validationResults.available++;
+        } else {
+            validationResults.missing++;
+        }
+    }
+    
+    console.log('📊 Image validation results:', validationResults);
+    return validationResults;
+}
+
+// NEW: Image loading performance monitor
+function monitorImageLoadingPerformance() {
+    let imageLoadCount = 0;
+    let imageErrorCount = 0;
+    let totalLoadTime = 0;
+    
+    const originalImageConstructor = window.Image;
+    
+    window.Image = function(...args) {
+        const img = new originalImageConstructor(...args);
+        const startTime = performance.now();
+        
+        const originalOnLoad = img.onload;
+        const originalOnError = img.onerror;
+        
+        img.onload = function(...loadArgs) {
+            imageLoadCount++;
+            totalLoadTime += performance.now() - startTime;
+            console.log(`📈 Image load metrics: ${imageLoadCount} loaded, ${imageErrorCount} failed, avg: ${(totalLoadTime/imageLoadCount).toFixed(2)}ms`);
+            
+            if (originalOnLoad) {
+                originalOnLoad.apply(this, loadArgs);
+            }
+        };
+        
+        img.onerror = function(...errorArgs) {
+            imageErrorCount++;
+            console.log(`📉 Image error metrics: ${imageLoadCount} loaded, ${imageErrorCount} failed`);
+            
+            if (originalOnError) {
+                originalOnError.apply(this, errorArgs);
+            }
+        };
+        
+        return img;
+    };
+    
+    console.log('📊 Image loading performance monitoring enabled');
+}
+
+// NEW: Initialize image optimization system
+function initializeImageOptimization() {
+    console.log('🚀 Initializing image optimization system...');
+    
+    // Enable performance monitoring in development
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        monitorImageLoadingPerformance();
+    }
+    
+    // Preload critical images
+    setTimeout(() => {
+        preloadCriticalImages();
+    }, 2000);
+    
+    console.log('✅ Image optimization system initialized');
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeImageOptimization);
+} else {
+    initializeImageOptimization();
 }
 
 //////////////////////////////
