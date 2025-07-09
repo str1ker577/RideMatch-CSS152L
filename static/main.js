@@ -6030,7 +6030,7 @@ async function loadFavorites() {
                     </div>
                 `;
                 
-                // FIXED: Add click event for your existing popup using addEventListener
+                // FIXED: Add click event for your existing popup using the correct function name
                 card.addEventListener("click", function(e) {
                     // Don't trigger popup if clicking on remove button
                     if (e.target.closest('.remove-favorite-btn')) {
@@ -6068,6 +6068,121 @@ async function loadFavorites() {
             </div>
         `;
     }
+}
+
+function showCarSpecsInExistingPopup(specs, variant, imageUrl) {
+    console.log('🔍 Showing car specs in existing popup for:', variant);
+    console.log('📋 Specs data:', specs);
+    
+    // Update the title
+    const carTitle = document.querySelector('#card-popup .car-title');
+    if (carTitle) {
+        carTitle.textContent = `${specs.Brand || 'Unknown'} ${specs.Model || 'Unknown'} - ${variant}`;
+    }
+    
+    // Update the image
+    const popupImage = document.querySelector('#card-popup .img-fave-frame img');
+    if (popupImage) {
+        popupImage.src = imageUrl || getFinalFallbackImage();
+        popupImage.alt = `${specs.Brand || 'Unknown'} ${specs.Model || 'Unknown'}`;
+        
+        // Add error handling for popup image
+        popupImage.onerror = function() {
+            this.src = getFinalFallbackImage();
+        };
+    }
+    
+    // Update the specs container
+    const specContainer = document.querySelector('#card-popup .spec-card-container');
+    if (specContainer) {
+        specContainer.innerHTML = generateSpecCards(specs, variant);
+    }
+    
+    // Load color variants if available
+    if (specs.Brand && specs.Model) {
+        populateColors(specs.Model, specs.Brand);
+    }
+    
+    // Show the popup using your existing function
+    togglePopup('card-popup');
+}
+
+function generateSpecCards(specs, variant) {
+    return `
+        <div class="spec-row">
+            <div class="spec-card">
+                <div class="spec-label">Brand</div>
+                <div class="spec-value">${specs.Brand || 'N/A'}</div>
+            </div>
+            <div class="spec-card">
+                <div class="spec-label">Model</div>
+                <div class="spec-value">${specs.Model || 'N/A'}</div>
+            </div>
+            <div class="spec-card">
+                <div class="spec-label">Variant</div>
+                <div class="spec-value">${variant || 'N/A'}</div>
+            </div>
+        </div>
+        
+        <div class="spec-row">
+            <div class="spec-card">
+                <div class="spec-label">Year</div>
+                <div class="spec-value">${specs.Year || 'N/A'}</div>
+            </div>
+            <div class="spec-card">
+                <div class="spec-label">Body Type</div>
+                <div class="spec-value">${specs.BodyType || specs.Body_Type || 'N/A'}</div>
+            </div>
+            <div class="spec-card">
+                <div class="spec-label">Drive Train</div>
+                <div class="spec-value">${specs.DriveTrain || specs.Drive_Train || 'N/A'}</div>
+            </div>
+        </div>
+        
+        <div class="spec-row">
+            <div class="spec-card">
+                <div class="spec-label">Engine</div>
+                <div class="spec-value">${specs.Engine || 'N/A'}</div>
+            </div>
+            <div class="spec-card">
+                <div class="spec-label">Horsepower</div>
+                <div class="spec-value">${specs.Horsepower ? `${specs.Horsepower} HP` : 'N/A'}</div>
+            </div>
+            <div class="spec-card">
+                <div class="spec-label">Transmission</div>
+                <div class="spec-value">${specs.Transmission || 'N/A'}</div>
+            </div>
+        </div>
+        
+        <div class="spec-row">
+            <div class="spec-card">
+                <div class="spec-label">Fuel Type</div>
+                <div class="spec-value">${specs.FuelType || specs.Fuel_Type || 'N/A'}</div>
+            </div>
+            <div class="spec-card">
+                <div class="spec-label">Ground Clearance</div>
+                <div class="spec-value">${specs.GroundClearance || specs.Ground_Clearance ? `${specs.GroundClearance || specs.Ground_Clearance} cm` : 'N/A'}</div>
+            </div>
+            <div class="spec-card">
+                <div class="spec-label">Cargo Space</div>
+                <div class="spec-value">${specs.Cargospace || specs.Cargo_space ? `${specs.Cargospace || specs.Cargo_space} L` : 'N/A'}</div>
+            </div>
+        </div>
+        
+        <div class="spec-row">
+            <div class="spec-card">
+                <div class="spec-label">Seating Capacity</div>
+                <div class="spec-value">${specs.SeatingCapacity || specs.Seating_Capacity ? `${specs.SeatingCapacity || specs.Seating_Capacity} seats` : 'N/A'}</div>
+            </div>
+            <div class="spec-card price-card">
+                <div class="spec-label">Price</div>
+                <div class="spec-value price-value">${specs.Price ? `₱${parseInt(specs.Price).toLocaleString()}` : 'N/A'}</div>
+            </div>
+            <div class="spec-card empty-card">
+                <!-- Empty card for layout -->
+            </div>
+        </div>
+    `;
 }
 
 /////////////////////////
@@ -6121,9 +6236,8 @@ function determineCarImageUrl(specs) {
     return null;
 }
 
-// NEW: Function to show car specs popup (if the popup functionality exists)
 function handleImageError(imgElement, brand, model, variant = null) {
-    console.log('❌ Image failed to load for', brand, model, variant, '- trying case-insensitive fallbacks');
+    console.log('❌ Image failed to load for', brand, model, variant);
     
     if (!imgElement.dataset.fallbackAttempt) {
         imgElement.dataset.fallbackAttempt = "1";
@@ -6131,93 +6245,31 @@ function handleImageError(imgElement, brand, model, variant = null) {
     
     const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
     
-    // Clean names for filenames (case-insensitive)
-    const brand_clean = brand ? brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    // Simplified fallback list to avoid too many 404s
     const model_clean = model ? model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
-    const variant_clean = variant ? variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
     
-    // Build fallback paths with case variations
-    const fallbacks = [];
-    const extensions = ['.webp', '.png', '.jpg', '.jpeg', '.gif'];
-    const caseVariations = [
-        // All lowercase
-        { brand: brand_clean, model: model_clean, variant: variant_clean },
-        // Capitalize first letter
-        { 
-            brand: brand_clean ? capitalize(brand_clean) : '', 
-            model: model_clean ? capitalize(model_clean) : '', 
-            variant: variant_clean ? capitalize(variant_clean) : ''
-        },
-        // All uppercase
-        { 
-            brand: brand_clean ? brand_clean.toUpperCase() : '', 
-            model: model_clean ? model_clean.toUpperCase() : '', 
-            variant: variant_clean ? variant_clean.toUpperCase() : ''
-        }
+    const fallbacks = [
+        // Try just the model name with different cases
+        `/static/resources/${model_clean}.webp`,
+        `/static/resources/${model_clean.charAt(0).toUpperCase() + model_clean.slice(1)}.webp`,
+        // Final fallback
+        getFinalFallbackImage()
     ];
     
-    // Build fallback paths with case variations
-    caseVariations.forEach(variation => {
-        extensions.forEach(ext => {
-            if (variation.brand && variation.model) {
-                fallbacks.push(`/static/resources/${variation.brand}_${variation.model}${ext}`);
-                fallbacks.push(`/static/resources/${variation.model}_${variation.brand}${ext}`);
-                
-                if (variation.variant) {
-                    fallbacks.push(`/static/resources/${variation.brand}_${variation.model}_${variation.variant}${ext}`);
-                    fallbacks.push(`/static/resources/${variation.model}_${variation.variant}${ext}`);
-                }
-            }
-            
-            if (variation.model) {
-                fallbacks.push(`/static/resources/${variation.model}${ext}`);
-            }
-        });
-    });
-    
-    // Add some common patterns your files might follow
-    if (model_clean) {
-        extensions.forEach(ext => {
-            const commonColors = ['black', 'white', 'red', 'blue', 'silver', 'gray', 'grey'];
-            const capitalizedColors = ['Black', 'White', 'Red', 'Blue', 'Silver', 'Gray', 'Grey'];
-            
-            commonColors.forEach(color => {
-                fallbacks.push(`/static/resources/${model_clean}_${color}${ext}`);
-            });
-            
-            capitalizedColors.forEach(color => {
-                fallbacks.push(`/static/resources/${model_clean}_${color}${ext}`);
-            });
-        });
-    }
-    
-    // Add final safe fallbacks
-    fallbacks.push(
-        '/static/resources/default_car.png',
-        '/static/resources/no_image.png',
-        '/static/resources/placeholder.png'
-    );
-    
-    // Final data URL fallback
-    const dataUrlFallback = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg==';
-    
-    if (attemptIndex < fallbacks.length) {
+    if (attemptIndex < fallbacks.length - 1) {
         const nextPath = fallbacks[attemptIndex];
-        console.log(`🔄 Trying fallback ${attemptIndex + 1}/${fallbacks.length}:`, nextPath);
+        console.log(`🔄 Trying fallback ${attemptIndex + 1}/${fallbacks.length - 1}:`, nextPath);
         
         imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
-        
-        // FIXED: Only change the src, don't touch any other properties
-        // This preserves the original onclick and other event handlers
         imgElement.src = nextPath;
     } else {
         console.log('📷 Using final data URL fallback');
-        imgElement.src = dataUrlFallback;
-        
-        // FIXED: Only remove onerror to prevent infinite loop, preserve everything else
-        imgElement.onerror = null;
+        imgElement.src = fallbacks[fallbacks.length - 1];
+        imgElement.onerror = null; // Remove error handler to prevent infinite loop
     }
 }
+// Make the new function globally available
+window.showCarSpecsInExistingPopup = showCarSpecsInExistingPopup;
 
 function showColorChangeError(message) {
     const errorDiv = document.createElement('div');
