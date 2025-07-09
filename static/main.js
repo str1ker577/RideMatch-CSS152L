@@ -6005,9 +6005,17 @@ async function loadFavorites() {
                 const specs = await specResponse.json();
                 console.log('✅ Got specs for', car.variant, ':', specs);
                 
-                // Enhanced image URL determination with brand verification
-                let imageUrl = determineCarImageUrl(specs);
-                console.log('🖼️ Using brand-verified image URL for', car.variant, ':', imageUrl);
+                // UPDATED: Use async image determination with color variants
+                let imageUrl = await determineCarImageUrl(specs);
+                
+                // If no image found from color variants, use a reasonable fallback
+                if (!imageUrl) {
+                    // Try some basic patterns
+                    const model_clean = specs.Model ? specs.Model.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '') : '';
+                    imageUrl = `/static/resources/${model_clean}.webp`;
+                }
+                
+                console.log('🖼️ Using image URL for', car.variant, ':', imageUrl);
                 
                 // Create and add card
                 const card = document.createElement("div");
@@ -6030,7 +6038,7 @@ async function loadFavorites() {
                     </div>
                 `;
                 
-                // FIXED: Add click event for your existing popup using the correct function name
+                // Add click event for your existing popup
                 card.addEventListener("click", function(e) {
                     // Don't trigger popup if clicking on remove button
                     if (e.target.closest('.remove-favorite-btn')) {
@@ -6070,7 +6078,7 @@ async function loadFavorites() {
     }
 }
 
-function showCarSpecsInExistingPopup(specs, variant, imageUrl) {
+async function showCarSpecsInExistingPopup(specs, variant, initialImageUrl) {
     console.log('🔍 Showing car specs in existing popup for:', variant);
     console.log('📋 Specs data:', specs);
     
@@ -6080,14 +6088,37 @@ function showCarSpecsInExistingPopup(specs, variant, imageUrl) {
         carTitle.textContent = `${specs.Brand || 'Unknown'} ${specs.Model || 'Unknown'} - ${variant}`;
     }
     
-    // Update the image
+    // Update the image - try to get the best available image
     const popupImage = document.querySelector('#card-popup .img-fave-frame img');
     if (popupImage) {
-        popupImage.src = imageUrl || getFinalFallbackImage();
+        // Try to get a better image using color variants
+        let bestImageUrl = initialImageUrl;
+        
+        try {
+            if (specs.Brand && specs.Model) {
+                const url = new URL(`${baseUrl}/get_colors`);
+                url.searchParams.append('model', specs.Model);
+                url.searchParams.append('brand', specs.Brand);
+                
+                const response = await fetch(url);
+                if (response.ok) {
+                    const colors = await response.json();
+                    if (colors.length > 0 && colors[0].image_path) {
+                        bestImageUrl = colors[0].image_path;
+                        console.log('✅ Using better image from color variants:', bestImageUrl);
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn('⚠️ Could not fetch better image, using initial:', error);
+        }
+        
+        popupImage.src = bestImageUrl || getFinalFallbackImage();
         popupImage.alt = `${specs.Brand || 'Unknown'} ${specs.Model || 'Unknown'}`;
         
         // Add error handling for popup image
         popupImage.onerror = function() {
+            console.log('❌ Popup image failed, using fallback');
             this.src = getFinalFallbackImage();
         };
     }
@@ -6098,7 +6129,7 @@ function showCarSpecsInExistingPopup(specs, variant, imageUrl) {
         specContainer.innerHTML = generateSpecCards(specs, variant);
     }
     
-    // Load color variants if available
+    // Load color variants dropdown - this should populate with working images
     if (specs.Brand && specs.Model) {
         populateColors(specs.Model, specs.Brand);
     }
@@ -6189,50 +6220,50 @@ function generateSpecCards(specs, variant) {
 // CarImages function //
 ///////////////////////
 
-function determineCarImageUrl(specs) {
+async function determineCarImageUrl(specs) {
     console.log('🔍 Determining image URL for specs:', specs);
     
     // Priority 1: Use the Image field if it exists and is valid
     if (specs.Image && 
         specs.Image.trim() !== '' && 
         specs.Image !== 'N/A' && 
+        specs.Image !== 'null' &&
         !specs.Image.startsWith('data:image/svg+xml')) {
         console.log('📸 Using specs.Image:', specs.Image);
         return specs.Image;
     }
     
-    // Priority 2: Construct path based on your actual file naming
-    if (specs.Brand && specs.Model && specs.Variant) {
-        const brand = specs.Brand.toLowerCase();
-        const model = specs.Model.toLowerCase();
-        const variant = specs.Variant.toLowerCase();
-        
-        // Handle specific Porsche models based on your actual files
-        if (brand === 'porsche') {
-            if (model.includes('cayenne')) {
-                // For Cayenne models, try specific patterns
-                if (variant.includes('e-hybrid') || variant.includes('ehybrid')) {
-                    return '/static/resources/CayenneE_Black.webp'; // Your actual file
-                }
-                if (variant.includes('turbo')) {
-                    return '/static/resources/CayenneTurbo_Red.webp'; // Your actual file
-                }
-                // Default Cayenne
-                return '/static/resources/CayenneS_White.webp';
-            }
+    // Priority 2: Try to get image from color variants API
+    if (specs.Brand && specs.Model) {
+        try {
+            console.log(`🎨 Fetching color variants for ${specs.Brand} ${specs.Model}...`);
             
-            if (model.includes('panamera')) {
-                return '/static/resources/Panamera_Black.webp'; // Your actual file
+            const url = new URL(`${baseUrl}/get_colors`);
+            url.searchParams.append('model', specs.Model);
+            url.searchParams.append('brand', specs.Brand);
+            
+            const response = await fetch(url);
+            
+            if (response.ok) {
+                const colors = await response.json();
+                console.log(`📋 Received ${colors.length} color variants:`, colors);
+                
+                if (colors.length > 0) {
+                    // Use the first available color variant image
+                    const firstColorImage = colors[0].image_path;
+                    if (firstColorImage) {
+                        console.log('✅ Using color variant image:', firstColorImage);
+                        return firstColorImage;
+                    }
+                }
             }
+        } catch (error) {
+            console.warn('⚠️ Error fetching color variants:', error);
         }
-        
-        // For other brands, use simplified pattern
-        const modelClean = model.replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
-        return `/static/resources/${modelClean}.webp`;
     }
     
-    // Priority 3: Return null to let frontend handle
-    console.log('📷 No suitable image found, returning null');
+    // Priority 3: Return null to trigger fallback system
+    console.log('📷 No suitable image found, will use fallback system');
     return null;
 }
 
@@ -6245,12 +6276,21 @@ function handleImageError(imgElement, brand, model, variant = null) {
     
     const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
     
-    // Simplified fallback list to avoid too many 404s
-    const model_clean = model ? model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    // More comprehensive fallback list
+    const model_clean = model ? model.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '') : '';
+    const brand_clean = brand ? brand.toLowerCase().replace(/\s+/g, '').replace(/[^a-z0-9]/g, '') : '';
     
     const fallbacks = [
-        // Try just the model name with different cases
+        // Try the exact model name
         `/static/resources/${model_clean}.webp`,
+        // Try with brand prefix
+        `/static/resources/${brand_clean}_${model_clean}.webp`,
+        // Try with common colors that might exist
+        `/static/resources/${model_clean}_black.webp`,
+        `/static/resources/${model_clean}_white.webp`,
+        `/static/resources/${model_clean}_Black.webp`,
+        `/static/resources/${model_clean}_White.webp`,
+        // Try capitalized version
         `/static/resources/${model_clean.charAt(0).toUpperCase() + model_clean.slice(1)}.webp`,
         // Final fallback
         getFinalFallbackImage()
@@ -6268,7 +6308,9 @@ function handleImageError(imgElement, brand, model, variant = null) {
         imgElement.onerror = null; // Remove error handler to prevent infinite loop
     }
 }
-// Make the new function globally available
+
+// Make functions globally available
+window.determineCarImageUrl = determineCarImageUrl;
 window.showCarSpecsInExistingPopup = showCarSpecsInExistingPopup;
 
 function showColorChangeError(message) {
@@ -6313,7 +6355,6 @@ function getFinalFallbackImage() {
     // Return a data URL that will always work
     return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg==';
 }
-
 
 window.handleImageError = handleImageError;
 window.determineCarImageUrl = determineCarImageUrl;
