@@ -1742,7 +1742,7 @@ function initializeProfilePage() {
 function handleProfilePageAccess() {
     console.log('🔒 Checking profile page access...');
     
-    // Give time for auth to load, but don't be too aggressive
+    // Give more time for auth to load
     setTimeout(() => {
         if (!currentUser && !userName && !userDisplayName) {
             console.log('❌ User not authenticated, redirecting to home');
@@ -1755,7 +1755,7 @@ function handleProfilePageAccess() {
         if (typeof loadUserProfile === 'function') {
             loadUserProfile();
         }
-    }, 1500); // Shorter wait time
+    }, 2000); // Increased wait time
 }
 
 function loadProfilePage() {
@@ -1775,7 +1775,7 @@ async function loadUserProfile() {
     
     console.log('🔄 Loading user profile data...');
     
-    // FIXED: Initialize profile page icons immediately to prevent text flash
+    // Initialize profile page icons immediately to prevent text flash
     initializeProfilePageIcons();
 
     try {
@@ -1814,7 +1814,7 @@ async function loadUserProfile() {
                 totalFavoritesElement.textContent = profile.favoriteCount || '0';
             }
             
-            // FIXED: Update profile page picture
+            // Update profile page picture
             const currentPic = document.getElementById('current-profile-pic');
             const defaultIcon = document.getElementById('default-profile-icon');
             
@@ -1848,10 +1848,10 @@ async function loadUserProfile() {
                 }
             }
             
-            // FIXED: Update header profile picture with persistence
+            // Update header profile picture with persistence
             updateHeaderProfilePicture(profile.profilePictureUrl);
             
-            // FIXED: Store profile picture URL globally for persistence
+            // Store profile picture URL globally for persistence
             userProfilePictureUrl = profile.profilePictureUrl;
             
         } else {
@@ -1877,10 +1877,28 @@ function enableUsernameEdit() {
 }
 
 function cancelUsernameEdit() {
-    document.getElementById('current-username').style.display = 'block';
-    document.getElementById('edit-username-btn').style.display = 'block';
-    document.getElementById('username-edit-form').style.display = 'none';
-    document.getElementById('username-validation').textContent = '';
+    console.log('🔧 Canceling username edit');
+    
+    const currentUsernameInput = document.getElementById('current-username');
+    const editBtn = document.getElementById('edit-username-btn');
+    const editForm = document.getElementById('username-edit-form');
+    const validation = document.getElementById('username-validation');
+    
+    if (!currentUsernameInput || !editBtn || !editForm) {
+        console.error('❌ Required elements not found for cancel username edit');
+        return;
+    }
+    
+    currentUsernameInput.style.display = 'block';
+    editBtn.style.display = 'block';
+    editForm.style.display = 'none';
+    
+    if (validation) {
+        validation.textContent = '';
+        validation.className = 'username-validation';
+    }
+    
+    console.log('✅ Username edit canceled');
 }
 
 async function saveUsername() {
@@ -1910,40 +1928,79 @@ async function saveUsername() {
         validation.textContent = 'Saving...';
         validation.className = 'username-validation';
         
+        // Enhanced logging
+        console.log('🔄 Saving username:', newUsername);
+        console.log('🔍 Current user:', currentUser);
+        
+        if (!currentUser || !currentUser.uid) {
+            throw new Error('User not authenticated');
+        }
+        
         const response = await fetch(`${baseUrl}/update-username`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
             body: JSON.stringify({ 
                 uid: currentUser.uid,
                 newUsername: newUsername 
             })
         });
         
-        const result = await response.json();
+        console.log('📡 Response status:', response.status);
         
-        if (response.ok) {
-            document.getElementById('current-username').value = newUsername;
-            userDisplayName = newUsername;
-            
-            // Update Firebase user profile
-            await currentUser.updateProfile({ displayName: newUsername });
-            
-            // Update UI
-            updateUIForAuthState();
-            
-            validation.textContent = 'Username updated successfully!';
-            validation.className = 'username-validation valid';
-            
-            setTimeout(() => {
-                cancelUsernameEdit();
-            }, 2000);
-        } else {
-            validation.textContent = result.message || 'Failed to update username';
-            validation.className = 'username-validation invalid';
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Server error:', errorText);
+            throw new Error(`Server error: ${response.status}`);
         }
+        
+        const result = await response.json();
+        console.log('✅ Username update result:', result);
+        
+        if (result.error) {
+            throw new Error(result.error);
+        }
+        
+        // Update the display
+        document.getElementById('current-username').value = newUsername;
+        userDisplayName = newUsername;
+        
+        // Update Firebase user profile
+        if (currentUser && currentUser.updateProfile) {
+            try {
+                await currentUser.updateProfile({ displayName: newUsername });
+                console.log('✅ Firebase profile updated');
+            } catch (profileError) {
+                console.warn('⚠️ Firebase profile update failed:', profileError);
+            }
+        }
+        
+        // Update session
+        try {
+            await fetch(`${baseUrl}/refresh-session`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'same-origin'
+            });
+        } catch (sessionError) {
+            console.warn('⚠️ Session refresh failed:', sessionError);
+        }
+        
+        // Update UI
+        updateUIForAuthState();
+        
+        validation.textContent = 'Username updated successfully!';
+        validation.className = 'username-validation valid';
+        
+        setTimeout(() => {
+            cancelUsernameEdit();
+        }, 2000);
+        
     } catch (error) {
-        console.error('Error updating username:', error);
-        validation.textContent = 'Error updating username';
+        console.error('❌ Error updating username:', error);
+        validation.textContent = error.message || 'Error updating username';
         validation.className = 'username-validation invalid';
     }
 }
@@ -2261,6 +2318,41 @@ async function debugProfilePictureIssue(profilePictureUrl) {
         console.error('❌ Error debugging profile picture:', error);
     }
 }
+
+function checkAuthenticationForProfile() {
+    console.log('🔍 Checking authentication for profile page...');
+    
+    const authStates = {
+        currentUser: !!currentUser,
+        userName: !!userName,
+        userDisplayName: !!userDisplayName,
+        sessionUser: !!session?.user,
+        sessionAuth: !!session?.authenticated
+    };
+    
+    console.log('🔍 Auth states:', authStates);
+    
+    // Check if any authentication method is available
+    const isAuthenticated = authStates.currentUser || 
+                           authStates.userName || 
+                           authStates.userDisplayName || 
+                           authStates.sessionUser;
+    
+    if (!isAuthenticated) {
+        console.log('❌ No authentication found, redirecting...');
+        alert('Please sign in to access your profile.');
+        window.location.href = '/';
+        return false;
+    }
+    
+    console.log('✅ Authentication confirmed');
+    return true;
+}
+
+// Make functions globally available
+window.enableUsernameEdit = enableUsernameEdit;
+window.cancelUsernameEdit = cancelUsernameEdit;
+window.saveUsername = saveUsername;
 
 ////////////////////////////
 // Formats the CSV file  //

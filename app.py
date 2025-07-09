@@ -638,6 +638,96 @@ def check_session():
             'authenticated': False,
             'error': 'Session check failed'
         }), 500
+    """Check if user has a valid session with enhanced error handling"""
+    try:
+        session_data = {
+            'authenticated': False,
+            'user': None,
+            'email': None,
+            'username': None,
+            'profile_picture_url': None
+        }
+        
+        # Check if user is in session and authenticated
+        if 'user' in session and session.get('authenticated'):
+            user_id = session.get('user')
+            
+            # Get fresh profile data from database if available
+            if realtime_db_ref and user_id:
+                try:
+                    user_ref = realtime_db_ref.child('users').child(user_id)
+                    user_data = user_ref.get()
+                    
+                    if user_data:
+                        # Validate profile picture exists
+                        profile_pic_url = user_data.get('profilePictureUrl')
+                        if profile_pic_url:
+                            # Check if file actually exists
+                            if profile_pic_url.startswith('/static/profile_pictures/'):
+                                filename = profile_pic_url.split('/')[-1]
+                                file_path = os.path.join(UPLOAD_FOLDER, filename)
+                                if not os.path.exists(file_path):
+                                    app.logger.warning(f"Profile picture file not found: {file_path}")
+                                    profile_pic_url = None
+                                    # Update database to remove invalid URL
+                                    user_ref.update({'profilePictureUrl': None})
+                        
+                        session_data.update({
+                            'authenticated': True,
+                            'user': user_id,
+                            'email': session.get('email') or user_data.get('email'),
+                            'username': user_data.get('username'),
+                            'profile_picture_url': profile_pic_url
+                        })
+                    else:
+                        # User not found in database, create basic entry
+                        basic_user_data = {
+                            'uid': user_id,
+                            'email': session.get('email', 'Unknown'),
+                            'username': session.get('username') or session.get('email', 'User'),
+                            'memberSince': datetime.utcnow().isoformat() + 'Z',
+                            'favoriteCount': 0,
+                            'profilePictureUrl': None
+                        }
+                        user_ref.set(basic_user_data)
+                        
+                        session_data.update({
+                            'authenticated': True,
+                            'user': user_id,
+                            'email': session.get('email', 'Unknown'),
+                            'username': basic_user_data['username'],
+                            'profile_picture_url': None
+                        })
+                        
+                except Exception as db_error:
+                    app.logger.error(f"Database error in session check: {db_error}")
+                    # Return basic session data without database info
+                    session_data.update({
+                        'authenticated': True,
+                        'user': user_id,
+                        'email': session.get('email'),
+                        'username': session.get('username'),
+                        'profile_picture_url': None
+                    })
+            else:
+                # Database not available, use session data only
+                session_data.update({
+                    'authenticated': True,
+                    'user': user_id,
+                    'email': session.get('email'),
+                    'username': session.get('username'),
+                    'profile_picture_url': None  # Don't use potentially invalid URLs
+                })
+        
+        app.logger.info(f"Session check result: {session_data}")
+        return jsonify(session_data), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error in session check: {e}")
+        return jsonify({
+            'authenticated': False,
+            'error': 'Session check failed'
+        }), 500
     """Check if user has a valid session with profile picture data"""
     if 'user' in session and session.get('authenticated'):
         # Get fresh profile picture URL from database to ensure it's current
@@ -1276,6 +1366,33 @@ def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
 def validate_username(username):
+    """Enhanced username validation with detailed error messages"""
+    if not username:
+        return False, "Username is required"
+    
+    # Remove any whitespace
+    username = username.strip()
+    
+    if len(username) < 3:
+        return False, "Username must be at least 3 characters long"
+    
+    if len(username) > 20:
+        return False, "Username must be less than 20 characters long"
+    
+    # Check for valid characters only
+    if not re.match(r'^[a-zA-Z0-9_]+$', username):
+        return False, "Username can only contain letters, numbers, and underscores"
+    
+    # Check that it doesn't start or end with underscore
+    if username.startswith('_') or username.endswith('_'):
+        return False, "Username cannot start or end with an underscore"
+    
+    # Check for reserved usernames
+    reserved_usernames = ['admin', 'administrator', 'root', 'system', 'anonymous', 'null', 'undefined']
+    if username.lower() in reserved_usernames:
+        return False, "This username is reserved and cannot be used"
+    
+    return True, "Valid username"
     """Enhanced username validation with detailed error messages"""
     if not username:
         return False, "Username is required"
