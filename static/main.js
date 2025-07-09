@@ -5874,7 +5874,7 @@ async function loadFavorites() {
 function determineCarImageUrl(specs) {
     console.log('🔍 Determining image URL for specs:', specs);
     
-    // Priority 1: Use the Image field if it exists and is NOT a data URL placeholder
+    // Priority 1: Use the Image field if it exists and is valid
     if (specs.Image && 
         specs.Image.trim() !== '' && 
         specs.Image !== 'N/A' && 
@@ -5883,124 +5883,78 @@ function determineCarImageUrl(specs) {
         return specs.Image;
     }
     
-    // Priority 2: Construct most likely path
-    if (specs.Brand && specs.Model) {
-        const brand = specs.Brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-        const model = specs.Model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
+    // Priority 2: Construct path based on your actual file naming
+    if (specs.Brand && specs.Model && specs.Variant) {
+        const brand = specs.Brand.toLowerCase();
+        const model = specs.Model.toLowerCase();
+        const variant = specs.Variant.toLowerCase();
         
-        // Try the most common pattern first
-        const primaryPath = `/static/resources/${model}.webp`;
-        console.log('🔍 Primary path attempt:', primaryPath);
-        return primaryPath;
+        // Handle specific Porsche models based on your actual files
+        if (brand === 'porsche') {
+            if (model.includes('cayenne')) {
+                // For Cayenne models, try specific patterns
+                if (variant.includes('e-hybrid') || variant.includes('ehybrid')) {
+                    return '/static/resources/CayenneE_Black.webp'; // Your actual file
+                }
+                if (variant.includes('turbo')) {
+                    return '/static/resources/CayenneTurbo_Red.webp'; // Your actual file
+                }
+                // Default Cayenne
+                return '/static/resources/CayenneS_White.webp';
+            }
+            
+            if (model.includes('panamera')) {
+                return '/static/resources/Panamera_Black.webp'; // Your actual file
+            }
+        }
+        
+        // For other brands, use simplified pattern
+        const modelClean = model.replace(/\s+/g, '').replace(/[^a-z0-9]/g, '');
+        return `/static/resources/${modelClean}.webp`;
     }
     
-    // Priority 3: Safe fallback
-    console.log('📸 Using safe fallback');
-    return getFinalFallbackImage();
-}
-
-
-// NEW: Enhanced image error handler with multiple fallback attempts
-function handleImageError(imgElement, brand, model) {
-    console.log('❌ Image failed to load for', brand, model, '- trying fallbacks');
-    
-    if (!imgElement.dataset.fallbackAttempt) {
-        imgElement.dataset.fallbackAttempt = "1";
-        
-        // Try different image extensions and paths
-        const brand_clean = brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-        const model_clean = model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
-        
-        const fallbacks = [
-            `/static/resources/${brand_clean}_${model_clean}.jpg`,
-            `/static/resources/${model_clean}.png`,
-            `/static/resources/${model_clean}.jpg`,
-            `/static/car_images/${brand_clean}_${model_clean}.png`,
-            `/static/car_images/${brand_clean}_${model_clean}.jpg`,
-            `/static/resources/tesr.png`, // Your existing fallback
-            '/static/resources/default_car.png'
-        ];
-        
-        const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
-        
-        if (attemptIndex < fallbacks.length) {
-            console.log(`🔄 Trying fallback ${attemptIndex + 1}:`, fallbacks[attemptIndex]);
-            imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
-            imgElement.src = fallbacks[attemptIndex];
-        } else {
-            console.log('❌ All fallbacks failed, using final default');
-            imgElement.src = '/static/resources/default_car.png';
-            imgElement.onerror = null; // Prevent infinite loop
-        }
-    } else {
-        // Continue with next fallback
-        const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
-        const fallbacks = [
-            `/static/resources/${brand.toLowerCase().replace(/\s+/g, '_')}_${model.toLowerCase().replace(/\s+/g, '_')}.jpg`,
-            `/static/resources/${model.toLowerCase().replace(/\s+/g, '_')}.png`,
-            `/static/resources/tesr.png`,
-            '/static/resources/default_car.png'
-        ];
-        
-        if (attemptIndex < fallbacks.length) {
-            console.log(`🔄 Trying fallback ${attemptIndex + 1}:`, fallbacks[attemptIndex]);
-            imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
-            imgElement.src = fallbacks[attemptIndex];
-        } else {
-            console.log('❌ Final fallback - removing error handler');
-            imgElement.src = '/static/resources/default_car.png';
-            imgElement.onerror = null;
-        }
-    }
+    // Priority 3: Return null to let frontend handle
+    console.log('📷 No suitable image found, returning null');
+    return null;
 }
 
 // NEW: Function to show car specs popup (if the popup functionality exists)
 function handleImageError(imgElement, brand, model, variant = null) {
-    console.log('❌ Image failed to load for', brand, model, variant, '- trying case-insensitive fallbacks');
+    console.log('❌ Image failed to load for', brand, model, variant);
     
+    // Check attempt count
     if (!imgElement.dataset.fallbackAttempt) {
         imgElement.dataset.fallbackAttempt = "1";
     }
     
     const attemptIndex = parseInt(imgElement.dataset.fallbackAttempt) - 1;
-    
-    // FIXED: Limit fallback attempts to prevent excessive 404s
-    const maxAttempts = 5; // Reduced from unlimited attempts
+    const maxAttempts = 3; // Reduced to prevent 404 spam
     
     if (attemptIndex >= maxAttempts) {
         console.log('🛑 Max fallback attempts reached, using final fallback');
         imgElement.src = getFinalFallbackImage();
-        imgElement.onerror = null; // Remove error handler to prevent infinite loop
+        imgElement.onerror = null; // Remove error handler
         return;
     }
     
-    // Clean names for filenames (case-insensitive)
-    const brand_clean = brand ? brand.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
-    const model_clean = model ? model.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
-    const variant_clean = variant ? variant.toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '') : '';
+    // Limited fallback list based on your actual files
+    const brand_clean = brand ? brand.toLowerCase() : '';
+    const model_clean = model ? model.toLowerCase().replace(/\s+/g, '') : '';
     
-    // UPDATED: Strategic fallback list - most likely to least likely
     const fallbacks = [
-        // Most likely patterns first
+        // Attempt 1: Try exact filename patterns from your folder
         `/static/resources/${model_clean}.webp`,
+        // Attempt 2: Try with brand prefix
         `/static/resources/${brand_clean}_${model_clean}.webp`,
-        `/static/resources/${model_clean}.png`,
-        `/static/resources/${brand_clean}_${model_clean}.jpg`,
-        // Generic fallback
+        // Attempt 3: Use safe fallback
         getFinalFallbackImage()
     ];
     
-    if (attemptIndex < fallbacks.length) {
-        const nextPath = fallbacks[attemptIndex];
-        console.log(`🔄 Trying fallback ${attemptIndex + 1}/${maxAttempts}:`, nextPath);
-        
-        imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
-        imgElement.src = nextPath;
-    } else {
-        console.log('📷 Using final fallback image');
-        imgElement.src = getFinalFallbackImage();
-        imgElement.onerror = null;
-    }
+    const nextPath = fallbacks[attemptIndex];
+    console.log(`🔄 Trying fallback ${attemptIndex + 1}/${maxAttempts}:`, nextPath);
+    
+    imgElement.dataset.fallbackAttempt = (attemptIndex + 2).toString();
+    imgElement.src = nextPath;
 }
 
 function showColorChangeError(message) {
