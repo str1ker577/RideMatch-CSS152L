@@ -1846,6 +1846,129 @@ def get_user_profile():
 # NEW: Update username endpoint
 @app.route('/update-username', methods=['POST'])
 def update_username():
+    """Update user's username with comprehensive error handling and retry logic"""
+    app.logger.info("🔄 Update username request received")
+    
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available")
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        app.logger.info("📥 Getting request data...")
+        data = request.get_json()
+        app.logger.info(f"📦 Request data: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received")
+            return jsonify({"error": "No data provided"}), 400
+        
+        uid = data.get('uid')
+        new_username = data.get('newUsername', '').strip()
+        
+        app.logger.info(f"🔍 UID: {uid}")
+        app.logger.info(f"🔍 New username: {new_username}")
+        
+        if not uid or not new_username:
+            app.logger.error("❌ Missing required fields")
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        # Validate username format
+        app.logger.info("🔄 Validating username...")
+        is_valid, message = validate_username(new_username)
+        app.logger.info(f"✅ Username validation result: {is_valid}, {message}")
+        
+        if not is_valid:
+            return jsonify({"error": message}), 400
+        
+        # FIXED: Enhanced database operations with proper error handling
+        app.logger.info("🔄 Checking username availability...")
+        users_ref = realtime_db_ref.child('users')
+        
+        # Step 1: Check if username is already taken with retry logic
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                app.logger.info(f"📡 Username check attempt {attempt + 1}/{max_retries}")
+                
+                # Use a more robust query method
+                existing_users = users_ref.order_by_child('username').equal_to(new_username).get()
+                app.logger.info(f"🔍 Existing users check result: {existing_users}")
+                
+                # Remove current user from results if they exist
+                if existing_users:
+                    existing_users = {k: v for k, v in existing_users.items() if k != uid}
+                    if existing_users:
+                        app.logger.warning(f"⚠️ Username already taken: {new_username}")
+                        return jsonify({"error": "Username already taken"}), 400
+                
+                app.logger.info("✅ Username is available")
+                break  # Success, exit retry loop
+                
+            except Exception as query_error:
+                app.logger.error(f"❌ Database query attempt {attempt + 1} failed: {query_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    return jsonify({"error": "Database query failed"}), 500
+                else:
+                    # Wait before retry
+                    time.sleep(0.5 * (attempt + 1))
+        
+        # Step 2: Update username with retry logic
+        app.logger.info("🔄 Updating username in database...")
+        for attempt in range(max_retries):
+            try:
+                app.logger.info(f"📡 Username update attempt {attempt + 1}/{max_retries}")
+                
+                user_ref = users_ref.child(uid)
+                
+                # First, verify the user exists
+                user_data = user_ref.get()
+                if not user_data:
+                    app.logger.error(f"❌ User {uid} not found in database")
+                    return jsonify({"error": "User not found"}), 404
+                
+                # Update the username
+                user_ref.update({
+                    'username': new_username,
+                    'lastUpdated': int(time.time() * 1000)
+                })
+                
+                app.logger.info(f"✅ Username updated successfully for user {uid}: {new_username}")
+                
+                # Verify the update was successful
+                updated_user = user_ref.get()
+                if updated_user and updated_user.get('username') == new_username:
+                    app.logger.info("✅ Username update verified")
+                    break
+                else:
+                    raise Exception("Username update verification failed")
+                
+            except Exception as update_error:
+                app.logger.error(f"❌ Database update attempt {attempt + 1} failed: {update_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    return jsonify({"error": "Database update failed"}), 500
+                else:
+                    # Wait before retry
+                    time.sleep(0.5 * (attempt + 1))
+        
+        # Step 3: Update session data
+        try:
+            session['username'] = new_username
+            session['last_updated'] = int(time.time())
+            app.logger.info("✅ Session updated successfully")
+        except Exception as session_error:
+            app.logger.warning(f"⚠️ Session update failed: {session_error}")
+            # Don't fail the entire operation for session update issues
+        
+        return jsonify({"message": "Username updated successfully"}), 200
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error updating username: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Failed to update username"}), 500
     """Update user's username"""
     app.logger.info("🔄 Update username request received")
     
@@ -6079,6 +6202,101 @@ def refresh_session():
         app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
         return jsonify({"error": "Failed to update username"}), 500
     
+@app.route('/debug/username-update', methods=['GET', 'POST'])
+def debug_username_update():
+    """Debug endpoint to troubleshoot username update issues"""
+    try:
+        debug_info = {
+            "database_available": realtime_db_ref is not None,
+            "current_time": datetime.utcnow().isoformat() + 'Z',
+            "session_data": {
+                "has_session": bool(session),
+                "user_in_session": 'user' in session if session else False,
+                "session_keys": list(session.keys()) if session else []
+            }
+        }
+        
+        # Test database connection
+        if realtime_db_ref:
+            try:
+                # Test basic database operations
+                test_ref = realtime_db_ref.child('test_connection')
+                test_data = {'timestamp': int(time.time()), 'test': 'connection_test'}
+                
+                # Test write
+                test_ref.set(test_data)
+                debug_info["database_write_test"] = "success"
+                
+                # Test read
+                read_result = test_ref.get()
+                debug_info["database_read_test"] = "success"
+                debug_info["read_result"] = read_result
+                
+                # Test query (the operation that's failing)
+                users_ref = realtime_db_ref.child('users')
+                
+                # Test basic query
+                try:
+                    all_users = users_ref.get()
+                    debug_info["users_query_test"] = "success"
+                    debug_info["total_users"] = len(all_users) if all_users else 0
+                except Exception as query_error:
+                    debug_info["users_query_test"] = f"failed: {str(query_error)}"
+                
+                # Test username query (the specific failing operation)
+                try:
+                    test_username = "test_username_query"
+                    username_query = users_ref.order_by_child('username').equal_to(test_username).get()
+                    debug_info["username_query_test"] = "success"
+                    debug_info["username_query_result"] = username_query
+                except Exception as username_query_error:
+                    debug_info["username_query_test"] = f"failed: {str(username_query_error)}"
+                
+                # Clean up test data
+                test_ref.delete()
+                
+            except Exception as db_error:
+                debug_info["database_error"] = str(db_error)
+                debug_info["database_available"] = False
+        
+        # If POST request, test the actual username update process
+        if request.method == 'POST':
+            data = request.get_json()
+            if data and data.get('test_uid') and data.get('test_username'):
+                test_uid = data['test_uid']
+                test_username = data['test_username']
+                
+                debug_info["test_update"] = {}
+                
+                try:
+                    # Test the exact same process as the real endpoint
+                    users_ref = realtime_db_ref.child('users')
+                    
+                    # Test username availability check
+                    existing_users = users_ref.order_by_child('username').equal_to(test_username).get()
+                    debug_info["test_update"]["availability_check"] = "success"
+                    debug_info["test_update"]["existing_users"] = existing_users
+                    
+                    # Test user update (simulate)
+                    user_ref = users_ref.child(test_uid)
+                    user_data = user_ref.get()
+                    debug_info["test_update"]["user_exists"] = user_data is not None
+                    debug_info["test_update"]["user_data"] = user_data
+                    
+                    # Test update operation (don't actually update)
+                    debug_info["test_update"]["would_update"] = True
+                    
+                except Exception as test_error:
+                    debug_info["test_update"]["error"] = str(test_error)
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "error_type": type(e).__name__
+        }), 500
+        
 ##################
 # Error handlers #
 ##################

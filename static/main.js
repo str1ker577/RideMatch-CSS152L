@@ -1664,52 +1664,52 @@ function setupUsernameValidation() {
 
 // UPDATED: Enhanced username availability check with better error handling
 async function checkUsernameAvailabilityEnhanced(username, statusElement) {
-  try {
-    console.log(`🔍 Checking availability for username: ${username}`);
-    
-    statusElement.textContent = 'Checking availability...';
-    statusElement.className = 'username-status checking';
-    
-    const response = await fetch(`${baseUrl}/check-username`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ username: username })
-    });
-    
-    console.log(`📡 Username check response status: ${response.status}`);
-    
-    if (!response.ok) {
-      console.error(`❌ Username check failed with status: ${response.status}`);
-      
-      if (response.status === 500) {
-        statusElement.textContent = 'Unable to check availability. You can still continue.';
+    try {
+        console.log(`🔍 Checking availability for username: ${username}`);
+        
+        statusElement.textContent = 'Checking availability...';
+        statusElement.className = 'username-status checking';
+        
+        const response = await fetch(`${baseUrl}/check-username`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ username: username })
+        });
+        
+        console.log(`📡 Username check response status: ${response.status}`);
+        
+        if (!response.ok) {
+            console.error(`❌ Username check failed with status: ${response.status}`);
+            
+            if (response.status === 500) {
+                statusElement.textContent = 'Unable to check availability. You can still try to save.';
+                statusElement.className = 'username-status warning';
+            } else {
+                statusElement.textContent = 'Error checking availability. Please try again.';
+                statusElement.className = 'username-status unavailable';
+            }
+            return;
+        }
+        
+        const result = await response.json();
+        console.log(`📊 Username check result:`, result);
+        
+        if (result.available) {
+            statusElement.textContent = '✓ Username available';
+            statusElement.className = 'username-status available';
+        } else {
+            statusElement.textContent = result.message || 'Username not available';
+            statusElement.className = 'username-status unavailable';
+        }
+        
+    } catch (error) {
+        console.error('❌ Error checking username availability:', error);
+        statusElement.textContent = 'Unable to verify availability. You can still try to save.';
         statusElement.className = 'username-status warning';
-      } else {
-        statusElement.textContent = 'Error checking availability. Please try again.';
-        statusElement.className = 'username-status unavailable';
-      }
-      return;
     }
-    
-    const result = await response.json();
-    console.log(`📊 Username check result:`, result);
-    
-    if (result.available) {
-      statusElement.textContent = '✓ Username available';
-      statusElement.className = 'username-status available';
-    } else {
-      statusElement.textContent = result.message || 'Username not available';
-      statusElement.className = 'username-status unavailable';
-    }
-    
-  } catch (error) {
-    console.error('❌ Error checking username availability:', error);
-    statusElement.textContent = 'Unable to verify availability. You can still continue.';
-    statusElement.className = 'username-status warning';
-  }
 }
 
 /////////////////////////////////
@@ -1902,10 +1902,18 @@ function cancelUsernameEdit() {
 }
 
 async function saveUsername() {
+    console.log('🔄 Starting username save process...');
+    
     const newUsername = document.getElementById('new-username').value.trim();
     const validation = document.getElementById('username-validation');
     
-    // Validate username
+    if (!newUsername) {
+        validation.textContent = 'Username cannot be empty';
+        validation.className = 'username-validation invalid';
+        return;
+    }
+    
+    // Validate username format
     if (newUsername.length < 3 || newUsername.length > 20) {
         validation.textContent = 'Username must be 3-20 characters long';
         validation.className = 'username-validation invalid';
@@ -1918,90 +1926,190 @@ async function saveUsername() {
         return;
     }
     
-    // Check if username is different
-    if (newUsername === document.getElementById('current-username').value) {
+    // Check if username is different from current
+    const currentUsername = document.getElementById('current-username').value;
+    if (newUsername === currentUsername) {
+        console.log('🔄 Username unchanged, canceling edit');
         cancelUsernameEdit();
         return;
     }
     
+    // Show loading state
+    validation.textContent = 'Saving username...';
+    validation.className = 'username-validation';
+    
     try {
-        validation.textContent = 'Saving...';
-        validation.className = 'username-validation';
-        
-        // Enhanced logging
         console.log('🔄 Saving username:', newUsername);
-        console.log('🔍 Current user:', currentUser);
         
-        if (!currentUser || !currentUser.uid) {
-            throw new Error('User not authenticated');
+        // Enhanced user authentication check
+        let user = null;
+        
+        // Check Firebase auth first
+        if (typeof auth !== 'undefined' && auth && auth.currentUser) {
+            user = auth.currentUser;
+            console.log('✅ Using Firebase auth user:', user.uid);
+        } else if (currentUser && currentUser.uid) {
+            user = currentUser;
+            console.log('✅ Using global currentUser:', user.uid);
+        } else {
+            console.error('❌ No authenticated user found');
+            throw new Error('User not authenticated. Please refresh the page and try again.');
         }
         
-        const response = await fetch(`${baseUrl}/update-username`, {
-            method: 'POST',
-            headers: { 
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            },
-            body: JSON.stringify({ 
-                uid: currentUser.uid,
-                newUsername: newUsername 
-            })
-        });
+        // Prepare request data
+        const requestData = { 
+            uid: user.uid,
+            newUsername: newUsername 
+        };
         
-        console.log('📡 Response status:', response.status);
+        console.log('📤 Sending update request:', requestData);
         
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('❌ Server error:', errorText);
-            throw new Error(`Server error: ${response.status}`);
-        }
+        // ENHANCED: Multiple retry attempts with exponential backoff
+        let lastError = null;
+        let success = false;
+        const maxRetries = 3;
         
-        const result = await response.json();
-        console.log('✅ Username update result:', result);
-        
-        if (result.error) {
-            throw new Error(result.error);
-        }
-        
-        // Update the display
-        document.getElementById('current-username').value = newUsername;
-        userDisplayName = newUsername;
-        
-        // Update Firebase user profile
-        if (currentUser && currentUser.updateProfile) {
+        for (let attempt = 1; attempt <= maxRetries; attempt++) {
             try {
-                await currentUser.updateProfile({ displayName: newUsername });
-                console.log('✅ Firebase profile updated');
-            } catch (profileError) {
-                console.warn('⚠️ Firebase profile update failed:', profileError);
+                console.log(`📡 Username update attempt ${attempt}/${maxRetries}`);
+                
+                const response = await fetch(`${baseUrl}/update-username`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+                
+                console.log(`📥 Response status (attempt ${attempt}):`, response.status);
+                console.log(`📥 Response ok (attempt ${attempt}):`, response.ok);
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    console.log('✅ Username update successful:', result);
+                    
+                    // Update UI immediately
+                    document.getElementById('current-username').value = newUsername;
+                    
+                    // Update global variables
+                    if (typeof userDisplayName !== 'undefined') {
+                        userDisplayName = newUsername;
+                    }
+                    
+                    // Update Firebase user profile if available
+                    if (user && user.updateProfile) {
+                        try {
+                            await user.updateProfile({ displayName: newUsername });
+                            console.log('✅ Firebase profile updated');
+                        } catch (profileError) {
+                            console.warn('⚠️ Firebase profile update failed:', profileError);
+                        }
+                    }
+                    
+                    // Update session with retry
+                    try {
+                        await fetch(`${baseUrl}/refresh-session`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'same-origin'
+                        });
+                        console.log('✅ Session refreshed');
+                    } catch (sessionError) {
+                        console.warn('⚠️ Session refresh failed:', sessionError);
+                    }
+                    
+                    // Update UI globally
+                    if (typeof updateUIForAuthState === 'function') {
+                        updateUIForAuthState();
+                    }
+                    
+                    // Show success message
+                    validation.textContent = 'Username updated successfully!';
+                    validation.className = 'username-validation valid';
+                    
+                    // Close edit form after delay
+                    setTimeout(() => {
+                        cancelUsernameEdit();
+                    }, 2000);
+                    
+                    success = true;
+                    break; // Success, exit retry loop
+                    
+                } else {
+                    // Parse error response
+                    let errorMessage = 'Server error';
+                    try {
+                        const errorData = await response.json();
+                        errorMessage = errorData.error || errorMessage;
+                    } catch (parseError) {
+                        const errorText = await response.text();
+                        errorMessage = errorText || `HTTP ${response.status}`;
+                    }
+                    
+                    console.error(`❌ Server error (attempt ${attempt}):`, errorMessage);
+                    lastError = errorMessage;
+                    
+                    // For certain errors, don't retry
+                    if (response.status === 400 && errorMessage.includes('already taken')) {
+                        throw new Error(errorMessage);
+                    }
+                    
+                    // Wait before retry with exponential backoff
+                    if (attempt < maxRetries) {
+                        const waitTime = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s
+                        console.log(`⏳ Waiting ${waitTime}ms before retry...`);
+                        await new Promise(resolve => setTimeout(resolve, waitTime));
+                    }
+                }
+                
+            } catch (networkError) {
+                console.error(`❌ Network error (attempt ${attempt}):`, networkError);
+                lastError = networkError.message;
+                
+                // Wait before retry
+                if (attempt < maxRetries) {
+                    const waitTime = Math.pow(2, attempt) * 1000;
+                    await new Promise(resolve => setTimeout(resolve, waitTime));
+                }
             }
         }
         
-        // Update session
-        try {
-            await fetch(`${baseUrl}/refresh-session`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin'
-            });
-        } catch (sessionError) {
-            console.warn('⚠️ Session refresh failed:', sessionError);
+        // If all retries failed
+        if (!success) {
+            throw new Error(lastError || 'Failed to update username after multiple attempts');
         }
         
-        // Update UI
-        updateUIForAuthState();
-        
-        validation.textContent = 'Username updated successfully!';
-        validation.className = 'username-validation valid';
-        
-        setTimeout(() => {
-            cancelUsernameEdit();
-        }, 2000);
-        
     } catch (error) {
-        console.error('❌ Error updating username:', error);
-        validation.textContent = error.message || 'Error updating username';
+        console.error('❌ Final error updating username:', error);
+        
+        // Show user-friendly error message
+        let errorMessage = error.message;
+        
+        // Handle specific error cases
+        if (errorMessage.includes('already taken')) {
+            errorMessage = 'This username is already taken. Please choose another one.';
+        } else if (errorMessage.includes('Database')) {
+            errorMessage = 'Database temporarily unavailable. Please try again later.';
+        } else if (errorMessage.includes('Network')) {
+            errorMessage = 'Network error. Please check your connection and try again.';
+        } else if (errorMessage.includes('not authenticated')) {
+            errorMessage = 'Authentication expired. Please refresh the page and try again.';
+        } else if (!errorMessage || errorMessage === 'Failed to update username') {
+            errorMessage = 'Unable to update username. Please try again.';
+        }
+        
+        validation.textContent = errorMessage;
         validation.className = 'username-validation invalid';
+        
+        // Focus back on input for user to try again
+        const newUsernameInput = document.getElementById('new-username');
+        if (newUsernameInput) {
+            setTimeout(() => {
+                newUsernameInput.focus();
+                newUsernameInput.select();
+            }, 100);
+        }
     }
 }
 
