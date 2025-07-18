@@ -16,6 +16,7 @@
   <!-- Link to Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
 
 </head>
 <body>
@@ -37,21 +38,32 @@
       </div>
     </div>
   
-    <div id="signup-popup" class="popup">
-      <div class="popup-content">
-          <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
-          <h1>Sign Up</h1>
-          <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
-              <input type="email" name="email_signup" placeholder="Email" required>
-              <input type="password" name="password_signup" placeholder="Password" required>
-              <button type="submit">Sign Up</button>
-          </form>
-          <p class="success-message"></p>
-          <p class="error-message12"></p> <!-- Error message element -->
+<div id="signup-popup" class="popup">
+  <div class="popup-content">
+      <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+      <h1>Sign Up</h1>
+      <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+          <!-- NEW: Username field -->
+          <input type="text" name="username" id="username_signup" placeholder="Username" required minlength="3" maxlength="20">
+          <small class="username-hint">Username must be 3-20 characters, letters and numbers only</small>
+          
+          <input type="email" name="email_signup" placeholder="Email" required>
+          <input type="password" name="password_signup" placeholder="Password" required>
+          
+          <!-- NEW: Profile picture upload (optional) -->
+          <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="margin: 10px 0;">
+          <small class="file-hint">Profile picture (optional)</small>
+          
+          <button type="submit">Sign Up</button>
+      </form>
+      <p class="success-message"></p>
+      <p class="error-message12"></p>
+      <!-- NEW: Username availability message -->
+      <p class="username-status"></p>
 
-          <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
-      </div>
-    </div>
+      <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+  </div>
+</div>
 
   <!-- Navbar -->
   <header>
@@ -118,8 +130,9 @@
   </div>
 </div>
   </header>
-  
-<div class="calculator-container">
+
+    <!-- Calculator Container -->
+    <div class="calculator-container">
         <h1 class="calculator-title">Car Affordability Calculator</h1>
         
         <form id="price-calculator-form" onsubmit="event.preventDefault(); calculateAffordability();">
@@ -134,6 +147,7 @@
                                 Monthly Income 
                                 <span class="info-tooltip" title="Your gross monthly salary or income">ℹ️</span>
                             </label>
+                            <!-- MODIFIED: External peso sign -->
                             <div class="input-group">
                                 <span class="input-prefix">₱</span>
                                 <input type="number" id="monthly-income" class="input-with-prefix" 
@@ -165,6 +179,7 @@
                                 Total Savings/Cash Available
                                 <span class="info-tooltip" title="Total amount you can pay upfront (optional if using loan)">ℹ️</span>
                             </label>
+                            <!-- MODIFIED: External peso sign -->
                             <div class="input-group">
                                 <span class="input-prefix">₱</span>
                                 <input type="number" id="total-savings" class="input-with-prefix" 
@@ -232,229 +247,32 @@
         <div id="calculator-results" style="display: none;"></div>
     </div>
 
-    <!-- Include your existing results table structure here -->
-    <div id="results-frame" class="results-frame" style="display: none;">
-        <!-- Your existing car results table -->
+    <!-- Car Results Table Section -->
+    <div id="calculator-car-results" class="calculator-results-container" style="display: none;">
+        <h2 class="results-title">Cars Within Your Budget</h2>
+        <div class="results-summary">
+            <span id="calculator-results-count">0 cars found</span>
+        </div>
+        
+        <div class="table-container">
+            <table class="calculator-cars-table">
+                <thead>
+                    <tr>
+                        <th>Brand</th>
+                        <th>Model</th>
+                        <th>Variant</th>
+                        <th>Fuel Type</th>
+                        <th>Price</th>
+                        <th>Affordability</th>
+                        <th>❤️</th> <!-- FIXED: Proper heart emoji header -->
+                    </tr>
+                </thead>
+                <tbody id="calculator-car-specs">
+                    <!-- Car data will be populated here -->
+                </tbody>
+            </table>
+        </div>
     </div>
-
-    <style>
-        .calculator-container {
-            width: 70%; /* Adjust the width as necessary */
-            margin: 50px auto;
-            margin-top: 10%;
-            padding: 20px;
-            border: 2px solid #b49b66;
-            border-radius: 10px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            background: rgba(255, 255, 255, 0.2);
-            backdrop-filter: blur(18px);
-        }
-        
-        .calculator-title {
-            text-align: center;
-            margin-bottom: 20px;
-            color: #b49b66;
-            font-size: 24px;
-        }
-        
-        .calculator-form {
-            display: grid;
-            gap: 1.5rem;
-        }
-        
-        .form-section {
-            background: #f8f9fa;
-            padding: 1.5rem;
-            border-radius: 8px;
-            border-left: 4px solid #b49b66;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-        
-        .section-title {
-            font-size: 1.2rem;
-            font-weight: bold;
-            color: #333;
-            margin-bottom: 1rem;
-        }
-        
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1rem;
-            margin-bottom: 1rem;
-        }
-        
-        .form-group {
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .form-group.full-width {
-            grid-column: span 2;
-        }
-        
-        label {
-            font-weight: 600;
-            color: #555;
-            margin-bottom: 0.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        input, select {
-            padding: 0.75rem;
-            border: 2px solid #ddd;
-            border-radius: 6px;
-            font-size: 1rem;
-            transition: border-color 0.3s ease;
-        }
-        
-        input:focus, select:focus {
-            outline: none;
-            border-color: #b49b66;
-        }
-        
-        .input-group {
-            position: relative;
-        }
-        
-        .input-prefix {
-            position: absolute;
-            left: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #666;
-            font-weight: bold;
-        }
-        
-        .input-with-prefix {
-            padding-left: 2rem;
-        }
-        
-        .input-suffix {
-            position: absolute;
-            right: 12px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #666;
-        }
-        
-        .input-with-suffix {
-            padding-right: 2rem;
-        }
-        
-        .calculate-btn {
-            background: #b49b66;
-            color: white;
-            padding: 1rem 2rem;
-            border: none;
-            border-radius: 8px;
-            font-size: 1.1rem;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            margin-top: 1rem;
-        }
-        
-        .calculate-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(#b49b66);
-        }
-        
-        .affordability-result {
-            background: linear-gradient(135deg, #b49b66,#9e8a56);
-            color: white;
-            padding: 2rem;
-            border-radius: 12px;
-            margin-top: 2rem;
-            text-align: center;
-        }
-        
-        .main-result {
-            font-size: 1.5rem;
-            margin-bottom: 1rem;
-        }
-        
-        .price-highlight {
-            font-size: 2rem;
-            font-weight: bold;
-            display: block;
-            margin-top: 0.5rem;
-        }
-        
-        .calculation-method {
-            font-size: 1.1rem;
-            margin-bottom: 1rem;
-            opacity: 0.9;
-        }
-        
-        .calc-detail {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 0.5rem 1rem;
-            margin: 0.5rem 0;
-            border-radius: 6px;
-            text-align: left;
-        }
-        
-        .action-buttons {
-            margin-top: 1.5rem;
-        }
-        
-        .view-cars-btn, .reset-calc-btn {
-            padding: 0.75rem 1.5rem;
-            margin: 0 0.5rem;
-            border: 2px solid white;
-            background: transparent;
-            color: white;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-        
-        .view-cars-btn:hover {
-            background: white;
-            color: #28a745;
-        }
-        
-        .reset-calc-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-        
-        .info-tooltip {
-            color: #b49b66;
-            cursor: help;
-            font-size: 0.9rem;
-        }
-        
-        .calculation-preview {
-            font-style: italic;
-            color: #666;
-            margin-top: 0.5rem;
-        }
-        
-        @media (max-width: 768px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-            
-            .calculator-container {
-                margin: 1rem;
-                padding: 1rem;
-            }
-            
-            .action-buttons {
-                display: flex;
-                flex-direction: column;
-                gap: 0.5rem;
-            }
-            
-            .view-cars-btn, .reset-calc-btn {
-                margin: 0;
-            }
-        }
-    </style>
     <footer>
         <div class="footer-container">
             <div class="footer-section">

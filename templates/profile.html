@@ -16,11 +16,12 @@
   <!-- Link to Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
 
 </head>
 <body>
 
-    <!-- Popup Containers -->
+      <!-- Popup Containers -->
     <div id="login-popup" class="popup">
       <div class="popup-content">
           <span class="close-btn" onclick="togglePopup('login-popup')">&times;</span>
@@ -36,22 +37,33 @@
           <p>Don't have an account? <a href="javascript:void(0)" onclick="togglePopup('signup-popup'); togglePopup('login-popup')">Sign Up</a></p>
       </div>
     </div>
-  
-    <div id="signup-popup" class="popup">
-      <div class="popup-content">
-          <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
-          <h1>Sign Up</h1>
-          <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
-              <input type="email" name="email_signup" placeholder="Email" required>
-              <input type="password" name="password_signup" placeholder="Password" required>
-              <button type="submit">Sign Up</button>
-          </form>
-          <p class="success-message"></p>
-          <p class="error-message12"></p> <!-- Error message element -->
 
-          <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
-      </div>
-    </div>
+<div id="signup-popup" class="popup">
+  <div class="popup-content">
+      <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+      <h1>Sign Up</h1>
+      <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+          <!-- NEW: Username field -->
+          <input type="text" name="username" id="username_signup" placeholder="Username" required minlength="3" maxlength="20">
+          <small class="username-hint">Username must be 3-20 characters, letters and numbers only</small>
+          
+          <input type="email" name="email_signup" placeholder="Email" required>
+          <input type="password" name="password_signup" placeholder="Password" required>
+          
+          <!-- NEW: Profile picture upload (optional) -->
+          <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="margin: 10px 0;">
+          <small class="file-hint">Profile picture (optional)</small>
+          
+          <button type="submit">Sign Up</button>
+      </form>
+      <p class="success-message"></p>
+      <p class="error-message12"></p>
+      <!-- NEW: Username availability message -->
+      <p class="username-status"></p>
+
+      <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+  </div>
+</div>
 
   <!-- Navbar -->
   <header>
@@ -120,6 +132,129 @@
   </header>
   
 
+<!-- UPDATED HTML STRUCTURE -->
+<div class="profile-page-container">
+  <div class="profile-outer-frame">
+    <!-- Header -->
+    <div class="profile-header">
+      <h1><i class="fas fa-user-circle"></i> My Profile</h1>
+      <div class="subtitle">Manage your account settings and preferences</div>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="profile-content">
+      <!-- Left Side - Profile Picture -->
+      <div class="profile-picture-section">
+        <h3><i class="fas fa-camera"></i> Profile Picture</h3>
+        
+        <div class="current-picture">
+          <img id="current-profile-pic" src="" alt="Profile Picture" style="display: none;">
+          <!-- Default icon in gold color -->
+          <i id="default-profile-icon" class='fas fa-user-circle' style="font-size: 120px; color: #b49b66;"></i>
+        </div>
+        
+        <div class="picture-controls">
+          <input type="file" id="new-profile-picture" accept="image/*" style="display: none;">
+          <button onclick="document.getElementById('new-profile-picture').click()" class="upload-btn">
+            <i class="fas fa-camera"></i> Change Picture
+          </button>
+          <button onclick="removeProfilePicture()" class="remove-btn">
+            <i class="fas fa-trash"></i> Remove Picture
+          </button>
+        </div>
+      </div>
+      
+      <!-- Right Side - Username Section -->
+      <div class="profile-info-sections">
+        <!-- Username Section -->
+        <div class="info-section username-section">
+          <div class="section-header">
+            <i class="fas fa-user"></i>
+            <h3>Username</h3>
+          </div>
+          <div class="username-controls">
+            <input type="text" id="current-username" placeholder="Loading..." readonly>
+            <button onclick="enableUsernameEdit()" id="edit-username-btn" class="edit-btn">
+              <i class="fas fa-edit"></i> Edit
+            </button>
+          </div>
+          
+          <!-- Username editing form (hidden by default) -->
+          <div id="username-edit-form" style="display: none;">
+            <input type="text" id="new-username" placeholder="Enter new username" minlength="3" maxlength="20">
+            <div class="edit-buttons">
+              <button onclick="saveUsername()" class="save-btn">
+                <i class="fas fa-check"></i> Save
+              </button>
+              <button onclick="cancelUsernameEdit()" class="cancel-btn">
+                <i class="fas fa-times"></i> Cancel
+              </button>
+            </div>
+            <p class="username-validation" id="username-validation"></p>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Full Width Account Information Section -->
+      <div class="account-info-full-width">
+        <div class="info-section">
+          <div class="section-header">
+            <i class="fas fa-info-circle"></i>
+            <h3>Account Information</h3>
+          </div>
+          
+          <!-- Email Field -->
+          <div class="email-section">
+            <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #333;">
+              <i class="fas fa-envelope" style="margin-right: 8px; color: var(--second-color);"></i>
+              Email Address
+            </label>
+            <input type="email" id="current-email" placeholder="Loading..." class="email-readonly" readonly>
+            <div class="email-note">
+              <i class="fas fa-lock" style="margin-right: 4px;"></i>
+              Email address cannot be changed
+            </div>
+          </div>
+          
+          <!-- Account Stats Grid -->
+          <div class="account-grid">
+            <div class="account-item">
+              <div class="label">
+                <i class="fas fa-calendar-alt"></i> Member Since
+              </div>
+              <div class="value" id="member-since">Loading...</div>
+            </div>
+            
+            <div class="account-item">
+              <div class="label">
+                <i class="fas fa-heart"></i> Total Favorites
+              </div>
+              <div class="value" id="total-favorites">Loading...</div>
+            </div>
+            
+            <div class="account-item">
+              <div class="label">
+                <i class="fas fa-shield-alt"></i> Account Status
+              </div>
+              <div class="value">
+                <span class="status-indicator status-verified">
+                  <i class="fas fa-check-circle"></i> Verified
+                </span>
+              </div>
+            </div>
+            
+            <div class="account-item">
+              <div class="label">
+                <i class="fas fa-clock"></i> Last Login
+              </div>
+              <div class="value" id="last-login">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
     <footer>
         <div class="footer-container">

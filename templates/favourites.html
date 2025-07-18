@@ -12,6 +12,7 @@
   <!-- Link to Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
 
   <!-- CSS -->
   <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='style.css')}}">
@@ -35,21 +36,32 @@
       </div>
     </div>
   
-    <div id="signup-popup" class="popup">
-      <div class="popup-content">
-          <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
-          <h1>Sign Up</h1>
-          <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
-              <input type="email" name="email_signup" placeholder="Email" required>
-              <input type="password" name="password_signup" placeholder="Password" required>
-              <button type="submit">Sign Up</button>
-          </form>
-          <p class="success-message"></p>
-          <p class="error-message12"></p> <!-- Error message element -->
+<div id="signup-popup" class="popup">
+  <div class="popup-content">
+      <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+      <h1>Sign Up</h1>
+      <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+          <!-- NEW: Username field -->
+          <input type="text" name="username" id="username_signup" placeholder="Username" required minlength="3" maxlength="20">
+          <small class="username-hint">Username must be 3-20 characters, letters and numbers only</small>
+          
+          <input type="email" name="email_signup" placeholder="Email" required>
+          <input type="password" name="password_signup" placeholder="Password" required>
+          
+          <!-- NEW: Profile picture upload (optional) -->
+          <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="margin: 10px 0;">
+          <small class="file-hint">Profile picture (optional)</small>
+          
+          <button type="submit">Sign Up</button>
+      </form>
+      <p class="success-message"></p>
+      <p class="error-message12"></p>
+      <!-- NEW: Username availability message -->
+      <p class="username-status"></p>
 
-          <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
-      </div>
-    </div>
+      <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+  </div>
+</div>
 
   <!-- Navbar -->
   <header>

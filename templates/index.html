@@ -16,6 +16,7 @@
   <!-- Link to Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
 
 </head>
 <body>
@@ -37,21 +38,32 @@
       </div>
     </div>
   
-    <div id="signup-popup" class="popup">
-      <div class="popup-content">
-          <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
-          <h1>Sign Up</h1>
-          <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
-              <input type="email" name="email_signup" placeholder="Email" required>
-              <input type="password" name="password_signup" placeholder="Password" required>
-              <button type="submit">Sign Up</button>
-          </form>
-          <p class="success-message"></p>
-          <p class="error-message12"></p> <!-- Error message element -->
+<div id="signup-popup" class="popup">
+  <div class="popup-content">
+      <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+      <h1>Sign Up</h1>
+      <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+          <!-- NEW: Username field -->
+          <input type="text" name="username" id="username_signup" placeholder="Username" required minlength="3" maxlength="20">
+          <small class="username-hint">Username must be 3-20 characters, letters and numbers only</small>
+          
+          <input type="email" name="email_signup" placeholder="Email" required>
+          <input type="password" name="password_signup" placeholder="Password" required>
+          
+          <!-- NEW: Profile picture upload (optional) -->
+          <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="margin: 10px 0;">
+          <small class="file-hint">Profile picture (optional)</small>
+          
+          <button type="submit">Sign Up</button>
+      </form>
+      <p class="success-message"></p>
+      <p class="error-message12"></p>
+      <!-- NEW: Username availability message -->
+      <p class="username-status"></p>
 
-          <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
-      </div>
-    </div>
+      <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+  </div>
+</div>
 
   <!-- Navbar -->
   <header>
@@ -105,7 +117,7 @@
        onclick="toggleLogoutDropdown()"></i>
 
     <!-- Profile picture, hidden by default -->
-    <img src="" alt="Profile Picture"
+        <img src="" alt="Profile Picture"
          id="profile-pic"
          class="profile-pic"
          style="display: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;"
@@ -203,7 +215,17 @@
           <option value="Hybrid">Hybrid</option>
           <option value="Electric">Electric</option>
         </select>
+
+        <!-- Year Drop down box -->
+        <label for="year">Year:</label>
+        <select id="year" name="year">
+          <option value="" selected disabled>Choose Year...</option>
+          <option value="">Any Year</option>
+          <!-- Years will be populated dynamically -->
+        </select>
+
       </div>
+
 
       <!-- Vertical Divider -->
       <div class="vertical-divider"></div>
@@ -233,7 +255,7 @@
 
                 <!--Price Slider-->
                 <label for="price">Price (₱):</label>
-                <input type="range" id="price" name="price" min="500000" max="9000000" step="1000" oninput="updateSliderValue('price','₱', true)">
+                <input type="range" id="price" name="price" min="500000" max="25000000" step="100000" oninput="updateSliderValue('price','₱', true)">
                 <span id="price-value">₱500,000</span>
                 
                 <button id="filter-btn" class="filter-btn" onclick="applyFilters()">Apply Filters</button>
@@ -267,6 +289,7 @@
                           <th>Horsepower</th>
                           <th>Transmission</th>
                           <th>Fuel Type</th>
+                          <th>Year</th>
                           <th>Ground Clearance</th>
                           <th>Cargo Space</th>
                           <th>Seating Capacity</th>
@@ -292,6 +315,10 @@
                                 <!-- NEW: Seating Capacity Sorting -->
                                 <button onclick="sortBy('seating-asc')">Seating: Low to High</button>
                                 <button onclick="sortBy('seating-desc')">Seating: High to Low</button>
+
+                                <!-- NEW: Add year sorting options -->
+                                <button onclick="sortBy('year-desc')">Year: Newest First</button>
+                                <button onclick="sortBy('year-asc')">Year: Oldest First</button>
                               </div>
                             </div>
                           </th>
@@ -365,6 +392,12 @@
 
       // Ensure all sliders display correct formatting when the page loads
       document.addEventListener("DOMContentLoaded", function() {
+          // Set price slider to max value initially
+          const priceSlider = document.getElementById('price');
+          if (priceSlider) {
+              priceSlider.value = priceSlider.max; // This will be 25,000,000
+          }
+          
           updateSliderValue('price', '₱', true);
           updateSliderValue('horsepower', 'HP', false);
       });

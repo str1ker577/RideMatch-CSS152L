@@ -12,26 +12,10 @@
   <!-- Link to Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
 
   <!-- Link to CSS -->
   <link rel="stylesheet" type="text/css" href="{{url_for('static', filename='style.css')}}">
-
-  <!-- Optional inline style for the sidebar slide animation -->
-  <style>
-    .SideBar {
-      position: fixed;
-      top: 0;
-      left: -100%;
-      width: 500px;
-      height: 100%;
-      background-color: #fff;
-      transition: left 0.5s ease-in-out;
-      z-index: 1000;
-    }
-    .SideBar.open {
-      left: 0;
-    }
-  </style>
 </head>
 <body>
     <!-- Popup Containers -->
@@ -40,44 +24,49 @@
           <span class="close-btn" onclick="togglePopup('login-popup')">&times;</span>
           <h1>Login</h1>
           <form action="/login" method="POST" onsubmit="return handleLogin(event);">
-
               <input type="email" name="email" placeholder="Email" required>
               <input type="password" name="password" placeholder="Password" required>
               <button type="submit">Login</button>
           </form>
           <p class="success-message"></p>
-          <p class="error-message"></p> <!-- Error message element -->
+          <p class="error-message"></p>
           <p>Don't have an account? <a href="javascript:void(0)" onclick="togglePopup('signup-popup'); togglePopup('login-popup')">Sign Up</a></p>
       </div>
     </div>
   
-    <div id="signup-popup" class="popup">
-      <div class="popup-content">
-          <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
-          <h1>Sign Up</h1>
-          <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
-              <input type="email" name="email_signup" placeholder="Email" required>
-              <input type="password" name="password_signup" placeholder="Password" required>
-              <button type="submit">Sign Up</button>
-          </form>
-          <p class="success-message"></p>
-          <p class="error-message12"></p> <!-- Error message element -->
+<div id="signup-popup" class="popup">
+  <div class="popup-content">
+      <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+      <h1>Sign Up</h1>
+      <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+          <!-- NEW: Username field -->
+          <input type="text" name="username" id="username_signup" placeholder="Username" required minlength="3" maxlength="20">
+          <small class="username-hint">Username must be 3-20 characters, letters and numbers only</small>
+          
+          <input type="email" name="email_signup" placeholder="Email" required>
+          <input type="password" name="password_signup" placeholder="Password" required>
+          
+          <!-- NEW: Profile picture upload (optional) -->
+          <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="margin: 10px 0;">
+          <small class="file-hint">Profile picture (optional)</small>
+          
+          <button type="submit">Sign Up</button>
+      </form>
+      <p class="success-message"></p>
+      <p class="error-message12"></p>
+      <!-- NEW: Username availability message -->
+      <p class="username-status"></p>
 
-          <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
-      </div>
-    </div>
+      <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+  </div>
+</div>
 
   <!-- Navbar -->
   <header>
-    <!-- Centered Logo -->
     <a href="{{url_for('home')}}" class="Logo">
       <img src="{{url_for('static', filename='resources/Logo2.png')}}" alt="RideMatch">
     </a>
 
-    <!-- Side Menu Pop-out-->
-    <div class="Quick-Tools"></div>
-
-    <!-- Side-Menu -->
     <div class="Side-Menu">
       <i class='bx bx-menu' id='menu-button' style='color:#b49b66'></i>
     </div>
@@ -89,10 +78,9 @@
           <i class='bx bx-user' id='user-icon' style='color:#b49b66' onclick="handleUserIconClick()"></i>
           <a href="{{url_for('favourites')}}"><i class='bx bx-heart' style='color:#b49b66'></i></a>
           <a href="{{url_for('compare')}}"><i class="fa-solid fa-scale-balanced" style='color:#b49b66'></i></a>
-          <a href="{{url_for('calculator')}}"><i class="fa-solid fa-calculator" style='color:#b49b66'></i></i></a>
+          <a href="{{url_for('calculator')}}"><i class="fa-solid fa-calculator" style='color:#b49b66'></i></a>
         </div>
         <hr>
-        <!-- Updated nav items -->
         <li><a href="{{url_for('home')}}">Home</a></li>
         <li><a href="{{url_for('about')}}">About Us</a></li>
         <li><a href="{{url_for('contacts')}}">Contacts</a></li>
@@ -102,106 +90,140 @@
       </ul>
     </div>
 
-    <div class="liked"><a href="#"></a></div>
+    <div class="welcome-section">
+      <span class="welcome-text" id="welcome-text">Welcome!</span>
+      <button class="login-button" id="login-button" onclick="togglePopup('login-popup')" style="display: block;">Login</button>
+      
+      <div class="profile-container" id="profile-container" style="display: none;">
+        <i class='bx bxs-user-circle bx-rotate-90 bx-flip-horizontal'
+           id="profile-icon"
+           style="font-size: 36px; color:#b49b66; cursor: pointer;"
+           onclick="toggleLogoutDropdown()"></i>
 
-<!-- Updated Welcome Section -->
-<div class="welcome-section">
-  <span class="welcome-text" id="welcome-text">Welcome!</span>
-  <button class="login-button" id="login-button" onclick="togglePopup('login-popup')" style="display: block;">Login</button>
-  
-  <!-- Single unified profile container -->
-  <div class="profile-container" id="profile-container" style="display: none;">
-    
-    <!-- Default icon shown when no profile picture is available -->
-    <i class='bx bxs-user-circle bx-rotate-90 bx-flip-horizontal'
-       id="profile-icon"
-       style="font-size: 36px; color:#b49b66; cursor: pointer;"
-       onclick="toggleLogoutDropdown()"></i>
+        <img src="" alt="Profile Picture"
+             id="profile-pic"
+             class="profile-pic"
+             style="display: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;"
+             onclick="toggleLogoutDropdown()">
 
-    <!-- Profile picture, hidden by default -->
-    <img src="" alt="Profile Picture"
-         id="profile-pic"
-         class="profile-pic"
-         style="display: none; width: 36px; height: 36px; border-radius: 50%; cursor: pointer;"
-         onclick="toggleLogoutDropdown()">
-
-    <!-- Dropdown for logout -->
-    <div class="logout-dropdown" id="logout-dropdown">
-      <a href="#" onclick="handleLogout()">Sign Out</a>
-    </div>
-  </div>
-</div>
-  </header>
-
-    <!-- Side Menu Pop-out-->
-    <div class="Quick-Tools"></div>
-
-    <!-- Side-Menu -->
-    <div class="Side-Menu">
-      <i class='bx bx-menu' id='menu-button' style='color:#b49b66'></i>
-    </div>
-
-    <div class="SideBar" id="sidebar">
-      <i class='bx bx-arrow-from-right' id="close-button" style='color:#b49b66'></i>
-      <ul>
-        <div class="SideBar-Icons">
-          <i class='bx bx-user' id='user-icon' style='color:#b49b66' onclick="togglePopup('login-popup')"></i>
-          <a href="{{url_for('favourites')}}"><i class='bx bx-heart' style='color:#b49b66'></i></a>
-          <a href="{{url_for('compare')}}"><i class="fa-solid fa-scale-balanced" style='color:#b49b66'></i></a>
+        <div class="logout-dropdown" id="logout-dropdown">
+          <a href="#" onclick="handleLogout()">Sign Out</a>
         </div>
-        <hr>
-        <!-- Updated nav items -->
-        <li><a href="{{url_for('home')}}">Home</a></li>
-        <li><a href="{{url_for('about')}}">About Us</a></li>
-        <li><a href="{{url_for('contacts')}}">Contacts</a></li>
-        <li><a href="{{url_for('testimonials')}}">Testimonials</a></li>
-      </ul>
+      </div>
     </div>
-
-    <div class="liked"><a href="#"></a></div>
   </header>
 
-  <div class="outer-frame" style="margin-top:10rem;">
-    <h2 class="filter-title">Compare Cars</h2>
-    <div class="inner-frame">
-      <div class="filter-left">
+<!-- Car Selection Form -->
+  <div class="compare-outer-frame" style="margin-top:10rem;">
+    <h2 class="compare-filter-title">Compare Cars</h2>
+    <div class="compare-inner-frame">
+      <div class="compare-filter-left">
         <form id="compare-form">
           <label for="brand">Select Brand:</label>
-          <select id="brand" name="brand" onchange="populateModels()">
-
-            <option value="" selected disabled>Select Brand</option>
-            <option value="Toyota">Toyota</option>
-            <option value="Honda">Honda</option>
-            <option value="Mitsubishi">Mitsubishi</option>
-            <option value="Mazda">Mazda</option>
-            <option value="Ford">Ford</option>
-            <option value="Hyundai">Hyundai</option>
-            <option value="Suzuki">Suzuki</option>
+          <select id="brand" name="brand" onchange="populateModelsForCompare()">
+            <option value="" selected disabled>Loading brands...</option>
           </select>
-
+          
           <label for="model">Select Model:</label>
           <select id="model" name="model" onchange="populateVariants()">
             <option value="">Select Model</option>
-            <!-- Populate with car models based on selected brand -->
           </select>
 
           <label for="variant">Select Variant:</label>
-          <select id="variant" name="variant">
+          <select id="variant" name="variant" onchange="populateYears()">
             <option value="">Select Variant</option>
-            <!-- Populate with car variants based on selected model -->
+          </select>
+
+          <label for="year">Select Year:</label>
+          <select id="year" name="year">
+            <option value="">Select Year</option>
           </select>
 
           <button class="compare_btn" type="button" onclick="compareCars()">Compare Cars</button>
         </form>
+        
+        <div id="compare-success-message" class="compare-success-message" style="display: none;">
+          <i class='bx bx-check-circle'></i>
+          <span>Car added to comparison successfully!</span>
+        </div>
       </div>
     </div>
   </div>
 
-  <div class="wrapper">
+  <!-- Bar Charts Visualization Section (Original Layout) -->
+  <div class="compare-wrapper">
+    <div class="compare-charts-section" id="compare-charts-section" style="display: none;">
+      <h2 class="compare-charts-title">
+        <i class='bx bx-bar-chart-alt-2' style='margin-right: 0.5rem;'></i>
+        Performance Analysis
+      </h2>
+      
+      <div class="compare-charts-grid">
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-tachometer' style='color: #b49b66;'></i>
+            <h3>Horsepower Comparison</h3>
+          </div>
+          <canvas id="horsepowerChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-money' style='color: #b49b66;'></i>
+            <h3>Price Comparison</h3>
+          </div>
+          <canvas id="priceChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-trending-up' style='color: #b49b66;'></i>
+            <h3>Ground Clearance</h3>
+          </div>
+          <canvas id="groundClearanceChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-package' style='color: #b49b66;'></i>
+            <h3>Cargo Space</h3>
+          </div>
+          <canvas id="cargoSpaceChart"></canvas>
+        </div>
+
+        <div class="compare-chart-container">
+          <div class="compare-chart-header">
+            <i class='bx bx-group' style='color: #b49b66;'></i>
+            <h3>Seating Capacity</h3>
+          </div>
+          <canvas id="seatingCapacityChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NEW: Separate Radar Chart Section -->
+  <div class="compare-wrapper">
+    <div class="radar-chart-section" id="radar-chart-section" style="display: none;">
+      <h2 class="compare-charts-title">
+        <i class='bx bx-radar' style='margin-right: 0.5rem;'></i>
+        Overall Performance Radar
+      </h2>
+      
+      <div class="radar-chart-wrapper">
+        <div class="radar-chart-container">
+          <canvas id="radarChart"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Car Comparison Cards -->
+  <div class="compare-wrapper" id="comparison-cards-wrapper" style="display: none;">
     <div class="comp_table_frame">
       <div class="comp_table_content">
         <div id="comparison-container">
-          <!-- CAR SPECS HERE -->
+          <!-- CAR SPECS WILL APPEAR HERE -->
         </div>
       </div>
     </div>
@@ -249,6 +271,9 @@
     </div>
   </footer>
   
+  <!-- Chart.js for visualizations -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+
   <!-- Link to Main.js -->
   <script src="{{url_for('static', filename='main.js')}}"></script>
 </body>

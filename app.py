@@ -4,29 +4,51 @@ import pandas as pd
 import json
 import requests
 import firebase_admin
-from firebase_admin import credentials, auth, firestore
+from firebase_admin import credentials, auth, firestore, db as realtime_db
 import numpy as np
 import os
 import logging
+import time
+from datetime import datetime, timedelta
+import os
+from werkzeug.utils import secure_filename
+from PIL import Image
+import uuid
+import re
 
 app = Flask(__name__)
 CORS(app)
 
-# Configure logging for Railway
+#########################################
+# Railway Hosting Service Configuration #
+#########################################
+
 logging.basicConfig(level=logging.INFO)
 app.logger.setLevel(logging.INFO)
 
+##############################
+# Pulls RideMatch secret key #
+##############################
+
 app.secret_key = os.environ.get('SECRET_KEY', 'fallback_secret_key')
 
-# Load configuration safely
+#############################
+# Load configuration safely #
+#############################
+
 try:
     app.config.from_pyfile('config.py')
     app.logger.info("✅ Config.py loaded successfully")
 except Exception as e:
     app.logger.info(f"⚠️ config.py not found: {e}, using environment variables")
 
-# Initialize Firebase safely
-db = None
+##############################
+# Initialize Firebase safely #
+##############################
+
+firestore_db = None
+realtime_db_ref = None  # Changed variable name to avoid confusion
+
 try:
     # Load serviceAccountKey.json
     if 'SERVICE_ACCOUNT_KEY_JSON' in os.environ:
@@ -37,14 +59,23 @@ try:
         cred = credentials.Certificate('serviceAccountKey.json')
         app.logger.info("✅ Firebase credentials loaded from file")
     
-    firebase_admin.initialize_app(cred)
-    db = firestore.client()
+    firebase_admin.initialize_app(cred, {
+        'databaseURL': 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app/'  
+    })
+    
+    realtime_db_ref = realtime_db.reference()  # Use the imported realtime_db module
+    firestore_db = firestore.client()
     app.logger.info("✅ Firebase initialized successfully")
+    
 except Exception as e:
     app.logger.error(f"❌ Firebase initialization failed: {e}")
-    db = None
+    realtime_db_ref = None
+    firestore_db = None
+    
+###############################
+# Load Firebase config safely #
+############################### 
 
-# Load Firebase config safely
 firebase_config = {}
 api_key = None
 try:
@@ -67,41 +98,238 @@ except Exception as e:
     firebase_config = {}
     api_key = None
 
-# Load CSV data safely
+########################
+# Load CSV data safely #
+########################
+
+def load_csv_data_enhanced():
+    """Load CSV data with detailed tracking and row preservation"""
+    global df
+    
+    try:
+        # Check if file exists
+        csv_path = 'car_data.csv'
+        if not os.path.exists(csv_path):
+            app.logger.error(f"❌ CSV file not found at {csv_path}")
+            app.logger.info(f"Current directory contents: {os.listdir('.')}")
+            return False
+        
+        app.logger.info(f"📁 CSV file found: {csv_path}")
+        app.logger.info(f"📊 File size: {os.path.getsize(csv_path)} bytes")
+        
+        # Try multiple encodings
+        encodings_to_try = ['cp1252', 'utf-8', 'latin-1', 'iso-8859-1']
+        
+        for encoding in encodings_to_try:
+            try:
+                app.logger.info(f"🔄 Trying to load CSV with encoding: {encoding}")
+                
+                # Load CSV with specific encoding
+                df_raw = pd.read_csv(csv_path, encoding=encoding)
+                app.logger.info(f"✅ CSV loaded successfully with {encoding} encoding")
+                app.logger.info(f"📊 Raw data shape: {df_raw.shape}")
+                app.logger.info(f"📋 Columns: {list(df_raw.columns)}")
+                break
+                
+            except UnicodeDecodeError as e:
+                app.logger.warning(f"⚠️ Encoding {encoding} failed: {e}")
+                continue
+            except Exception as e:
+                app.logger.error(f"❌ Error with {encoding}: {e}")
+                continue
+        else:
+            app.logger.error("❌ Failed to load CSV with any encoding")
+            return False
+        
+        # Step 1: Initial data inspection
+        app.logger.info("🔍 STEP 1: Initial data inspection")
+        app.logger.info(f"Total rows loaded: {len(df_raw)}")
+        app.logger.info(f"Columns: {list(df_raw.columns)}")
+        
+        # Check for completely empty rows
+        empty_rows = df_raw.isnull().all(axis=1).sum()
+        app.logger.info(f"Completely empty rows: {empty_rows}")
+        
+        # Step 2: Remove only completely empty rows
+        app.logger.info("🧹 STEP 2: Cleaning completely empty rows")
+        df_clean = df_raw.dropna(how='all').copy()
+        app.logger.info(f"After removing empty rows: {len(df_clean)} (removed {len(df_raw) - len(df_clean)} rows)")
+        
+        # Step 3: Standardize Fuel_Type - Convert PHEV to Hybrid:Gasoline
+        app.logger.info("🔧 STEP 3: Standardizing Fuel_Type column")
+        if 'Fuel_Type' in df_clean.columns:
+            # Show original fuel types
+            original_fuel_types = df_clean['Fuel_Type'].value_counts()
+            app.logger.info(f"Original fuel types: {original_fuel_types.to_dict()}")
+            
+            # Convert PHEV to Hybrid:Gasoline
+            phev_count = (df_clean['Fuel_Type'].str.contains('PHEV', case=False, na=False)).sum()
+            if phev_count > 0:
+                app.logger.info(f"Found {phev_count} PHEV entries, converting to 'Hybrid:Gasoline'")
+                df_clean.loc[df_clean['Fuel_Type'].str.contains('PHEV', case=False, na=False), 'Fuel_Type'] = 'Hybrid:Gasoline'
+            
+            # Show updated fuel types
+            updated_fuel_types = df_clean['Fuel_Type'].value_counts()
+            app.logger.info(f"Updated fuel types: {updated_fuel_types.to_dict()}")
+        
+        # Step 4: Data transformation with row preservation
+        app.logger.info("🔧 STEP 4: Data transformation (preserving all rows)")
+        df_processed = df_clean.copy()
+        
+        # Transform Cargo_space
+        if 'Cargo_space' in df_processed.columns:
+            app.logger.info("Processing Cargo_space column...")
+            
+            # Convert to string and extract numbers, but keep original if extraction fails
+            df_processed['Cargo_space_str'] = df_processed['Cargo_space'].astype(str)
+            cargo_extracted = df_processed['Cargo_space_str'].str.extract(r'(\d+)', expand=False)
+            df_processed['Cargo_space'] = pd.to_numeric(cargo_extracted, errors='coerce')
+            
+            # Count successful conversions
+            valid_cargo = df_processed['Cargo_space'].notna().sum()
+            app.logger.info(f"Cargo_space: {valid_cargo}/{len(df_processed)} values converted successfully")
+            
+            # Drop temporary column
+            df_processed.drop('Cargo_space_str', axis=1, inplace=True)
+        
+        # Transform Ground_Clearance
+        if 'Ground_Clearance' in df_processed.columns:
+            app.logger.info("Processing Ground_Clearance column...")
+            
+            df_processed['Ground_Clearance_str'] = df_processed['Ground_Clearance'].astype(str)
+            clearance_extracted = df_processed['Ground_Clearance_str'].str.extract(r'([\d.]+)', expand=False)
+            df_processed['Ground_Clearance'] = pd.to_numeric(clearance_extracted, errors='coerce')
+            
+            valid_clearance = df_processed['Ground_Clearance'].notna().sum()
+            app.logger.info(f"Ground_Clearance: {valid_clearance}/{len(df_processed)} values converted successfully")
+            
+            df_processed.drop('Ground_Clearance_str', axis=1, inplace=True)
+        
+        # Transform Horsepower
+        if 'Horsepower' in df_processed.columns:
+            app.logger.info("Processing Horsepower column...")
+            
+            df_processed['Horsepower_str'] = df_processed['Horsepower'].astype(str)
+            hp_extracted = df_processed['Horsepower_str'].str.extract(r'(\d+)', expand=False)
+            df_processed['Horsepower'] = pd.to_numeric(hp_extracted, errors='coerce')
+            
+            valid_hp = df_processed['Horsepower'].notna().sum()
+            app.logger.info(f"Horsepower: {valid_hp}/{len(df_processed)} values converted successfully")
+            
+            df_processed.drop('Horsepower_str', axis=1, inplace=True)
+        
+        # Transform Price
+        if 'Price' in df_processed.columns:
+            app.logger.info("Processing Price column...")
+            df_processed['Price'] = pd.to_numeric(df_processed['Price'], errors='coerce')
+            valid_price = df_processed['Price'].notna().sum()
+            app.logger.info(f"Price: {valid_price}/{len(df_processed)} values converted successfully")
+        
+        # Transform other numeric columns
+        numeric_columns = ['Year', 'Seating_Capacity']
+        for col in numeric_columns:
+            if col in df_processed.columns:
+                app.logger.info(f"Processing {col} column...")
+                df_processed[col] = pd.to_numeric(df_processed[col], errors='coerce')
+                valid_count = df_processed[col].notna().sum()
+                app.logger.info(f"{col}: {valid_count}/{len(df_processed)} values converted successfully")
+        
+        # Step 5: Final validation and statistics
+        app.logger.info("📊 STEP 5: Final validation")
+        app.logger.info(f"Final DataFrame shape: {df_processed.shape}")
+        app.logger.info(f"Rows preserved: {len(df_processed)}/{len(df_raw)} ({(len(df_processed)/len(df_raw)*100):.1f}%)")
+        
+        # Check essential columns for non-null values
+        essential_columns = ['Brand', 'Model', 'Variant', 'Price']
+        for col in essential_columns:
+            if col in df_processed.columns:
+                non_null_count = df_processed[col].notna().sum()
+                app.logger.info(f"{col} non-null values: {non_null_count}/{len(df_processed)}")
+            else:
+                app.logger.warning(f"Essential column {col} not found!")
+        
+        # Count by brand to check for missing brands
+        if 'Brand' in df_processed.columns:
+            brand_counts = df_processed['Brand'].value_counts()
+            app.logger.info(f"Cars by brand: {brand_counts.to_dict()}")
+        
+        # Set the global DataFrame
+        df = df_processed
+        app.logger.info("✅ CSV data loading and processing completed successfully")
+        return True
+        
+    except Exception as e:
+        app.logger.error(f"❌ Critical error in CSV loading: {e}")
+        app.logger.error(f"Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return False
+
+# Replace your existing CSV loading section with this:
 df = pd.DataFrame()
-try:
-    # Check if file exists first
-    csv_path = 'car_data.csv'
-    if not os.path.exists(csv_path):
-        app.logger.error(f"❌ CSV file not found at {csv_path}")
-        app.logger.info(f"Current directory contents: {os.listdir('.')}")
-    else:
-        df = pd.read_csv(csv_path, encoding='utf-8')
-        
-        # Ensure all relevant columns are strings before extraction (FIXED REGEX PATTERNS)
-        df["Cargo_space"] = df["Cargo_space"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
-        df["Ground_Clearance"] = df["Ground_Clearance"].astype(str).str.extract(r"([\d.]+)", expand=False).astype(float)
-        df["Horsepower"] = df["Horsepower"].astype(str).str.extract(r"(\d+)", expand=False).astype(float)
-        df["Price"] = pd.to_numeric(df["Price"], errors="coerce")
-        
-        app.logger.info(f"✅ CSV data loaded successfully - {len(df)} records")
-        app.logger.info(f"CSV columns: {list(df.columns)}")
-        
-except Exception as e:
-    app.logger.error(f"❌ CSV loading failed: {e}")
+csv_loaded = load_csv_data_enhanced()
+
+if not csv_loaded:
+    app.logger.error("❌ CRITICAL: CSV data could not be loaded!")
     df = pd.DataFrame()
+else:
+    app.logger.info(f"✅ CSV data loaded successfully - {len(df)} records")
+    
+# Finds Car images    
+def find_car_image(model):
+    """Find car image based on model name with better error handling"""
+    try:
+        # Clean model name for filename
+        model_clean = model.replace(' ', '_').lower() if model else 'default'
+        
+        # Check if image exists in resources folder
+        image_path = f'/static/resources/{model_clean}.png'
+        full_path = f'static/resources/{model_clean}.png'
+        
+        # Check if file actually exists
+        if os.path.exists(full_path):
+            return image_path
+        
+        # Check for common image extensions
+        for ext in ['.jpg', '.jpeg', '.gif', '.webp']:
+            alt_path = f'static/resources/{model_clean}{ext}'
+            if os.path.exists(alt_path):
+                return f'/static/resources/{model_clean}{ext}'
+        
+        # Return a placeholder image that actually exists or a data URL
+        placeholder_path = 'static/resources/default_car.png'
+        if os.path.exists(placeholder_path):
+            return '/static/resources/default_car.png'
+        
+        # Return a simple data URL placeholder to avoid 404s
+        return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkNhciBJbWFnZTwvdGV4dD48L3N2Zz4='
+        
+    except Exception as e:
+        app.logger.warning(f"Error finding image for model {model}: {e}")
+        # Return inline SVG placeholder
+        return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjEwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZGRkIi8+PHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0iIzk5OSIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZHk9Ii4zZW0iPkNhciBJbWFnZTwvdGV4dD48L3N2Zz4='
 
 # Health check endpoint
 @app.route('/health')
 def health():
+    global df
+    
     status = {
-        "status": "healthy",
-        "firebase_initialized": db is not None,
+        "status": "healthy" if not df.empty else "unhealthy",
+        "firebase_initialized": realtime_db_ref is not None,
         "csv_loaded": not df.empty,
         "csv_records": len(df) if not df.empty else 0,
         "firebase_config_loaded": bool(firebase_config),
-        "api_key_available": api_key is not None
+        "api_key_available": api_key is not None,
+        "csv_columns": list(df.columns) if not df.empty else [],
+        "csv_file_exists": any(os.path.exists(path) for path in [
+            'car_data.csv', './car_data.csv', 'static/car_data.csv', 'data/car_data.csv'
+        ]),
+        "brand_count": len(df['Brand'].unique()) if not df.empty and 'Brand' in df.columns else 0,
+        "model_count": len(df['Model'].unique()) if not df.empty and 'Model' in df.columns else 0,
+        "variant_count": len(df['Variant'].unique()) if not df.empty and 'Variant' in df.columns else 0
     }
+    
     app.logger.info(f"Health check: {status}")
     return jsonify(status)
 
@@ -118,6 +346,37 @@ def serve_resources(filename):
         app.logger.warning(f"Resources directory not found: {resources_path}")
         return "Resource not found", 404
     return send_from_directory(resources_path, filename)
+
+@app.route('/debug/price-range')
+def debug_price_range():
+    """Check the actual price range in your data"""
+    if df.empty:
+        return jsonify({"error": "No data loaded"})
+    
+    try:
+        prices = df['Price'].dropna()
+        
+        price_stats = {
+            "total_cars": len(df),
+            "min_price": int(prices.min()) if len(prices) > 0 else 0,
+            "max_price": int(prices.max()) if len(prices) > 0 else 0,
+            "avg_price": int(prices.mean()) if len(prices) > 0 else 0
+        }
+        
+        # Get top 10 most expensive cars
+        top_expensive = df.nlargest(10, 'Price')[['Brand', 'Model', 'Variant', 'Year', 'Price']].to_dict('records')
+        
+        return jsonify({
+            "price_statistics": price_stats,
+            "top_10_expensive": top_expensive
+        })
+        
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+##########################
+# Firebase Configuration #
+##########################
 
 @app.route('/firebase-config')
 def get_firebase_config():
@@ -137,12 +396,9 @@ def get_firebase_config():
     app.logger.info("Firebase config requested")
     return jsonify(client_config)
 
+# UPDATED: Enhanced verify-token route to include username (replace existing)
 @app.route('/verify-token', methods=['POST'])
 def verify_token():
-    if not db:
-        app.logger.error("Database not available for token verification")
-        return jsonify({"status": "error", "message": "Database not available"}), 500
-    
     try:
         data = request.get_json()
         if not data:
@@ -156,15 +412,58 @@ def verify_token():
             app.logger.error("No token provided in request")
             return jsonify({"status": "error", "message": "No token provided"}), 400
         
+        # Verify token with Firebase Admin
         decoded_token = auth.verify_id_token(id_token)
         uid = decoded_token['uid']
         
+        # Get user profile data
+        username = None
+        profile_picture_url = None
+        
+        if realtime_db_ref:
+            try:
+                user_ref = realtime_db_ref.child('users').child(uid)
+                user_data = user_ref.get()
+                
+                if user_data:
+                    username = user_data.get('username')
+                    profile_picture_url = user_data.get('profilePictureUrl')
+                    
+                    # Ensure profile picture URL is properly formatted
+                    if profile_picture_url and not profile_picture_url.startswith('/'):
+                        if not profile_picture_url.startswith('http'):
+                            profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
+                            
+                app.logger.info(f"📱 User data retrieved: username={username}, picture={profile_picture_url}")
+                
+            except Exception as db_error:
+                app.logger.error(f"❌ Database error retrieving user data: {db_error}")
+                username = email  # Fallback to email as username
+        else:
+            app.logger.warning("⚠️ Database not available, using email as username")
+            username = email  # Fallback when database is not available
+        
+        # Set comprehensive session data
         session['user'] = uid
         session['email'] = email
+        session['username'] = username
+        session['profile_picture_url'] = profile_picture_url
         session['idToken'] = id_token
+        session['authenticated'] = True
+        session['auth_time'] = int(time.time())
         
-        app.logger.info(f"✅ User {email} logged in successfully.")
-        return jsonify({"status": "success", "message": "Authentication successful"}), 200
+        # Make session permanent (expires in 30 days)
+        session.permanent = True
+        app.permanent_session_lifetime = timedelta(days=30)
+        
+        app.logger.info(f"✅ User {email} logged in successfully with username: {username}, profile_picture: {profile_picture_url}")
+        return jsonify({
+            "status": "success", 
+            "message": "Authentication successful",
+            "username": username,
+            "profile_picture_url": profile_picture_url,
+            "uid": uid
+        }), 200
         
     except firebase_admin.auth.InvalidIdTokenError as e:
         app.logger.error(f"Invalid token error: {e}")
@@ -172,10 +471,300 @@ def verify_token():
     except Exception as e:
         app.logger.error(f"Token verification failed: {str(e)}")
         return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
+    try:
+        data = request.get_json()
+        if not data:
+            app.logger.error("No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+            
+        id_token = data.get('idToken')
+        email = data.get('email')
+        
+        if not id_token:
+            app.logger.error("No token provided in request")
+            return jsonify({"status": "error", "message": "No token provided"}), 400
+        
+        # Verify token with Firebase Admin
+        decoded_token = auth.verify_id_token(id_token)
+        uid = decoded_token['uid']
+        
+        # FIXED: Better database availability check
+        username = None
+        profile_picture_url = None
+        
+        if realtime_db_ref:
+            try:
+                # Get user profile data including username AND profile picture
+                user_ref = realtime_db_ref.child('users').child(uid)
+                user_data = user_ref.get()
+                
+                if user_data:
+                    username = user_data.get('username')
+                    profile_picture_url = user_data.get('profilePictureUrl')
+                    
+                    # FIXED: Ensure profile picture URL is properly formatted
+                    if profile_picture_url and not profile_picture_url.startswith('/'):
+                        if not profile_picture_url.startswith('http'):
+                            profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
+                            
+                app.logger.info(f"📱 User data retrieved: username={username}, picture={profile_picture_url}")
+                
+            except Exception as db_error:
+                app.logger.error(f"❌ Database error retrieving user data: {db_error}")
+                # Continue with login even if user data retrieval fails
+                username = email  # Fallback to email as username
+        else:
+            app.logger.warning("⚠️ Database not available, using email as username")
+            username = email  # Fallback when database is not available
+        
+        # Set comprehensive session data
+        session['user'] = uid
+        session['email'] = email
+        session['username'] = username
+        session['profile_picture_url'] = profile_picture_url
+        session['idToken'] = id_token
+        session['authenticated'] = True
+        session['auth_time'] = int(time.time())
+        
+        # Make session permanent (expires in 30 days)
+        session.permanent = True
+        app.permanent_session_lifetime = timedelta(days=30)
+        
+        app.logger.info(f"✅ User {email} logged in successfully with username: {username}, profile_picture: {profile_picture_url}")
+        return jsonify({
+            "status": "success", 
+            "message": "Authentication successful",
+            "username": username,
+            "profile_picture_url": profile_picture_url,
+            "uid": uid
+        }), 200
+        
+    except firebase_admin.auth.InvalidIdTokenError as e:
+        app.logger.error(f"Invalid token error: {e}")
+        return jsonify({"status": "error", "message": "Invalid token"}), 401
+    except Exception as e:
+        app.logger.error(f"Token verification failed: {str(e)}")
+        return jsonify({"status": "error", "message": f"Authentication failed: {str(e)}"}), 500
+ 
+@app.route('/check-session', methods=['GET'])
+def check_session():
+    """Check if user has a valid session with enhanced error handling"""
+    try:
+        session_data = {
+            'authenticated': False,
+            'user': None,
+            'email': None,
+            'username': None,
+            'profile_picture_url': None
+        }
+        
+        # Check if user is in session and authenticated
+        if 'user' in session and session.get('authenticated'):
+            user_id = session.get('user')
+            
+            # Get fresh profile data from database if available
+            if realtime_db_ref and user_id:
+                try:
+                    user_ref = realtime_db_ref.child('users').child(user_id)
+                    user_data = user_ref.get()
+                    
+                    if user_data:
+                        # Validate profile picture exists
+                        profile_pic_url = user_data.get('profilePictureUrl')
+                        if profile_pic_url:
+                            # Check if file actually exists
+                            if profile_pic_url.startswith('/static/profile_pictures/'):
+                                filename = profile_pic_url.split('/')[-1]
+                                file_path = os.path.join(UPLOAD_FOLDER, filename)
+                                if not os.path.exists(file_path):
+                                    app.logger.warning(f"Profile picture file not found: {file_path}")
+                                    profile_pic_url = None
+                                    # Update database to remove invalid URL
+                                    user_ref.update({'profilePictureUrl': None})
+                        
+                        session_data.update({
+                            'authenticated': True,
+                            'user': user_id,
+                            'email': session.get('email') or user_data.get('email'),
+                            'username': user_data.get('username'),
+                            'profile_picture_url': profile_pic_url
+                        })
+                    else:
+                        # User not found in database, create basic entry
+                        basic_user_data = {
+                            'uid': user_id,
+                            'email': session.get('email', 'Unknown'),
+                            'username': session.get('username') or session.get('email', 'User'),
+                            'memberSince': datetime.utcnow().isoformat() + 'Z',
+                            'favoriteCount': 0,
+                            'profilePictureUrl': None
+                        }
+                        user_ref.set(basic_user_data)
+                        
+                        session_data.update({
+                            'authenticated': True,
+                            'user': user_id,
+                            'email': session.get('email', 'Unknown'),
+                            'username': basic_user_data['username'],
+                            'profile_picture_url': None
+                        })
+                        
+                except Exception as db_error:
+                    app.logger.error(f"Database error in session check: {db_error}")
+                    # Return basic session data without database info
+                    session_data.update({
+                        'authenticated': True,
+                        'user': user_id,
+                        'email': session.get('email'),
+                        'username': session.get('username'),
+                        'profile_picture_url': None
+                    })
+            else:
+                # Database not available, use session data only
+                session_data.update({
+                    'authenticated': True,
+                    'user': user_id,
+                    'email': session.get('email'),
+                    'username': session.get('username'),
+                    'profile_picture_url': None  # Don't use potentially invalid URLs
+                })
+        
+        app.logger.info(f"Session check result: {session_data}")
+        return jsonify(session_data), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error in session check: {e}")
+        return jsonify({
+            'authenticated': False,
+            'error': 'Session check failed'
+        }), 500
+    """Check if user has a valid session with enhanced error handling"""
+    try:
+        session_data = {
+            'authenticated': False,
+            'user': None,
+            'email': None,
+            'username': None,
+            'profile_picture_url': None
+        }
+        
+        # Check if user is in session and authenticated
+        if 'user' in session and session.get('authenticated'):
+            user_id = session.get('user')
+            
+            # Get fresh profile data from database if available
+            if realtime_db_ref and user_id:
+                try:
+                    user_ref = realtime_db_ref.child('users').child(user_id)
+                    user_data = user_ref.get()
+                    
+                    if user_data:
+                        # Validate profile picture exists
+                        profile_pic_url = user_data.get('profilePictureUrl')
+                        if profile_pic_url:
+                            # Check if file actually exists
+                            if profile_pic_url.startswith('/static/profile_pictures/'):
+                                filename = profile_pic_url.split('/')[-1]
+                                file_path = os.path.join(UPLOAD_FOLDER, filename)
+                                if not os.path.exists(file_path):
+                                    app.logger.warning(f"Profile picture file not found: {file_path}")
+                                    profile_pic_url = None
+                                    # Update database to remove invalid URL
+                                    user_ref.update({'profilePictureUrl': None})
+                        
+                        session_data.update({
+                            'authenticated': True,
+                            'user': user_id,
+                            'email': session.get('email') or user_data.get('email'),
+                            'username': user_data.get('username'),
+                            'profile_picture_url': profile_pic_url
+                        })
+                    else:
+                        # User not found in database, create basic entry
+                        basic_user_data = {
+                            'uid': user_id,
+                            'email': session.get('email', 'Unknown'),
+                            'username': session.get('username') or session.get('email', 'User'),
+                            'memberSince': datetime.utcnow().isoformat() + 'Z',
+                            'favoriteCount': 0,
+                            'profilePictureUrl': None
+                        }
+                        user_ref.set(basic_user_data)
+                        
+                        session_data.update({
+                            'authenticated': True,
+                            'user': user_id,
+                            'email': session.get('email', 'Unknown'),
+                            'username': basic_user_data['username'],
+                            'profile_picture_url': None
+                        })
+                        
+                except Exception as db_error:
+                    app.logger.error(f"Database error in session check: {db_error}")
+                    # Return basic session data without database info
+                    session_data.update({
+                        'authenticated': True,
+                        'user': user_id,
+                        'email': session.get('email'),
+                        'username': session.get('username'),
+                        'profile_picture_url': None
+                    })
+            else:
+                # Database not available, use session data only
+                session_data.update({
+                    'authenticated': True,
+                    'user': user_id,
+                    'email': session.get('email'),
+                    'username': session.get('username'),
+                    'profile_picture_url': None  # Don't use potentially invalid URLs
+                })
+        
+        app.logger.info(f"Session check result: {session_data}")
+        return jsonify(session_data), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error in session check: {e}")
+        return jsonify({
+            'authenticated': False,
+            'error': 'Session check failed'
+        }), 500
+    """Check if user has a valid session with profile picture data"""
+    if 'user' in session and session.get('authenticated'):
+        # Get fresh profile picture URL from database to ensure it's current
+        uid = session.get('user')
+        profile_picture_url = session.get('profile_picture_url')
+        
+        # If no profile picture in session, try to get it from database
+        if not profile_picture_url and uid and realtime_db_ref:
+            try:
+                user_ref = realtime_db_ref.child('users').child(uid)
+                user_data = user_ref.get()
+                if user_data and user_data.get('profilePictureUrl'):
+                    profile_picture_url = user_data.get('profilePictureUrl')
+                    # Update session with the profile picture URL
+                    session['profile_picture_url'] = profile_picture_url
+                    app.logger.info(f"📸 Retrieved profile picture from database: {profile_picture_url}")
+            except Exception as e:
+                app.logger.error(f"Error retrieving profile picture from database: {e}")
+        
+        return jsonify({
+            "authenticated": True,
+            "user": session.get('user'),
+            "email": session.get('email'),
+            "username": session.get('username'),
+            "profile_picture_url": profile_picture_url
+        }), 200
+    else:
+        return jsonify({"authenticated": False}), 200
+
+    
+###################
+# Signup Function #
+###################
 
 @app.route('/signup', methods=['POST'])
 def signup():
-    if not db:
+    if not realtime_db_ref:
         app.logger.error("Database not available for signup")
         return jsonify({"status": "error", "message": "Database not available"}), 500
     
@@ -202,6 +791,512 @@ def signup():
     except Exception as e:
         app.logger.error(f"Signup failed for {email}: {str(e)}")
         return jsonify({"status": "error", "message": f"Signup failed: {str(e)}"}), 400
+    if not realtime_db_ref:
+        app.logger.error("Database not available for signup")
+        return jsonify({"status": "error", "message": "Database not available"}), 500
+    
+    email = request.form.get('email')
+    password = request.form.get('password')
+    
+    app.logger.info(f"Signup attempt for email: {email}")
+
+    if not email or not password:
+        app.logger.error("Missing email or password in signup")
+        return jsonify({"status": "error", "message": "All fields are required."}), 400
+
+    try:
+        user = auth.get_user_by_email(email)
+        app.logger.warning(f"Email already exists: {email}")
+        return jsonify({"status": "error", "message": "Email already in use."}), 400
+    except firebase_admin.auth.UserNotFoundError:
+        pass
+
+    try:
+        user = auth.create_user(email=email, password=password)
+        app.logger.info(f"✅ User {email} signed up successfully.")
+        return jsonify({"status": "success", "message": "User signed up successfully! Please log in."}), 200
+    except Exception as e:
+        app.logger.error(f"Signup failed for {email}: {str(e)}")
+        return jsonify({"status": "error", "message": f"Signup failed: {str(e)}"}), 400
+    
+@app.route('/complete-signup', methods=['POST'])
+def complete_signup():
+    """Complete user signup with username and profile data - Enhanced with better error handling"""
+    app.logger.info("🔄 Starting complete-signup process...")
+    
+    # FIXED: Better database availability check
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available for signup completion")
+        # Instead of failing, create a basic session without database storage
+        try:
+            data = request.get_json()
+            uid = data.get('uid')
+            email = data.get('email')
+            username = data.get('username', email)  # Fallback to email
+            
+            # Create basic session without database
+            session['user'] = uid
+            session['email'] = email
+            session['username'] = username
+            session['authenticated'] = True
+            session['auth_time'] = int(time.time())
+            
+            app.logger.info(f"✅ Basic signup completed for {email} (database unavailable)")
+            return jsonify({
+                "status": "success", 
+                "message": "Profile created successfully (limited features due to database)",
+                "user": {
+                    "uid": uid,
+                    "email": email,
+                    "username": username,
+                    "profilePictureUrl": None
+                }
+            }), 200
+            
+        except Exception as fallback_error:
+            app.logger.error(f"❌ Fallback signup also failed: {fallback_error}")
+            return jsonify({"status": "error", "message": "Signup failed - database unavailable"}), 500
+    
+    try:
+        # Get and validate request data
+        data = request.get_json()
+        app.logger.info(f"📥 Received signup data: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+        
+        uid = data.get('uid')
+        email = data.get('email')
+        username = data.get('username', '').strip()
+        profile_picture_url = data.get('profilePictureUrl')
+        
+        app.logger.info(f"📋 Processing signup for:")
+        app.logger.info(f"   UID: {uid}")
+        app.logger.info(f"   Email: {email}")
+        app.logger.info(f"   Username: {username}")
+        app.logger.info(f"   Profile Picture: {profile_picture_url}")
+        
+        # Validate required fields
+        if not uid:
+            app.logger.error("❌ Missing UID")
+            return jsonify({"status": "error", "message": "User ID is required"}), 400
+        
+        if not email:
+            app.logger.error("❌ Missing email")
+            return jsonify({"status": "error", "message": "Email is required"}), 400
+        
+        if not username:
+            app.logger.error("❌ Missing username")
+            return jsonify({"status": "error", "message": "Username is required"}), 400
+        
+        # Enhanced username validation
+        app.logger.info("🔍 Validating username...")
+        is_valid, message = validate_username(username)
+        if not is_valid:
+            app.logger.error(f"❌ Username validation failed: {message}")
+            return jsonify({"status": "error", "message": message}), 400
+        
+        app.logger.info("✅ Username validation passed")
+        
+        # FIXED: Better username availability check with retry logic
+        app.logger.info("🔍 Checking username availability...")
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                users_ref = realtime_db_ref.child('users')
+                existing_users = users_ref.order_by_child('username').equal_to(username).get()
+                
+                app.logger.info(f"📊 Username check result (attempt {attempt + 1}): {existing_users}")
+                
+                if existing_users:
+                    # Check if any of the existing users have a different UID
+                    for existing_uid, existing_data in existing_users.items():
+                        if existing_uid != uid:
+                            app.logger.error(f"❌ Username '{username}' already taken by user {existing_uid}")
+                            return jsonify({"status": "error", "message": "Username already taken"}), 400
+                    
+                    app.logger.info("✅ Username belongs to current user (re-signup case)")
+                else:
+                    app.logger.info("✅ Username is available")
+                
+                break  # Success, exit retry loop
+                
+            except Exception as query_error:
+                app.logger.warning(f"Username check attempt {attempt + 1} failed: {query_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed - continue with signup anyway
+                    app.logger.warning("⚠️ Username availability check failed, proceeding anyway")
+                    break
+                else:
+                    time.sleep(0.5)  # Wait before retry
+        
+        # Process profile picture URL
+        if profile_picture_url:
+            # Ensure profile picture URL is properly formatted
+            if not profile_picture_url.startswith('/') and not profile_picture_url.startswith('http'):
+                profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
+            app.logger.info(f"📸 Profile picture URL processed: {profile_picture_url}")
+        
+        # Create comprehensive user profile data
+        app.logger.info("📝 Creating user profile data...")
+        user_data = {
+            'uid': uid,
+            'email': email,
+            'username': username,
+            'profilePictureUrl': profile_picture_url,
+            'memberSince': datetime.utcnow().isoformat() + 'Z',
+            'favoriteCount': 0,
+            'createdAt': int(time.time() * 1000),
+            'lastUpdated': int(time.time() * 1000),
+            'accountStatus': 'active'
+        }
+        
+        app.logger.info(f"📄 User data to be stored: {user_data}")
+        
+        # FIXED: Store user data with retry logic
+        app.logger.info("💾 Storing user data in database...")
+        for attempt in range(max_retries):
+            try:
+                users_ref = realtime_db_ref.child('users')
+                users_ref.child(uid).set(user_data)
+                app.logger.info("✅ User data stored successfully")
+                break
+                
+            except Exception as store_error:
+                app.logger.error(f"❌ Storage attempt {attempt + 1} failed: {store_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed - create basic session anyway
+                    app.logger.warning("⚠️ Database storage failed, creating basic session")
+                    session['user'] = uid
+                    session['email'] = email
+                    session['username'] = username
+                    session['authenticated'] = True
+                    session['auth_time'] = int(time.time())
+                    
+                    return jsonify({
+                        "status": "success", 
+                        "message": "Profile created successfully (limited database features)",
+                        "user": {
+                            "uid": uid,
+                            "email": email,
+                            "username": username,
+                            "profilePictureUrl": profile_picture_url
+                        }
+                    }), 200
+                else:
+                    time.sleep(0.5)  # Wait before retry
+        
+        # Create session
+        session['user'] = uid
+        session['email'] = email
+        session['username'] = username
+        session['profile_picture_url'] = profile_picture_url
+        session['authenticated'] = True
+        session['auth_time'] = int(time.time())
+        
+        app.logger.info(f"🎉 User profile created successfully for {email} with username '{username}'")
+        
+        return jsonify({
+            "status": "success", 
+            "message": "Profile created successfully",
+            "user": {
+                "uid": uid,
+                "email": email,
+                "username": username,
+                "profilePictureUrl": profile_picture_url
+            }
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error in complete_signup: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({"status": "error", "message": "Failed to complete signup"}), 500
+    """Complete user signup with username and profile data - Enhanced version"""
+    app.logger.info("🔄 Starting complete-signup process...")
+    
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available for signup completion")
+        return jsonify({"status": "error", "message": "Database not available"}), 500
+    
+    try:
+        # Get and validate request data
+        data = request.get_json()
+        app.logger.info(f"📥 Received signup data: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received")
+            return jsonify({"status": "error", "message": "No data provided"}), 400
+        
+        uid = data.get('uid')
+        email = data.get('email')
+        username = data.get('username', '').strip()
+        profile_picture_url = data.get('profilePictureUrl')
+        
+        app.logger.info(f"📋 Processing signup for:")
+        app.logger.info(f"   UID: {uid}")
+        app.logger.info(f"   Email: {email}")
+        app.logger.info(f"   Username: {username}")
+        app.logger.info(f"   Profile Picture: {profile_picture_url}")
+        
+        # Validate required fields
+        if not uid:
+            app.logger.error("❌ Missing UID")
+            return jsonify({"status": "error", "message": "User ID is required"}), 400
+        
+        if not email:
+            app.logger.error("❌ Missing email")
+            return jsonify({"status": "error", "message": "Email is required"}), 400
+        
+        if not username:
+            app.logger.error("❌ Missing username")
+            return jsonify({"status": "error", "message": "Username is required"}), 400
+        
+        # Enhanced username validation
+        app.logger.info("🔍 Validating username...")
+        is_valid, message = validate_username(username)
+        if not is_valid:
+            app.logger.error(f"❌ Username validation failed: {message}")
+            return jsonify({"status": "error", "message": message}), 400
+        
+        app.logger.info("✅ Username validation passed")
+        
+        # Check username availability
+        app.logger.info("🔍 Checking username availability...")
+        try:
+            users_ref = realtime_db_ref.child('users')
+            existing_users = users_ref.order_by_child('username').equal_to(username).get()
+            
+            app.logger.info(f"📊 Username check result: {existing_users}")
+            
+            if existing_users:
+                # Check if any of the existing users have a different UID
+                for existing_uid, existing_data in existing_users.items():
+                    if existing_uid != uid:
+                        app.logger.error(f"❌ Username '{username}' already taken by user {existing_uid}")
+                        return jsonify({"status": "error", "message": "Username already taken"}), 400
+                
+                app.logger.info("✅ Username belongs to current user (re-signup case)")
+            else:
+                app.logger.info("✅ Username is available")
+                
+        except Exception as db_error:
+            app.logger.error(f"❌ Database query error during username check: {db_error}")
+            return jsonify({"status": "error", "message": "Database query failed"}), 500
+        
+        # Process profile picture URL
+        if profile_picture_url:
+            # Ensure profile picture URL is properly formatted
+            if not profile_picture_url.startswith('/') and not profile_picture_url.startswith('http'):
+                profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
+            app.logger.info(f"📸 Profile picture URL processed: {profile_picture_url}")
+        
+        # Create comprehensive user profile data
+        app.logger.info("📝 Creating user profile data...")
+        user_data = {
+            'uid': uid,
+            'email': email,
+            'username': username,
+            'profilePictureUrl': profile_picture_url,
+            'memberSince': datetime.utcnow().isoformat() + 'Z',
+            'favoriteCount': 0,
+            'createdAt': int(time.time() * 1000),
+            'lastUpdated': int(time.time() * 1000),
+            'accountStatus': 'active'
+        }
+        
+        app.logger.info(f"📄 User data to be stored: {user_data}")
+        
+        # Store user data in database
+        app.logger.info("💾 Storing user data in database...")
+        try:
+            users_ref.child(uid).set(user_data)
+            app.logger.info("✅ User data stored successfully")
+        except Exception as store_error:
+            app.logger.error(f"❌ Failed to store user data: {store_error}")
+            return jsonify({"status": "error", "message": "Failed to store user data"}), 500
+        
+        # Verify the data was stored correctly
+        app.logger.info("🔍 Verifying stored data...")
+        try:
+            stored_data = users_ref.child(uid).get()
+            if stored_data:
+                app.logger.info("✅ Data verification successful")
+                app.logger.info(f"📊 Stored data: {stored_data}")
+            else:
+                app.logger.error("❌ Data verification failed - no data found")
+                return jsonify({"status": "error", "message": "Failed to verify stored data"}), 500
+        except Exception as verify_error:
+            app.logger.error(f"❌ Data verification error: {verify_error}")
+            # Continue anyway, as the main storage might have succeeded
+        
+        app.logger.info(f"🎉 User profile created successfully for {email} with username '{username}'")
+        
+        return jsonify({
+            "status": "success", 
+            "message": "Profile created successfully",
+            "user": {
+                "uid": uid,
+                "email": email,
+                "username": username,
+                "profilePictureUrl": profile_picture_url
+            }
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error in complete_signup: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({"status": "error", "message": "Failed to complete signup"}), 500
+    """Complete user signup with username and profile data"""
+    if not realtime_db_ref:
+        return jsonify({"status": "error", "message": "Database not available"}), 500
+    
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        email = data.get('email')
+        username = data.get('username', '').strip()
+        profile_picture_url = data.get('profilePictureUrl')
+        
+        app.logger.info(f"Completing signup for user {uid} with username: {username}, profile_picture: {profile_picture_url}")
+        
+        if not uid or not email or not username:
+            return jsonify({"status": "error", "message": "Missing required fields"}), 400
+        
+        # Validate username
+        is_valid, message = validate_username(username)
+        if not is_valid:
+            return jsonify({"status": "error", "message": message}), 400
+        
+        # Check username availability
+        users_ref = realtime_db_ref.child('users')
+        existing_users = users_ref.order_by_child('username').equal_to(username).get()
+        
+        if existing_users:
+            return jsonify({"status": "error", "message": "Username already taken"}), 400
+        
+        # FIXED: Ensure profile picture URL is properly formatted
+        if profile_picture_url:
+            if not profile_picture_url.startswith('/') and not profile_picture_url.startswith('http'):
+                profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
+        
+        # Create user profile in database
+        user_data = {
+            'uid': uid,
+            'email': email,
+            'username': username,
+            'profilePictureUrl': profile_picture_url,
+            'memberSince': datetime.utcnow().isoformat() + 'Z',
+            'favoriteCount': 0,
+            'createdAt': int(time.time() * 1000)
+        }
+        
+        # Store user data
+        users_ref.child(uid).set(user_data)
+        
+        app.logger.info(f"✅ User profile created for {email} with username {username} and profile picture {profile_picture_url}")
+        return jsonify({"status": "success", "message": "Profile created successfully"}), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error completing signup: {e}")
+        return jsonify({"status": "error", "message": "Failed to complete signup"}), 500
+
+    """Complete user signup with username and profile data"""
+    if not realtime_db_ref:
+        return jsonify({"status": "error", "message": "Database not available"}), 500
+    
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        email = data.get('email')
+        username = data.get('username', '').strip()
+        profile_picture_url = data.get('profilePictureUrl')
+        
+        app.logger.info(f"Completing signup for user {uid} with username: {username}")
+        
+        if not uid or not email or not username:
+            return jsonify({"status": "error", "message": "Missing required fields"}), 400
+        
+        # Validate username
+        is_valid, message = validate_username(username)
+        if not is_valid:
+            return jsonify({"status": "error", "message": message}), 400
+        
+        # Check username availability
+        users_ref = realtime_db_ref.child('users')
+        existing_users = users_ref.order_by_child('username').equal_to(username).get()
+        
+        if existing_users:
+            return jsonify({"status": "error", "message": "Username already taken"}), 400
+        
+        # Create user profile in database
+        user_data = {
+            'uid': uid,
+            'email': email,
+            'username': username,
+            'profilePictureUrl': profile_picture_url,
+            'memberSince': datetime.utcnow().isoformat() + 'Z',
+            'favoriteCount': 0,
+            'createdAt': int(time.time() * 1000)
+        }
+        
+        # Store user data
+        users_ref.child(uid).set(user_data)
+        
+        app.logger.info(f"✅ User profile created for {email} with username {username}")
+        return jsonify({"status": "success", "message": "Profile created successfully"}), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error completing signup: {e}")
+        return jsonify({"status": "error", "message": "Failed to complete signup"}), 500    
+
+@app.route('/debug/signup-process')
+def debug_signup_process():
+    """Debug endpoint to check signup process components"""
+    try:
+        debug_info = {
+            "database_available": realtime_db_ref is not None,
+            "upload_folder_exists": os.path.exists(UPLOAD_FOLDER),
+            "upload_folder_writable": os.access(UPLOAD_FOLDER, os.W_OK) if os.path.exists(UPLOAD_FOLDER) else False,
+            "max_file_size": MAX_FILE_SIZE,
+            "allowed_extensions": list(ALLOWED_EXTENSIONS),
+            "current_time": datetime.utcnow().isoformat() + 'Z',
+            "firebase_admin_available": firebase_admin is not None
+        }
+        
+        # Test database connection
+        if realtime_db_ref:
+            try:
+                test_ref = realtime_db_ref.child('test')
+                test_data = test_ref.get()
+                debug_info["database_connection"] = "working"
+                debug_info["test_read_result"] = test_data
+            except Exception as db_error:
+                debug_info["database_connection"] = f"error: {str(db_error)}"
+        
+        # Check existing users count
+        if realtime_db_ref:
+            try:
+                users_ref = realtime_db_ref.child('users')
+                users_data = users_ref.get() or {}
+                debug_info["existing_users_count"] = len(users_data)
+                debug_info["sample_usernames"] = [data.get('username', 'No username') for data in list(users_data.values())[:3]]
+            except Exception as users_error:
+                debug_info["users_check_error"] = str(users_error)
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+##################
+# Login Function #
+##################
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -255,6 +1350,1178 @@ def logout():
     session.clear()
     return jsonify({"status": "success", "message": "Logged out successfully"}), 200
 
+####################
+# Profile Function #
+####################
+
+UPLOAD_FOLDER = 'static/profile_pictures'
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
+
+# Create upload directory if it doesn't exist
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def allowed_file(filename):
+    """Check if file extension is allowed"""
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def validate_username(username):
+    """Enhanced username validation with detailed error messages"""
+    if not username:
+        return False, "Username is required"
+    
+    # Remove any whitespace
+    username = username.strip()
+    
+    if len(username) < 3:
+        return False, "Username must be at least 3 characters long"
+    
+    if len(username) > 20:
+        return False, "Username must be less than 20 characters long"
+    
+    # Check for valid characters only
+    if not re.match(r'^[a-zA-Z0-9_]+$', username):
+        return False, "Username can only contain letters, numbers, and underscores"
+    
+    # Check that it doesn't start or end with underscore
+    if username.startswith('_') or username.endswith('_'):
+        return False, "Username cannot start or end with an underscore"
+    
+    # Check for reserved usernames
+    reserved_usernames = ['admin', 'administrator', 'root', 'system', 'anonymous', 'null', 'undefined']
+    if username.lower() in reserved_usernames:
+        return False, "This username is reserved and cannot be used"
+    
+    return True, "Valid username"
+    """Enhanced username validation with detailed error messages"""
+    if not username:
+        return False, "Username is required"
+    
+    # Remove any whitespace
+    username = username.strip()
+    
+    if len(username) < 3:
+        return False, "Username must be at least 3 characters long"
+    
+    if len(username) > 20:
+        return False, "Username must be less than 20 characters long"
+    
+    # Check for valid characters only
+    if not re.match(r'^[a-zA-Z0-9_]+$', username):
+        return False, "Username can only contain letters, numbers, and underscores"
+    
+    # Check that it doesn't start or end with underscore
+    if username.startswith('_') or username.endswith('_'):
+        return False, "Username cannot start or end with an underscore"
+    
+    # Check for reserved usernames
+    reserved_usernames = ['admin', 'administrator', 'root', 'system', 'anonymous', 'null', 'undefined']
+    if username.lower() in reserved_usernames:
+        return False, "This username is reserved and cannot be used"
+    
+    return True, "Valid username"
+
+    """Validate username format and length"""
+    if not username:
+        return False, "Username is required"
+    
+    username = username.strip()
+    
+    if len(username) < 3:
+        return False, "Username must be at least 3 characters long"
+    
+    if len(username) > 20:
+        return False, "Username must be less than 20 characters long"
+    
+    if not re.match(r'^[a-zA-Z0-9_]+$', username):
+        return False, "Username can only contain letters, numbers, and underscores"
+    
+    return True, "Valid username"
+
+def resize_image(image_path, max_size=(300, 300)):
+    """Resize image to maximum dimensions while maintaining aspect ratio"""
+    try:
+        with Image.open(image_path) as img:
+            # Convert to RGB if necessary (for PNG with transparency)
+            if img.mode in ('RGBA', 'LA', 'P'):
+                img = img.convert('RGB')
+            
+            # Resize maintaining aspect ratio
+            img.thumbnail(max_size, Image.Resampling.LANCZOS)
+            
+            # Save optimized image
+            img.save(image_path, 'JPEG', quality=85, optimize=True)
+        
+        return True
+    except Exception as e:
+        app.logger.error(f"Error resizing image {image_path}: {e}")
+        return False
+
+# NEW: Check username availability endpoint
+@app.route('/check-username', methods=['POST'])
+def check_username():
+    """Check if username is available - Enhanced with better error handling"""
+    app.logger.info("🔍 Username availability check requested")
+    
+    # Check if database is available
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available for username check")
+        return jsonify({"available": False, "message": "Database temporarily unavailable"}), 500
+    
+    try:
+        # Get request data with validation
+        data = request.get_json()
+        app.logger.info(f"📥 Username check data received: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received for username check")
+            return jsonify({"available": False, "message": "No data provided"}), 400
+        
+        username = data.get('username', '').strip()
+        app.logger.info(f"🔍 Checking availability for username: '{username}'")
+        
+        if not username:
+            app.logger.error("❌ Empty username provided")
+            return jsonify({"available": False, "message": "Username is required"}), 400
+        
+        # Validate username format first (before checking database)
+        app.logger.info("🔍 Validating username format...")
+        is_valid, message = validate_username(username)
+        if not is_valid:
+            app.logger.info(f"❌ Username format invalid: {message}")
+            return jsonify({"available": False, "message": message}), 400
+        
+        app.logger.info("✅ Username format is valid")
+        
+        # Check if username exists in database
+        app.logger.info("🔍 Checking database for existing username...")
+        try:
+            users_ref = realtime_db_ref.child('users')
+            
+            # Use a more reliable query method
+            app.logger.info("📡 Querying database...")
+            existing_users = users_ref.order_by_child('username').equal_to(username).get()
+            
+            app.logger.info(f"📊 Database query result: {existing_users}")
+            
+            if existing_users:
+                app.logger.info(f"❌ Username '{username}' is already taken")
+                return jsonify({
+                    "available": False, 
+                    "message": "Username already taken"
+                }), 200
+            else:
+                app.logger.info(f"✅ Username '{username}' is available")
+                return jsonify({
+                    "available": True, 
+                    "message": "Username available"
+                }), 200
+            
+        except Exception as db_error:
+            app.logger.error(f"❌ Database query error: {db_error}")
+            app.logger.error(f"❌ Error type: {type(db_error)}")
+            import traceback
+            app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+            
+            # Return a more user-friendly error
+            return jsonify({
+                "available": False, 
+                "message": "Unable to check username availability. Please try again."
+            }), 500
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error in username check: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({
+            "available": False, 
+            "message": "Error checking username availability"
+        }), 500
+    """Check if username is available"""
+    if not realtime_db_ref:
+        return jsonify({"available": False, "message": "Database not available"}), 500
+    
+    try:
+        data = request.get_json()
+        username = data.get('username', '').strip()
+        
+        # Validate username format
+        is_valid, message = validate_username(username)
+        if not is_valid:
+            return jsonify({"available": False, "message": message}), 400
+        
+        # Check if username exists in database
+        users_ref = realtime_db_ref.child('users')
+        existing_users = users_ref.order_by_child('username').equal_to(username).get()
+        
+        if existing_users:
+            return jsonify({
+                "available": False, 
+                "message": "Username already taken"
+            }), 200
+        
+        return jsonify({
+            "available": True, 
+            "message": "Username available"
+        }), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error checking username: {e}")
+        return jsonify({
+            "available": False, 
+            "message": "Error checking username"
+        }), 500
+
+@app.route('/upload-profile-picture', methods=['POST'])
+def upload_profile_picture():
+    """Upload and process profile picture during signup - Enhanced version"""
+    app.logger.info("📸 Starting profile picture upload...")
+    
+    try:
+        # Check if file is in request
+        if 'profile_picture' not in request.files:
+            app.logger.error("❌ No file provided in request")
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files['profile_picture']
+        user_id = request.form.get('user_id')
+        
+        app.logger.info(f"📋 Upload request details:")
+        app.logger.info(f"   User ID: {user_id}")
+        app.logger.info(f"   Filename: {file.filename}")
+        app.logger.info(f"   Content Type: {file.content_type}")
+        
+        if not user_id:
+            app.logger.error("❌ User ID required but not provided")
+            return jsonify({"error": "User ID required"}), 400
+        
+        if file.filename == '':
+            app.logger.error("❌ No file selected")
+            return jsonify({"error": "No file selected"}), 400
+        
+        if not allowed_file(file.filename):
+            app.logger.error(f"❌ File type not allowed: {file.filename}")
+            return jsonify({"error": "File type not allowed. Please use PNG, JPG, JPEG, GIF, or WEBP"}), 400
+        
+        # Check file size
+        file.seek(0, os.SEEK_END)  # Move to end of file
+        file_size = file.tell()     # Get current position (file size)
+        file.seek(0)               # Reset to beginning
+        
+        app.logger.info(f"📊 File size: {file_size} bytes")
+        
+        if file_size > MAX_FILE_SIZE:
+            app.logger.error(f"❌ File too large: {file_size} bytes > {MAX_FILE_SIZE} bytes")
+            return jsonify({"error": "File too large (max 5MB)"}), 400
+        
+        # Create upload directory if it doesn't exist
+        os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+        app.logger.info(f"📁 Upload folder ensured: {UPLOAD_FOLDER}")
+        
+        # Generate unique filename
+        file_extension = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"{user_id}_{uuid.uuid4().hex}.{file_extension}"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+        app.logger.info(f"💾 Saving file as: {filename}")
+        app.logger.info(f"📂 Full path: {filepath}")
+        
+        # Save file
+        try:
+            file.save(filepath)
+            app.logger.info("✅ File saved successfully")
+        except Exception as save_error:
+            app.logger.error(f"❌ Failed to save file: {save_error}")
+            return jsonify({"error": "Failed to save file"}), 500
+        
+        # Resize image
+        app.logger.info("🖼️ Resizing image...")
+        if not resize_image(filepath):
+            app.logger.error("❌ Failed to resize image")
+            # Clean up the failed file
+            try:
+                os.remove(filepath)
+            except:
+                pass
+            return jsonify({"error": "Failed to process image"}), 500
+        
+        app.logger.info("✅ Image resized successfully")
+        
+        # Generate URL
+        file_url = f"/static/profile_pictures/{filename}"
+        
+        app.logger.info(f"🎉 Profile picture upload completed:")
+        app.logger.info(f"   User: {user_id}")
+        app.logger.info(f"   Filename: {filename}")
+        app.logger.info(f"   URL: {file_url}")
+        
+        return jsonify({"url": file_url}), 200
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error uploading profile picture: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Failed to upload image"}), 500
+    """Upload and process profile picture during signup"""
+    try:
+        if 'profile_picture' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files['profile_picture']
+        user_id = request.form.get('user_id')
+        
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({"error": "File type not allowed"}), 400
+        
+        # Check file size
+        file_content = file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            return jsonify({"error": "File too large (max 5MB)"}), 400
+        
+        file.seek(0)  # Reset file pointer
+        
+        # Generate unique filename
+        file_extension = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"{user_id}_{uuid.uuid4().hex}.{file_extension}"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+        # Save file
+        file.save(filepath)
+        
+        # Resize image
+        if not resize_image(filepath):
+            os.remove(filepath)  # Remove failed file
+            return jsonify({"error": "Failed to process image"}), 500
+        
+        # Generate URL
+        file_url = f"/static/profile_pictures/{filename}"
+        
+        app.logger.info(f"✅ Profile picture uploaded for user {user_id}: {filename} -> {file_url}")
+        return jsonify({"url": file_url}), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error uploading profile picture: {e}")
+        return jsonify({"error": "Failed to upload image"}), 500
+    """Upload and process profile picture"""
+    try:
+        if 'profile_picture' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files['profile_picture']
+        user_id = request.form.get('user_id')
+        
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 400
+        
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({"error": "File type not allowed"}), 400
+        
+        # Check file size
+        if len(file.read()) > MAX_FILE_SIZE:
+            return jsonify({"error": "File too large (max 5MB)"}), 400
+        
+        file.seek(0)  # Reset file pointer
+        
+        # Generate unique filename
+        file_extension = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"{user_id}_{uuid.uuid4().hex}.{file_extension}"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+        # Save file
+        file.save(filepath)
+        
+        # Resize image
+        if not resize_image(filepath):
+            os.remove(filepath)  # Remove failed file
+            return jsonify({"error": "Failed to process image"}), 500
+        
+        # Generate URL
+        file_url = f"/static/profile_pictures/{filename}"
+        
+        app.logger.info(f"Profile picture uploaded for user {user_id}: {filename}")
+        return jsonify({"url": file_url}), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error uploading profile picture: {e}")
+        return jsonify({"error": "Failed to upload image"}), 500
+
+# NEW: Get user profile endpoint
+@app.route('/get-user-profile', methods=['POST'])
+def get_user_profile():
+    """Get user profile data with proper profile picture URL"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        
+        if not uid:
+            return jsonify({"error": "User ID required"}), 400
+        
+        # Get user data from database
+        user_ref = realtime_db_ref.child('users').child(uid)
+        user_data = user_ref.get()
+        
+        if not user_data:
+            # Create basic profile if doesn't exist
+            user_data = {
+                'uid': uid,
+                'email': 'Unknown',
+                'username': '',
+                'memberSince': datetime.utcnow().isoformat() + 'Z',
+                'favoriteCount': 0,
+                'profilePictureUrl': None
+            }
+            user_ref.set(user_data)
+        
+        # FIXED: Ensure profile picture URL is properly formatted
+        profile_picture_url = user_data.get('profilePictureUrl')
+        if profile_picture_url:
+            # Ensure it's a proper URL path
+            if not profile_picture_url.startswith('/') and not profile_picture_url.startswith('http'):
+                profile_picture_url = f"/static/profile_pictures/{profile_picture_url}"
+            user_data['profilePictureUrl'] = profile_picture_url
+        
+        # Get favorite count
+        favorites_ref = realtime_db_ref.child('favorites').child(uid)
+        favorites = favorites_ref.get() or {}
+        user_data['favoriteCount'] = len(favorites)
+        
+        app.logger.info(f"✅ Profile data for {uid}: username={user_data.get('username')}, picture={profile_picture_url}")
+        
+        return jsonify(user_data), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error getting user profile: {e}")
+        return jsonify({"error": "Failed to get profile"}), 500
+    """Get user profile data"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        
+        if not uid:
+            return jsonify({"error": "User ID required"}), 400
+        
+        # Get user data from database
+        user_ref = realtime_db_ref.child('users').child(uid)
+        user_data = user_ref.get()
+        
+        if not user_data:
+            # Create basic profile if doesn't exist
+            user_data = {
+                'uid': uid,
+                'email': 'Unknown',
+                'username': '',
+                'memberSince': datetime.utcnow().isoformat() + 'Z',
+                'favoriteCount': 0
+            }
+            user_ref.set(user_data)
+        
+        # Get favorite count
+        favorites_ref = realtime_db_ref.child('favorites').child(uid)
+        favorites = favorites_ref.get() or {}
+        user_data['favoriteCount'] = len(favorites)
+        
+        return jsonify(user_data), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error getting user profile: {e}")
+        return jsonify({"error": "Failed to get profile"}), 500
+
+# NEW: Update username endpoint
+@app.route('/update-username', methods=['POST'])
+def update_username():
+    """Update user's username with comprehensive error handling and retry logic"""
+    app.logger.info("🔄 Update username request received")
+    
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available")
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        app.logger.info("📥 Getting request data...")
+        data = request.get_json()
+        app.logger.info(f"📦 Request data: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received")
+            return jsonify({"error": "No data provided"}), 400
+        
+        uid = data.get('uid')
+        new_username = data.get('newUsername', '').strip()
+        
+        app.logger.info(f"🔍 UID: {uid}")
+        app.logger.info(f"🔍 New username: {new_username}")
+        
+        if not uid or not new_username:
+            app.logger.error("❌ Missing required fields")
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        # Validate username format
+        app.logger.info("🔄 Validating username...")
+        is_valid, message = validate_username(new_username)
+        app.logger.info(f"✅ Username validation result: {is_valid}, {message}")
+        
+        if not is_valid:
+            return jsonify({"error": message}), 400
+        
+        # FIXED: Enhanced database operations with proper error handling
+        app.logger.info("🔄 Checking username availability...")
+        users_ref = realtime_db_ref.child('users')
+        
+        # Step 1: Check if username is already taken with retry logic
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                app.logger.info(f"📡 Username check attempt {attempt + 1}/{max_retries}")
+                
+                # Use a more robust query method
+                existing_users = users_ref.order_by_child('username').equal_to(new_username).get()
+                app.logger.info(f"🔍 Existing users check result: {existing_users}")
+                
+                # Remove current user from results if they exist
+                if existing_users:
+                    existing_users = {k: v for k, v in existing_users.items() if k != uid}
+                    if existing_users:
+                        app.logger.warning(f"⚠️ Username already taken: {new_username}")
+                        return jsonify({"error": "Username already taken"}), 400
+                
+                app.logger.info("✅ Username is available")
+                break  # Success, exit retry loop
+                
+            except Exception as query_error:
+                app.logger.error(f"❌ Database query attempt {attempt + 1} failed: {query_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    return jsonify({"error": "Database query failed"}), 500
+                else:
+                    # Wait before retry
+                    time.sleep(0.5 * (attempt + 1))
+        
+        # Step 2: Update username with retry logic
+        app.logger.info("🔄 Updating username in database...")
+        for attempt in range(max_retries):
+            try:
+                app.logger.info(f"📡 Username update attempt {attempt + 1}/{max_retries}")
+                
+                user_ref = users_ref.child(uid)
+                
+                # First, verify the user exists
+                user_data = user_ref.get()
+                if not user_data:
+                    app.logger.error(f"❌ User {uid} not found in database")
+                    return jsonify({"error": "User not found"}), 404
+                
+                # Update the username
+                user_ref.update({
+                    'username': new_username,
+                    'lastUpdated': int(time.time() * 1000)
+                })
+                
+                app.logger.info(f"✅ Username updated successfully for user {uid}: {new_username}")
+                
+                # Verify the update was successful
+                updated_user = user_ref.get()
+                if updated_user and updated_user.get('username') == new_username:
+                    app.logger.info("✅ Username update verified")
+                    break
+                else:
+                    raise Exception("Username update verification failed")
+                
+            except Exception as update_error:
+                app.logger.error(f"❌ Database update attempt {attempt + 1} failed: {update_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    return jsonify({"error": "Database update failed"}), 500
+                else:
+                    # Wait before retry
+                    time.sleep(0.5 * (attempt + 1))
+        
+        # Step 3: Update session data
+        try:
+            session['username'] = new_username
+            session['last_updated'] = int(time.time())
+            app.logger.info("✅ Session updated successfully")
+        except Exception as session_error:
+            app.logger.warning(f"⚠️ Session update failed: {session_error}")
+            # Don't fail the entire operation for session update issues
+        
+        return jsonify({"message": "Username updated successfully"}), 200
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error updating username: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Failed to update username"}), 500
+    """Update user's username"""
+    app.logger.info("🔄 Update username request received")
+    
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available")
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        app.logger.info("📥 Getting request data...")
+        data = request.get_json()
+        app.logger.info(f"📦 Request data: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received")
+            return jsonify({"error": "No data provided"}), 400
+        
+        uid = data.get('uid')
+        new_username = data.get('newUsername', '').strip()
+        
+        app.logger.info(f"🔍 UID: {uid}")
+        app.logger.info(f"🔍 New username: {new_username}")
+        
+        if not uid or not new_username:
+            app.logger.error("❌ Missing required fields")
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        # Validate username
+        app.logger.info("🔄 Validating username...")
+        is_valid, message = validate_username(new_username)
+        app.logger.info(f"✅ Username validation result: {is_valid}, {message}")
+        
+        if not is_valid:
+            return jsonify({"error": message}), 400
+        
+        # Check if username is already taken (excluding current user)
+        app.logger.info("🔄 Checking username availability...")
+        users_ref = realtime_db_ref.child('users')
+        
+        try:
+            existing_users = users_ref.order_by_child('username').equal_to(new_username).get()
+            app.logger.info(f"🔍 Existing users check result: {existing_users}")
+        except Exception as db_error:
+            app.logger.error(f"❌ Database query error: {db_error}")
+            return jsonify({"error": "Database query failed"}), 500
+        
+        # Remove current user from results
+        if existing_users:
+            existing_users = {k: v for k, v in existing_users.items() if k != uid}
+            if existing_users:
+                app.logger.warning(f"⚠️ Username already taken: {new_username}")
+                return jsonify({"error": "Username already taken"}), 400
+        
+        # Update username
+        app.logger.info("🔄 Updating username in database...")
+        try:
+            user_ref = users_ref.child(uid)
+            user_ref.update({'username': new_username})
+            app.logger.info(f"✅ Username updated successfully for user {uid}: {new_username}")
+        except Exception as update_error:
+            app.logger.error(f"❌ Database update error: {update_error}")
+            return jsonify({"error": "Database update failed"}), 500
+        
+        return jsonify({"message": "Username updated successfully"}), 200
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error updating username: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Failed to update username"}), 500
+
+# NEW: Update profile picture endpoint
+@app.route('/update-profile-picture', methods=['POST'])
+def update_profile_picture():
+    """Update user's profile picture with proper storage"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        if 'profile_picture' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files['profile_picture']
+        uid = request.form.get('uid')
+        
+        if not uid:
+            return jsonify({"error": "User ID required"}), 400
+        
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({"error": "File type not allowed"}), 400
+        
+        # Check file size
+        file_content = file.read()
+        if len(file_content) > MAX_FILE_SIZE:
+            return jsonify({"error": "File too large (max 5MB)"}), 400
+        
+        file.seek(0)  # Reset file pointer
+        
+        # Remove old profile picture
+        user_ref = realtime_db_ref.child('users').child(uid)
+        user_data = user_ref.get()
+        
+        if user_data and user_data.get('profilePictureUrl'):
+            old_url = user_data['profilePictureUrl']
+            if old_url and '/static/profile_pictures/' in old_url:
+                old_filename = old_url.split('/')[-1]
+                old_filepath = os.path.join(UPLOAD_FOLDER, old_filename)
+                if os.path.exists(old_filepath):
+                    os.remove(old_filepath)
+                    app.logger.info(f"🗑️ Removed old profile picture: {old_filename}")
+        
+        # Generate unique filename
+        file_extension = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"{uid}_{uuid.uuid4().hex}.{file_extension}"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+        # Save and resize image
+        file.save(filepath)
+        
+        if not resize_image(filepath):
+            os.remove(filepath)
+            return jsonify({"error": "Failed to process image"}), 500
+        
+        # Generate proper URL
+        file_url = f"/static/profile_pictures/{filename}"
+        
+        # FIXED: Update database with proper URL
+        user_ref.update({'profilePictureUrl': file_url})
+        
+        # FIXED: Update session data
+        session['profile_picture_url'] = file_url
+        
+        app.logger.info(f"✅ Profile picture updated for user {uid}: {filename} -> {file_url}")
+        return jsonify({"url": file_url}), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error updating profile picture: {e}")
+        return jsonify({"error": "Failed to update profile picture"}), 500
+    """Update user's profile picture"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        if 'profile_picture' not in request.files:
+            return jsonify({"error": "No file provided"}), 400
+        
+        file = request.files['profile_picture']
+        uid = request.form.get('uid')
+        
+        if not uid:
+            return jsonify({"error": "User ID required"}), 400
+        
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+        
+        if not allowed_file(file.filename):
+            return jsonify({"error": "File type not allowed"}), 400
+        
+        # Check file size
+        if len(file.read()) > MAX_FILE_SIZE:
+            return jsonify({"error": "File too large (max 5MB)"}), 400
+        
+        file.seek(0)  # Reset file pointer
+        
+        # Remove old profile picture
+        user_ref = realtime_db_ref.child('users').child(uid)
+        user_data = user_ref.get()
+        
+        if user_data and user_data.get('profilePictureUrl'):
+            old_url = user_data['profilePictureUrl']
+            if old_url.startswith('/static/profile_pictures/'):
+                old_filename = old_url.split('/')[-1]
+                old_filepath = os.path.join(UPLOAD_FOLDER, old_filename)
+                if os.path.exists(old_filepath):
+                    os.remove(old_filepath)
+        
+        # Generate unique filename
+        file_extension = file.filename.rsplit('.', 1)[1].lower()
+        filename = f"{uid}_{uuid.uuid4().hex}.{file_extension}"
+        filepath = os.path.join(UPLOAD_FOLDER, filename)
+        
+        # Save and resize image
+        file.save(filepath)
+        
+        if not resize_image(filepath):
+            os.remove(filepath)
+            return jsonify({"error": "Failed to process image"}), 500
+        
+        # Update database
+        file_url = f"/static/profile_pictures/{filename}"
+        user_ref.update({'profilePictureUrl': file_url})
+        
+        app.logger.info(f"Profile picture updated for user {uid}: {filename}")
+        return jsonify({"url": file_url}), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error updating profile picture: {e}")
+        return jsonify({"error": "Failed to update profile picture"}), 500
+
+# NEW: Remove profile picture endpoint
+@app.route('/remove-profile-picture', methods=['POST'])
+def remove_profile_picture():
+    """Remove user's profile picture with proper cleanup"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        
+        if not uid:
+            return jsonify({"error": "User ID required"}), 400
+        
+        # Get current profile picture
+        user_ref = realtime_db_ref.child('users').child(uid)
+        user_data = user_ref.get()
+        
+        if user_data and user_data.get('profilePictureUrl'):
+            old_url = user_data['profilePictureUrl']
+            
+            # Remove file from disk
+            if old_url and '/static/profile_pictures/' in old_url:
+                old_filename = old_url.split('/')[-1]
+                old_filepath = os.path.join(UPLOAD_FOLDER, old_filename)
+                if os.path.exists(old_filepath):
+                    os.remove(old_filepath)
+                    app.logger.info(f"🗑️ Removed profile picture file: {old_filename}")
+            
+            # FIXED: Update database - set to None instead of deleting
+            user_ref.update({'profilePictureUrl': None})
+            
+            # FIXED: Update session data
+            session['profile_picture_url'] = None
+        
+        app.logger.info(f"✅ Profile picture removed for user {uid}")
+        return jsonify({"message": "Profile picture removed"}), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error removing profile picture: {e}")
+        return jsonify({"error": "Failed to remove profile picture"}), 500
+
+    """Remove user's profile picture"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        data = request.get_json()
+        uid = data.get('uid')
+        
+        if not uid:
+            return jsonify({"error": "User ID required"}), 400
+        
+        # Get current profile picture
+        user_ref = realtime_db_ref.child('users').child(uid)
+        user_data = user_ref.get()
+        
+        if user_data and user_data.get('profilePictureUrl'):
+            old_url = user_data['profilePictureUrl']
+            
+            # Remove file from disk
+            if old_url.startswith('/static/profile_pictures/'):
+                old_filename = old_url.split('/')[-1]
+                old_filepath = os.path.join(UPLOAD_FOLDER, old_filename)
+                if os.path.exists(old_filepath):
+                    os.remove(old_filepath)
+            
+            # Update database
+            user_ref.update({'profilePictureUrl': None})
+        
+        app.logger.info(f"Profile picture removed for user {uid}")
+        return jsonify({"message": "Profile picture removed"}), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error removing profile picture: {e}")
+        return jsonify({"error": "Failed to remove profile picture"}), 500
+
+# UPDATED: Enhanced profile route (replace existing)
+@app.route('/profile', methods=['GET', 'POST'])
+def profile():
+    if 'user' not in session:
+        return redirect(url_for('home'))
+    
+    if request.method == 'POST':
+        # Handle any POST requests if needed
+        pass
+    
+    return render_template('profile.html')
+
+@app.route('/static/profile_pictures/<path:filename>')
+def serve_profile_picture(filename):
+    """Serve profile picture files with enhanced error handling"""
+    try:
+        app.logger.info(f"Serving profile picture request: {filename}")
+        
+        # Security check - ensure filename is safe
+        if not filename or '..' in filename or '/' in filename:
+            app.logger.warning(f"Invalid filename requested: {filename}")
+            return "Invalid filename", 400
+        
+        if not os.path.exists(UPLOAD_FOLDER):
+            app.logger.error(f"Profile pictures directory not found: {UPLOAD_FOLDER}")
+            return "Profile pictures directory not found", 404
+        
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        
+        if not os.path.exists(file_path):
+            app.logger.warning(f"Profile picture not found: {file_path}")
+            
+            # List available files for debugging
+            try:
+                available_files = os.listdir(UPLOAD_FOLDER)
+                app.logger.info(f"Available profile pictures: {available_files[:10]}")  # Show first 10
+            except Exception as list_error:
+                app.logger.error(f"Error listing profile pictures: {list_error}")
+            
+            return "Profile picture not found", 404
+        
+        # Check file size and permissions
+        try:
+            file_size = os.path.getsize(file_path)
+            if file_size == 0:
+                app.logger.warning(f"Profile picture is empty: {file_path}")
+                return "Profile picture is corrupted", 404
+            
+            if not os.access(file_path, os.R_OK):
+                app.logger.error(f"Profile picture not readable: {file_path}")
+                return "Profile picture not accessible", 403
+                
+        except Exception as file_error:
+            app.logger.error(f"Error checking profile picture file: {file_error}")
+            return "Error accessing profile picture", 500
+        
+        app.logger.info(f"Successfully serving profile picture: {filename} ({file_size} bytes)")
+        return send_from_directory(UPLOAD_FOLDER, filename)
+        
+    except Exception as e:
+        app.logger.error(f"Error serving profile picture {filename}: {e}")
+        return "Error serving profile picture", 500
+
+    """Serve profile picture files with better error handling"""
+    try:
+        app.logger.info(f"📸 Serving profile picture: {filename}")
+        
+        if not os.path.exists(UPLOAD_FOLDER):
+            app.logger.error(f"❌ Profile pictures directory not found: {UPLOAD_FOLDER}")
+            return "Profile pictures directory not found", 404
+        
+        file_path = os.path.join(UPLOAD_FOLDER, filename)
+        app.logger.info(f"📁 Looking for file at: {file_path}")
+        
+        if not os.path.exists(file_path):
+            app.logger.error(f"❌ Profile picture not found: {file_path}")
+            
+            # List available files for debugging
+            try:
+                available_files = os.listdir(UPLOAD_FOLDER) if os.path.exists(UPLOAD_FOLDER) else []
+                app.logger.info(f"📋 Available profile pictures: {available_files}")
+            except Exception as list_error:
+                app.logger.error(f"❌ Error listing files: {list_error}")
+            
+            return "Profile picture not found", 404
+        
+        app.logger.info(f"✅ Serving profile picture: {filename}")
+        return send_from_directory(UPLOAD_FOLDER, filename)
+        
+    except Exception as e:
+        app.logger.error(f"❌ Error serving profile picture {filename}: {e}")
+        return "Error serving profile picture", 500
+
+    port = int(os.environ.get('PORT', 8000))
+    app.logger.info(f"Starting app on port {port}")
+    
+    # Log all registered routes for debugging
+    app.logger.info("📋 Registered routes:")
+    for rule in app.url_map.iter_rules():
+        app.logger.info(f"  {rule.rule} -> {rule.endpoint}")
+    
+    app.run(host='0.0.0.0', port=port, debug=False)
+    
+@app.route('/debug/users')
+def debug_users():
+    """Debug endpoint to check user data"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        users_ref = realtime_db_ref.child('users')
+        users_data = users_ref.get() or {}
+        
+        users_summary = []
+        for uid, user_data in users_data.items():
+            users_summary.append({
+                "uid": uid,
+                "email": user_data.get('email', 'Unknown'),
+                "username": user_data.get('username', 'None'),
+                "memberSince": user_data.get('memberSince', 'Unknown'),
+                "hasProfilePicture": bool(user_data.get('profilePictureUrl'))
+            })
+        
+        return jsonify({
+            "total_users": len(users_summary),
+            "users": users_summary
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error fetching users debug info: {e}")
+        return jsonify({"error": str(e)}), 500
+    
+    """Refresh user session"""
+    try:
+        if session.get('authenticated') and session.get('user'):
+            # Update session timestamp
+            session['last_refresh'] = int(time.time())
+            app.logger.info(f"✅ Session refreshed for user: {session.get('email')}")
+            return jsonify({"status": "success", "message": "Session refreshed"}), 200
+        else:
+            app.logger.warning("⚠️ Session refresh requested but user not authenticated")
+            return jsonify({"status": "error", "message": "Not authenticated"}), 401
+    except Exception as e:
+        app.logger.error(f"❌ Error refreshing session: {e}")
+        return jsonify({"status": "error", "message": "Session refresh failed"}), 500
+    
+@app.route('/debug/profile-pictures-detailed')
+def debug_profile_pictures_detailed():
+    """Enhanced debug endpoint for profile picture issues"""
+    try:
+        debug_info = {
+            "upload_folder": {
+                "path": UPLOAD_FOLDER,
+                "exists": os.path.exists(UPLOAD_FOLDER),
+                "writable": os.access(UPLOAD_FOLDER, os.W_OK) if os.path.exists(UPLOAD_FOLDER) else False,
+                "readable": os.access(UPLOAD_FOLDER, os.R_OK) if os.path.exists(UPLOAD_FOLDER) else False
+            },
+            "files": [],
+            "database_users": [],
+            "session_info": {
+                "authenticated": session.get('authenticated', False),
+                "user_id": session.get('user'),
+                "email": session.get('email'),
+                "profile_picture_url": session.get('profile_picture_url')
+            }
+        }
+        
+        # List actual files
+        if os.path.exists(UPLOAD_FOLDER):
+            try:
+                for filename in os.listdir(UPLOAD_FOLDER):
+                    filepath = os.path.join(UPLOAD_FOLDER, filename)
+                    if os.path.isfile(filepath):
+                        debug_info["files"].append({
+                            "filename": filename,
+                            "size": os.path.getsize(filepath),
+                            "url": f"/static/profile_pictures/{filename}",
+                            "readable": os.access(filepath, os.R_OK),
+                            "modified": os.path.getmtime(filepath)
+                        })
+            except Exception as e:
+                debug_info["files_error"] = str(e)
+        
+        # Check database users
+        if realtime_db_ref:
+            try:
+                users_ref = realtime_db_ref.child('users')
+                users_data = users_ref.get() or {}
+                
+                for uid, user_data in users_data.items():
+                    profile_pic_url = user_data.get('profilePictureUrl')
+                    file_exists = False
+                    
+                    if profile_pic_url and profile_pic_url.startswith('/static/profile_pictures/'):
+                        filename = profile_pic_url.split('/')[-1]
+                        file_path = os.path.join(UPLOAD_FOLDER, filename)
+                        file_exists = os.path.exists(file_path)
+                    
+                    debug_info["database_users"].append({
+                        "uid": uid,
+                        "email": user_data.get('email'),
+                        "username": user_data.get('username'),
+                        "profilePictureUrl": profile_pic_url,
+                        "file_exists": file_exists
+                    })
+                    
+            except Exception as db_error:
+                debug_info["database_error"] = str(db_error)
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    """Debug endpoint to check profile picture files and database entries"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        # Check files in upload directory
+        files_info = []
+        upload_folder_exists = os.path.exists(UPLOAD_FOLDER)
+        
+        if upload_folder_exists:
+            try:
+                for filename in os.listdir(UPLOAD_FOLDER):
+                    filepath = os.path.join(UPLOAD_FOLDER, filename)
+                    if os.path.isfile(filepath):
+                        files_info.append({
+                            "filename": filename,
+                            "size": os.path.getsize(filepath),
+                            "url": f"/static/profile_pictures/{filename}",
+                            "full_path": filepath
+                        })
+            except Exception as e:
+                app.logger.error(f"Error listing profile picture files: {e}")
+        
+        # Check database entries
+        users_ref = realtime_db_ref.child('users')
+        users_data = users_ref.get() or {}
+        
+        users_with_pictures = []
+        for uid, user_data in users_data.items():
+            if user_data.get('profilePictureUrl'):
+                users_with_pictures.append({
+                    "uid": uid,
+                    "email": user_data.get('email'),
+                    "username": user_data.get('username'),
+                    "profilePictureUrl": user_data.get('profilePictureUrl')
+                })
+        
+        return jsonify({
+            "upload_folder_exists": upload_folder_exists,
+            "upload_folder_path": UPLOAD_FOLDER,
+            "upload_folder_writable": os.access(UPLOAD_FOLDER, os.W_OK) if upload_folder_exists else False,
+            "files_count": len(files_info),
+            "files": files_info,
+            "users_with_pictures_count": len(users_with_pictures),
+            "users_with_pictures": users_with_pictures,
+            "current_user_session": {
+                "user": session.get('user'),
+                "email": session.get('email'),
+                "profile_picture_url": session.get('profile_picture_url'),
+                "authenticated": session.get('authenticated')
+            }
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in profile pictures debug: {e}")
+        return jsonify({"error": str(e)}), 500
+   
+###################
+# HTML Page Links #
+###################
+
 @app.route('/about')
 def about():
     return render_template('about.html')
@@ -288,41 +2555,682 @@ def calculator():
 @app.route('/forum')
 def forum():
     return render_template('forum.html')
+#################################
+# Toggle Favorite/Like Function #
+#################################
 
-@app.route('/profile', methods=['GET', 'POST'])
-def profile():
-    if 'user' not in session:
-        return redirect(url_for('home'))
-    
-    if request.method == 'POST':
-        pass
-    
-    return render_template('profile.html')
+def sanitize_firebase_key(key):
+    """Sanitize a string to be used as a Firebase key"""
+    # Replace illegal characters with safe alternatives
+    sanitized = key.replace('.', '_DOT_')
+    sanitized = sanitized.replace(' ', '_SPACE_')
+    sanitized = sanitized.replace('/', '_SLASH_')
+    sanitized = sanitized.replace('[', '_LBRACKET_')
+    sanitized = sanitized.replace(']', '_RBRACKET_')
+    sanitized = sanitized.replace('#', '_HASH_')
+    sanitized = sanitized.replace('$', '_DOLLAR_')
+    return sanitized
 
+def unsanitize_firebase_key(key):
+    """Convert sanitized Firebase key back to original"""
+    original = key.replace('_DOT_', '.')
+    original = original.replace('_SPACE_', ' ')
+    original = original.replace('_SLASH_', '/')
+    original = original.replace('_LBRACKET_', '[')
+    original = original.replace('_RBRACKET_', ']')
+    original = original.replace('_HASH_', '#')
+    original = original.replace('_DOLLAR_', '$')
+    return original
+
+@app.route('/toggle-fave', methods=['POST'])
+def toggle_fave():
+    
+    """Toggle favorite status with enhanced error handling"""
+    
+    # Check authentication
+    if not session.get('authenticated') or not session.get('user'):
+        app.logger.warning("Unauthorized toggle-fave access")
+        return jsonify({"error": "User not logged in"}), 401
+    
+    if not realtime_db_ref:
+        app.logger.error("Database not available for toggle-fave")
+        return jsonify({"error": "Database temporarily unavailable"}), 503
+    
+    try:
+        user_id = session['user']
+        data = request.get_json()
+        
+        app.logger.info(f"Toggle fave request from user {user_id}: {data}")
+        
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+            
+        variant = data.get('variant')
+        liked = data.get('liked')
+
+        if not variant:
+            return jsonify({"error": "Variant required"}), 400
+
+        # Sanitize the variant for Firebase path
+        sanitized_variant = sanitize_firebase_key(variant)
+        app.logger.info(f"Processing variant: {variant} -> {sanitized_variant}")
+
+        # Try database operation with retry logic
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+                existing_fave = favorites_ref.child(sanitized_variant).get()
+
+                app.logger.info(f"Existing favorite check (attempt {attempt + 1}): {existing_fave}")
+
+                if liked:
+                    # Add to favorites
+                    favorite_data = {
+                        'variant': variant,
+                        'sanitized_key': sanitized_variant,
+                        'timestamp': int(time.time() * 1000),
+                        'dateAdded': datetime.utcnow().isoformat() + 'Z',
+                        'userEmail': session.get('email', 'Unknown')
+                    }
+                    
+                    favorites_ref.child(sanitized_variant).set(favorite_data)
+                    app.logger.info(f"Added favorite: {variant} for user {user_id}")
+                    
+                    return jsonify({
+                        "status": "added", 
+                        "variant": variant, 
+                        "liked": True,
+                        "message": "Added to favorites"
+                    }), 200
+                else:
+                    # Remove from favorites
+                    if existing_fave:
+                        favorites_ref.child(sanitized_variant).delete()
+                        app.logger.info(f"Removed favorite: {variant} for user {user_id}")
+                        
+                        return jsonify({
+                            "status": "removed", 
+                            "variant": variant, 
+                            "liked": False,
+                            "message": "Removed from favorites"
+                        }), 200
+                    else:
+                        return jsonify({
+                            "status": "not_found", 
+                            "variant": variant, 
+                            "liked": False,
+                            "message": "Favorite not found"
+                        }), 200
+                
+                break  # Success, exit retry loop
+                
+            except Exception as db_error:
+                app.logger.warning(f"Database operation attempt {attempt + 1} failed: {db_error}")
+                if attempt == max_retries - 1:
+                    return jsonify({"error": "Database operation failed"}), 503
+                else:
+                    time.sleep(0.5 * (attempt + 1))  # Progressive delay
+            
+    except Exception as e:
+        app.logger.error(f"Error toggling favorite: {e}")
+        return jsonify({"error": "Failed to toggle favorite"}), 500
+    
+    """Toggle favorite status using Firebase Realtime Database with enhanced error handling"""
+    
+    # FIXED: Better session check
+    if not session.get('authenticated') or not session.get('user'):
+        app.logger.warning(f"Unauthorized access to toggle-fave - session: {dict(session)}")
+        return jsonify({"error": "User not logged in"}), 401
+    
+    # FIXED: Better database availability check
+    if not realtime_db_ref:
+        app.logger.error("Database not available for toggle-fave")
+        return jsonify({"error": "Database temporarily unavailable"}), 503
+    
+    try:
+        user_id = session['user']
+        data = request.get_json()
+        
+        app.logger.info(f"Toggle fave request from user {user_id}: {data}")
+        
+        if not data:
+            app.logger.error("No JSON data received for toggle-fave")
+            return jsonify({"error": "No data provided"}), 400
+            
+        variant = data.get('variant')
+        liked = data.get('liked')
+
+        if not variant:
+            app.logger.error("No variant specified for toggle-fave")
+            return jsonify({"error": "Variant required"}), 400
+
+        # Sanitize the variant for Firebase path
+        sanitized_variant = sanitize_firebase_key(variant)
+        app.logger.info(f"Processing variant: {variant} -> {sanitized_variant}")
+
+        # FIXED: Add retry logic for database operations
+        max_retries = 3
+        
+        for attempt in range(max_retries):
+            try:
+                # Use Firebase Realtime Database
+                favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+                existing_fave = favorites_ref.child(sanitized_variant).get()
+
+                app.logger.info(f"Existing favorite check for {sanitized_variant} (attempt {attempt + 1}): {existing_fave}")
+
+                if liked:
+                    # Add to favorites
+                    favorite_data = {
+                        'variant': variant,  # Store original variant name
+                        'sanitized_key': sanitized_variant,  # Store sanitized key for reference
+                        'timestamp': int(time.time() * 1000),
+                        'dateAdded': datetime.utcnow().isoformat() + 'Z',
+                        'userEmail': session.get('email', 'Unknown')
+                    }
+                    
+                    # Set the favorite data
+                    favorites_ref.child(sanitized_variant).set(favorite_data)
+                    app.logger.info(f"✅ Added favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
+                    
+                    return jsonify({
+                        "status": "added", 
+                        "variant": variant, 
+                        "liked": True,
+                        "message": "Added to favorites"
+                    }), 200
+                else:
+                    # Remove from favorites
+                    if existing_fave:
+                        favorites_ref.child(sanitized_variant).delete()
+                        app.logger.info(f"✅ Removed favorite: {variant} (key: {sanitized_variant}) for user {user_id}")
+                        
+                        return jsonify({
+                            "status": "removed", 
+                            "variant": variant, 
+                            "liked": False,
+                            "message": "Removed from favorites"
+                        }), 200
+                    else:
+                        app.logger.info(f"Favorite not found for removal: {variant}")
+                        return jsonify({
+                            "status": "not_found", 
+                            "variant": variant, 
+                            "liked": False,
+                            "message": "Favorite not found"
+                        }), 200
+                
+                break  # Success, exit retry loop
+                
+            except Exception as db_error:
+                app.logger.warning(f"Database operation attempt {attempt + 1} failed: {db_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    app.logger.error(f"All database operation attempts failed for user {user_id}")
+                    return jsonify({"error": "Database operation failed"}), 503
+                else:
+                    time.sleep(0.5)  # Wait before retry
+            
+    except Exception as e:
+        app.logger.error(f"Error toggling favorite: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
 @app.route('/get-faves', methods=['POST'])
 def get_faves():
-    if not db:
+    """Get user's favorites with enhanced error handling"""
+    
+    # Check authentication
+    if not session.get('authenticated') or not session.get('user'):
+        app.logger.warning("Unauthorized favorites access")
+        return jsonify([]), 200  # Return empty array for unauthenticated users
+    
+    if not realtime_db_ref:
+        app.logger.error("Database not available for favorites")
+        return jsonify([]), 200  # Return empty array instead of error
+    
+    try:
+        user_id = session['user']
+        app.logger.info(f"Getting favorites for user: {user_id}")
+        
+        # Try to get favorites with timeout handling
+        try:
+            favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+            favorites_data = favorites_ref.get()
+            
+            app.logger.info(f"Raw favorites data: {favorites_data}")
+            
+        except Exception as db_error:
+            app.logger.error(f"Database query failed for favorites: {db_error}")
+            return jsonify([]), 200  # Return empty array on database errors
+        
+        # Process favorites data
+        if not favorites_data:
+            app.logger.info(f"No favorites found for user {user_id}")
+            return jsonify([]), 200
+
+        # Convert to list format
+        favorite_variants = []
+        for sanitized_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                # Use the original variant name from the stored data
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
+                
+                complete_variant_data = {
+                    'variant': original_variant,
+                    'sanitized_key': sanitized_key,
+                    'timestamp': variant_data.get('timestamp', int(time.time() * 1000)),
+                    'dateAdded': variant_data.get('dateAdded', datetime.utcnow().isoformat() + 'Z'),
+                    'userEmail': variant_data.get('userEmail', session.get('email', 'Unknown'))
+                }
+                
+                favorite_variants.append(complete_variant_data)
+
+        app.logger.info(f"Successfully retrieved {len(favorite_variants)} favorites for user {user_id}")
+        
+        # Sort by timestamp (newest first)
+        favorite_variants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
+        return jsonify(favorite_variants), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error retrieving favorites: {e}")
+        return jsonify([]), 200  # Return empty array instead of error
+    """Get user's favorites using Firebase Realtime Database with enhanced error handling"""
+    
+    # FIXED: Better session check - check for authenticated flag
+    if not session.get('authenticated') or not session.get('user'):
+        app.logger.warning(f"Unauthorized access to favorites - session: {dict(session)}")
+        return jsonify([]), 200  # Return empty array instead of error
+    
+    # FIXED: Better database availability check
+    if not realtime_db_ref:
+        app.logger.error("Database not available for get-faves")
+        return jsonify([]), 200  # Return empty array instead of error
+    
+    try:
+        user_id = session['user']
+        app.logger.info(f"Getting favorites for user: {user_id}")
+        
+        # FIXED: Add timeout and retry logic for database queries
+        max_retries = 3
+        retry_delay = 0.5
+        
+        for attempt in range(max_retries):
+            try:
+                # Get favorites from Firebase Realtime Database
+                favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+                favorites_data = favorites_ref.get()
+                
+                app.logger.info(f"Raw favorites data for {user_id} (attempt {attempt + 1}): {favorites_data}")
+                break  # Success, exit retry loop
+                
+            except Exception as query_error:
+                app.logger.warning(f"Database query attempt {attempt + 1} failed: {query_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    app.logger.error(f"All database query attempts failed for user {user_id}")
+                    return jsonify([]), 200  # Return empty list
+                else:
+                    # Wait before retry
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+
+        # Process favorites data
+        if not favorites_data:
+            app.logger.info(f"No favorites found for user {user_id}")
+            return jsonify([]), 200
+
+        # Convert to list format
+        favorite_variants = []
+        for sanitized_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                # Use the original variant name from the stored data
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
+                
+                # Ensure we have the complete variant data
+                complete_variant_data = {
+                    'variant': original_variant,
+                    'sanitized_key': sanitized_key,
+                    'timestamp': variant_data.get('timestamp', int(time.time() * 1000)),
+                    'dateAdded': variant_data.get('dateAdded', datetime.utcnow().isoformat() + 'Z'),
+                    'userEmail': variant_data.get('userEmail', session.get('email', 'Unknown'))
+                }
+                
+                favorite_variants.append(complete_variant_data)
+
+        app.logger.info(f"✅ Retrieved {len(favorite_variants)} favorites for user {user_id}")
+        
+        # Sort by timestamp (newest first)
+        favorite_variants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
+        return jsonify(favorite_variants), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error retrieving favorites: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        # Return empty list instead of error to prevent frontend crashes
+        return jsonify([]), 200
+    """Get user's favorites using Firebase Realtime Database with enhanced error handling"""
+    
+    # FIXED: Better session check - check for authenticated flag
+    if not session.get('authenticated') or not session.get('user'):
+        app.logger.warning(f"Unauthorized access to favorites - session: {dict(session)}")
+        return jsonify({"error": "Not logged in", "favorites": []}), 200  # Return empty instead of 401
+    
+    # FIXED: Better database availability check
+    if not realtime_db_ref:
+        app.logger.error("Database not available for get-faves")
+        return jsonify({"error": "Database temporarily unavailable", "favorites": []}), 200
+    
+    try:
+        user_id = session['user']
+        app.logger.info(f"Getting favorites for user: {user_id}")
+        
+        # FIXED: Add timeout and retry logic for database queries
+        max_retries = 3
+        retry_delay = 0.5
+        
+        for attempt in range(max_retries):
+            try:
+                # Get favorites from Firebase Realtime Database
+                favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+                favorites_data = favorites_ref.get()
+                
+                app.logger.info(f"Raw favorites data for {user_id} (attempt {attempt + 1}): {favorites_data}")
+                break  # Success, exit retry loop
+                
+            except Exception as query_error:
+                app.logger.warning(f"Database query attempt {attempt + 1} failed: {query_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    app.logger.error(f"All database query attempts failed for user {user_id}")
+                    return jsonify({"favorites": []}), 200  # Return empty list
+                else:
+                    # Wait before retry
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+
+        # Process favorites data
+        if not favorites_data:
+            app.logger.info(f"No favorites found for user {user_id}")
+            return jsonify([]), 200
+
+        # Convert to list format
+        favorite_variants = []
+        for sanitized_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                # Use the original variant name from the stored data
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
+                
+                # Ensure we have the complete variant data
+                complete_variant_data = {
+                    'variant': original_variant,
+                    'sanitized_key': sanitized_key,
+                    'timestamp': variant_data.get('timestamp', int(time.time() * 1000)),
+                    'dateAdded': variant_data.get('dateAdded', datetime.utcnow().isoformat() + 'Z'),
+                    'userEmail': variant_data.get('userEmail', session.get('email', 'Unknown'))
+                }
+                
+                favorite_variants.append(complete_variant_data)
+
+        app.logger.info(f"✅ Retrieved {len(favorite_variants)} favorites for user {user_id}")
+        
+        # Sort by timestamp (newest first)
+        favorite_variants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
+        return jsonify(favorite_variants), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error retrieving favorites: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        # Return empty list instead of error to prevent frontend crashes
+        return jsonify([]), 200
+
+    """Get user's favorites using Firebase Realtime Database with enhanced error handling"""
+    if 'user' not in session:
+        app.logger.warning("Unauthorized access to favorites")
+        return jsonify({"error": "Not logged in"}), 401
+    
+    # FIXED: Better database availability check
+    if not realtime_db_ref:
+        app.logger.error("Database not available for get-faves")
+        return jsonify({"error": "Database temporarily unavailable", "favorites": []}), 200  # Return empty list instead of error
+    
+    try:
+        user_id = session['user']
+        app.logger.info(f"Getting favorites for user: {user_id}")
+        
+        # FIXED: Add timeout and retry logic for database queries
+        max_retries = 3
+        retry_delay = 0.5
+        
+        for attempt in range(max_retries):
+            try:
+                # Get favorites from Firebase Realtime Database
+                favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+                favorites_data = favorites_ref.get()
+                
+                app.logger.info(f"Raw favorites data for {user_id} (attempt {attempt + 1}): {favorites_data}")
+                break  # Success, exit retry loop
+                
+            except Exception as query_error:
+                app.logger.warning(f"Database query attempt {attempt + 1} failed: {query_error}")
+                if attempt == max_retries - 1:
+                    # Last attempt failed
+                    app.logger.error(f"All database query attempts failed for user {user_id}")
+                    return jsonify({"error": "Database query failed", "favorites": []}), 200  # Return empty list
+                else:
+                    # Wait before retry
+                    time.sleep(retry_delay)
+                    retry_delay *= 2  # Exponential backoff
+
+        # Process favorites data
+        if not favorites_data:
+            app.logger.info(f"No favorites found for user {user_id}")
+            return jsonify([]), 200
+
+        # Convert to list format
+        favorite_variants = []
+        for sanitized_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                # Use the original variant name from the stored data
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
+                
+                # Ensure we have the complete variant data
+                complete_variant_data = {
+                    'variant': original_variant,
+                    'sanitized_key': sanitized_key,
+                    'timestamp': variant_data.get('timestamp', int(time.time() * 1000)),
+                    'dateAdded': variant_data.get('dateAdded', datetime.utcnow().isoformat() + 'Z'),
+                    'userEmail': variant_data.get('userEmail', session.get('email', 'Unknown'))
+                }
+                
+                favorite_variants.append(complete_variant_data)
+
+        app.logger.info(f"✅ Retrieved {len(favorite_variants)} favorites for user {user_id}")
+        
+        # Sort by timestamp (newest first)
+        favorite_variants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
+        return jsonify(favorite_variants), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error retrieving favorites: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        # FIXED: Return empty list instead of error to prevent frontend crashes
+        return jsonify({"error": f"Failed to retrieve favorites: {str(e)}", "favorites": []}), 200
+    """Get user's favorites using Firebase Realtime Database"""
+    if 'user' not in session:
+        app.logger.warning("Unauthorized access to favorites")
+        return jsonify({"error": "Not logged in"}), 401
+    
+    if not realtime_db_ref:
         app.logger.error("Database not available for get-faves")
         return jsonify({"error": "Database not available"}), 500
     
-    if 'user' in session:
+    try:
         user_id = session['user']
+        app.logger.info(f"Getting favorites for user: {user_id}")
+        
+        # Get favorites from Firebase Realtime Database
+        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+        favorites_data = favorites_ref.get() or {}
+        
+        app.logger.info(f"Raw favorites data for {user_id}: {favorites_data}")
+
+        # Convert to list format
+        favorite_variants = []
+        for sanitized_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                # Use the original variant name from the stored data
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
+                
+                # Ensure we have the complete variant data
+                complete_variant_data = {
+                    'variant': original_variant,
+                    'sanitized_key': sanitized_key,
+                    'timestamp': variant_data.get('timestamp', int(time.time() * 1000)),
+                    'dateAdded': variant_data.get('dateAdded', datetime.utcnow().isoformat() + 'Z'),
+                    'userEmail': variant_data.get('userEmail', session.get('email', 'Unknown'))
+                }
+                
+                favorite_variants.append(complete_variant_data)
+
+        app.logger.info(f"✅ Retrieved {len(favorite_variants)} favorites for user {user_id}")
+        
+        # Sort by timestamp (newest first)
+        favorite_variants.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
+        return jsonify(favorite_variants), 200
+        
+    except Exception as e:
+        app.logger.error(f"Error retrieving favorites: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to retrieve favorites: {str(e)}"}), 500
+    
+def initialize_firebase_safely():
+    """Initialize Firebase with comprehensive error handling"""
+    global realtime_db_ref, firestore_db
+    
+    try:
+        app.logger.info("🔄 Starting enhanced Firebase initialization...")
+        
+        # Load service account credentials
+        if 'SERVICE_ACCOUNT_KEY_JSON' in os.environ:
+            app.logger.info("📱 Loading credentials from environment variable")
+            service_account = json.loads(os.environ['SERVICE_ACCOUNT_KEY_JSON'])
+            cred = credentials.Certificate(service_account)
+        else:
+            app.logger.info("📁 Loading credentials from file")
+            cred = credentials.Certificate('serviceAccountKey.json')
+        
+        app.logger.info("✅ Firebase credentials loaded successfully")
+        
+        # Initialize Firebase app with database URL
+        database_url = 'https://ridematch-db867-default-rtdb.asia-southeast1.firebasedatabase.app/'
+        
+        firebase_admin.initialize_app(cred, {
+            'databaseURL': database_url
+        })
+        
+        app.logger.info("✅ Firebase app initialized successfully")
+        
+        # Get database reference
+        realtime_db_ref = realtime_db.reference()
+        app.logger.info("✅ Realtime database reference obtained")
+        
+        # Test database connection with a simple operation
         try:
-            favorites_ref = db.collection('users').document(user_id).collection('favorites')
-            favorites = favorites_ref.stream()
+            # Try to read from a test path (this should work with proper permissions)
+            test_ref = realtime_db_ref.child('test_connection')
+            test_value = {'timestamp': int(time.time()), 'status': 'testing'}
+            
+            # Try to write test data
+            test_ref.set(test_value)
+            app.logger.info("✅ Database write test successful")
+            
+            # Try to read it back
+            read_result = test_ref.get()
+            app.logger.info(f"✅ Database read test successful: {read_result}")
+            
+            # Clean up test data
+            test_ref.delete()
+            app.logger.info("✅ Database cleanup successful")
+            
+        except Exception as db_test_error:
+            app.logger.error(f"❌ Database connection test failed: {db_test_error}")
+            # Don't fail completely, but log the issue
+            realtime_db_ref = None
+        
+        # Initialize Firestore (optional)
+        try:
+            firestore_db = firestore.client()
+            app.logger.info("✅ Firestore client initialized")
+        except Exception as firestore_error:
+            app.logger.warning(f"⚠️ Firestore initialization failed: {firestore_error}")
+            firestore_db = None
+        
+        app.logger.info("🎉 Firebase initialization completed successfully")
+        return True
+        
+    except Exception as e:
+        app.logger.error(f"❌ Firebase initialization failed: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        
+        realtime_db_ref = None
+        firestore_db = None
+        return False
 
-            favorite_variants = []
-            for favorite in favorites:
-                favorite_variants.append(favorite.to_dict())
-
-            app.logger.info(f"Retrieved {len(favorite_variants)} favorites for user {user_id}")
-            return jsonify(favorite_variants)
-        except Exception as e:
-            app.logger.error(f"Error retrieving favorites: {e}")
-            return jsonify({"error": f"Failed to retrieve favorites: {str(e)}"}), 500
-    else:
-        app.logger.warning("Unauthorized access to favorites")
-        return jsonify({"error": "Not logged in"}), 401
+@app.route('/debug/favorites')
+def debug_favorites():
+    """Debug endpoint to check favorites data"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        user_id = session.get('user')
+        if not user_id:
+            return jsonify({"error": "No user in session"}), 401
+        
+        # Get favorites from database
+        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+        favorites_data = favorites_ref.get() or {}
+        
+        # Get all favorites for debugging
+        all_favorites_ref = realtime_db_ref.child('favorites')
+        all_favorites = all_favorites_ref.get() or {}
+        
+        return jsonify({
+            "session_info": {
+                "user": session.get('user'),
+                "email": session.get('email'),
+                "authenticated": session.get('authenticated')
+            },
+            "user_favorites": {
+                "count": len(favorites_data),
+                "data": favorites_data
+            },
+            "all_users_with_favorites": {
+                "users": list(all_favorites.keys()),
+                "total_count": len(all_favorites)
+            }
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in favorites debug: {e}")
+        return jsonify({"error": str(e)}), 500
+    
+#########################
+# Filter Function Logic #
+#########################
 
 @app.route('/get_cars', methods=['GET'])
 def get_cars():
@@ -343,13 +3251,14 @@ def get_cars():
         drive_train = request.args.get("drive_train", "").strip()
         transmission = request.args.get("transmission", "").strip()
         fuel_type = request.args.get("fuel_type", "").strip()
+        year = request.args.get("year", "").strip()  # NEW: Year filter parameter
         min_hp = request.args.get("min_hp", type=int, default=50)
         min_cargo = request.args.get("min_cargo", type=int, default=100)
-        max_price = request.args.get("max_price", type=int, default=3000000)
+        max_price = request.args.get("max_price", type=int, default=25000000)
         min_ground_clearance = request.args.get("min_ground_clearance", type=float, default=13.3)
         seating = request.args.get("seating", type=int, default=None)
 
-        app.logger.info(f"Filter parameters: brand={brand}, model={model}, body_type={body_type}")
+        app.logger.info(f"Filter parameters: brand={brand}, model={model}, body_type={body_type}, year={year}")  # NEW: Include year in logging
         app.logger.info(f"Numeric filters: min_hp={min_hp}, min_cargo={min_cargo}, max_price={max_price}, min_ground_clearance={min_ground_clearance}, seating={seating}")
 
         filtered_df = df.copy()
@@ -361,12 +3270,14 @@ def get_cars():
         app.logger.info(f"Cargo_space dtype: {filtered_df['Cargo_space'].dtype}")
         app.logger.info(f"Ground_Clearance dtype: {filtered_df['Ground_Clearance'].dtype}")
         app.logger.info(f"Price dtype: {filtered_df['Price'].dtype}")
+        app.logger.info(f"Year dtype: {filtered_df['Year'].dtype}")  # NEW: Log year data type
         
         # Sample values
         app.logger.info(f"Sample Horsepower values: {filtered_df['Horsepower'].head().tolist()}")
         app.logger.info(f"Sample Cargo_space values: {filtered_df['Cargo_space'].head().tolist()}")
         app.logger.info(f"Sample Ground_Clearance values: {filtered_df['Ground_Clearance'].head().tolist()}")
         app.logger.info(f"Sample Price values: {filtered_df['Price'].head().tolist()}")
+        app.logger.info(f"Sample Year values: {filtered_df['Year'].head().tolist()}")  # NEW: Log year sample values
 
         # Apply filters step by step
         if brand and brand.lower() not in ["any", "all brands"]:
@@ -404,6 +3315,18 @@ def get_cars():
             app.logger.info(f"Available fuel types: {filtered_df['Fuel_Type'].unique().tolist()}")
             filtered_df = filtered_df[filtered_df["Fuel_Type"].str.lower().str.contains(fuel_type.lower(), na=False)]
             app.logger.info(f"After fuel type filter: {len(filtered_df)} cars")
+
+        # NEW: Apply year filter
+        if year:
+            app.logger.info(f"Applying year filter: {year}")
+            app.logger.info(f"Available years: {filtered_df['Year'].unique().tolist()}")
+            
+            try:
+                year_int = int(year)
+                filtered_df = filtered_df[filtered_df["Year"] == year_int]
+                app.logger.info(f"After year filter: {len(filtered_df)} cars")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
 
         # Apply numeric filters
         app.logger.info("Applying numeric filters...")
@@ -455,6 +3378,35 @@ def get_cars():
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         return jsonify({"error": f"Failed to filter cars: {str(e)}"}), 500
 
+# NEW: Route to get all available years
+@app.route('/get_years', methods=['GET'])
+def get_years():
+    if df.empty:
+        app.logger.warning("No car data available for years")
+        return jsonify([])
+    
+    try:
+        # Get unique years and convert to list
+        years = df["Year"].dropna().unique().tolist()
+        
+        # Convert to integers and remove any invalid years
+        valid_years = []
+        for year in years:
+            try:
+                year_int = int(year)
+                if 1900 <= year_int <= 2030:  # Reasonable year range
+                    valid_years.append(year_int)
+            except (ValueError, TypeError):
+                continue
+        
+        app.logger.info(f"Retrieved {len(valid_years)} valid years")
+        return jsonify(valid_years)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting years: {e}")
+        return jsonify([])
+
+# Keep your existing routes as they are:
 @app.route('/get_all_models', methods=['GET'])
 def get_all_models():
     if df.empty:
@@ -505,142 +3457,2850 @@ def get_variants():
     except Exception as e:
         app.logger.error(f"Error getting variants for model {model}: {e}")
         return jsonify([])
-
-def find_colors(model):
-    try:
-        IMAGE_FOLDER = os.path.join(app.static_folder, "resources")
-        if not os.path.exists(IMAGE_FOLDER):
-            app.logger.warning(f"Image folder not found: {IMAGE_FOLDER}")
-            return []
-        
-        model = ''.join(e for e in model if e.isalnum())
-        colors = []
-        for filename in os.listdir(IMAGE_FOLDER):
-            if filename.lower().startswith(model.lower()) and '_' in filename:
-                color = filename.split('_')[1].split('.')[0]
-                image_path = find_car_image(filename.split('.')[0])
-                colors.append({"color": color, "image_path": image_path})
-        
-        app.logger.info(f"Found {len(colors)} colors for model {model}")
-        return colors
-    except Exception as e:
-        app.logger.error(f"Error finding colors for model {model}: {e}")
-        return []
-
-@app.route('/get_colors', methods=['GET'])
-def get_colors():
+    
+@app.route('/get_variant_years', methods=['GET'])
+def get_variant_years():
+    """Get available years for a specific brand, model, and variant combination"""
+    if df.empty:
+        app.logger.warning("No car data available for variant years")
+        return jsonify([])
+    
+    brand = request.args.get("brand", "").strip()
     model = request.args.get("model", "").strip()
-    colors = find_colors(model)
-    return jsonify(colors)
+    variant = request.args.get("variant", "").strip()
+    
+    if not brand or not model or not variant:
+        app.logger.warning("Missing parameters for variant years lookup")
+        return jsonify([])
 
-def find_car_image(model):
     try:
-        IMAGE_FOLDER = os.path.join(app.static_folder, "resources")
-        if not os.path.exists(IMAGE_FOLDER):
-            app.logger.warning(f"Image folder not found: {IMAGE_FOLDER}")
-            return "/static/resources/tesr.png"
+        app.logger.info(f"Getting years for brand: {brand}, model: {model}, variant: {variant}")
         
-        model = ''.join(e for e in model if e.isalnum() or e == '_')
-        for filename in os.listdir(IMAGE_FOLDER):
-            if filename.lower().startswith(model.lower()):
-                return f"/static/resources/{filename}"
+        # Filter by brand, model, and variant, then get unique years
+        filtered_df = df[
+            (df["Brand"].str.lower() == brand.lower()) &
+            (df["Model"].str.lower() == model.lower()) &
+            (df["Variant"].str.lower() == variant.lower())
+        ]
         
-        app.logger.info(f"No image found for model {model}, using default")
-        return "/static/resources/tesr.png"
+        years = filtered_df["Year"].dropna().unique().tolist()
+        
+        # Convert to integers and remove any invalid years
+        valid_years = []
+        for year in years:
+            try:
+                year_int = int(year)
+                if 1900 <= year_int <= 2030:  # Reasonable year range
+                    valid_years.append(year_int)
+            except (ValueError, TypeError):
+                continue
+        
+        app.logger.info(f"Retrieved {len(valid_years)} valid years for {variant}")
+        return jsonify(valid_years)
+        
     except Exception as e:
-        app.logger.error(f"Error finding image for model {model}: {e}")
-        return "/static/resources/tesr.png"
+        app.logger.error(f"Error getting variant years: {e}")
+        return jsonify([])
+    
+###########################
+# Pull Data from CSV file #
+###########################
 
 @app.route('/get_specs', methods=['GET'])
 def get_specs():
+    """Get car specifications with enhanced image handling"""
     if df.empty:
         app.logger.error("Car data not available for specs")
         return jsonify({"error": "Car data not available"}), 500
     
     variant = request.args.get("variant", "").strip()
+    year = request.args.get("year", "").strip()
+    
     if not variant:
         app.logger.warning("No variant specified for specs lookup")
-        return jsonify({}), 400
+        return jsonify({"error": "Variant parameter required"}), 400
 
     try:
-        specs_df = df[df["Variant"].str.lower() == variant.lower()]
-        if specs_df.empty:
-            app.logger.warning(f"Variant not found: {variant}")
-            return jsonify({"error": "Variant not found"}), 404
+        app.logger.info(f"Looking up specs for variant: {variant}, year: {year}")
         
-        specs = specs_df.iloc[0]
-        image_path = find_car_image(str(specs["Model"]))
+        # Build query conditions
+        query_conditions = [df["Variant"].str.lower() == variant.lower()]
         
-        car_specs = {
-            "Brand": str(specs["Brand"]),
-            "Model": str(specs["Model"]),
-            "Engine": str(specs["Engine"]),
-            "Horsepower": int(specs["Horsepower"]),
-            "DriveTrain": str(specs["Drive_Train"]),
-            "Transmission": str(specs["Transmission"]),
-            "BodyType": str(specs["Body_Type"]),
-            "FuelType": str(specs["Fuel_Type"]),
-            "GroundClearance": float(specs["Ground_Clearance"]),
-            "SeatingCapacity": int(specs["Seating_Capacity"]),
-            "CargoSpace": int(specs["Cargo_space"]),
-            "Price": float(specs["Price"]),
-            "Image": image_path
+        # Add year condition if provided
+        if year:
+            try:
+                year_int = int(year)
+                query_conditions.append(df["Year"] == year_int)
+                app.logger.info(f"Including year filter: {year_int}")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
+                return jsonify({"error": "Invalid year format"}), 400
+        
+        # Combine all conditions
+        combined_condition = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_condition = combined_condition & condition
+        
+        car_data = df[combined_condition]
+        
+        if car_data.empty:
+            app.logger.warning(f"No car found for variant: {variant}, year: {year}")
+            return jsonify({"error": f"Variant '{variant}' with year '{year}' not found"}), 404
+        
+        # Get the first matching car
+        car = car_data.iloc[0]
+        app.logger.info(f"Found car data for variant: {variant}, year: {year}")
+        
+        # Helper functions for safe data extraction
+        def safe_get_int(value, default=0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return int(float(value))
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_float(value, default=0.0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_str(value, default=""):
+            try:
+                if pd.isna(value) or value is None:
+                    return default
+                return str(value).strip()
+            except (ValueError, TypeError):
+                return default
+        
+        # Extract basic info for image finding
+        brand = safe_get_str(car.get("Brand", ""))
+        model = safe_get_str(car.get("Model", ""))
+        
+        # UPDATED: Use enhanced image finding with None fallback
+        image_url = find_car_image(model, brand, variant)
+        
+        # If backend returns None, frontend will handle fallbacks
+        if image_url is None:
+            app.logger.info(f"⚠️ No backend image found for {variant}, frontend will handle fallback")
+        
+        # Build specs dictionary
+        specs = {
+            # Basic Information
+            "Brand": brand,
+            "Model": model,
+            "BodyType": safe_get_str(car.get("Body_Type", "")),
+            "Variant": safe_get_str(car.get("Variant", "")),
+            "Year": safe_get_int(car.get("Year", 0)),
+            
+            # Performance Specifications
+            "Horsepower": safe_get_int(car.get("Horsepower", 0)),
+            "Engine": safe_get_str(car.get("Engine", "")),
+            "Transmission": safe_get_str(car.get("Transmission", "")),
+            "DriveTrain": safe_get_str(car.get("Drive_Train", "")),
+            "FuelType": safe_get_str(car.get("Fuel_Type", "")),
+            
+            # Utility Specifications
+            "GroundClearance": safe_get_float(car.get("Ground_Clearance", 0)),
+            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),
+            "SeatingCapacity": safe_get_int(car.get("Seating_Capacity", 0)),
+            
+            # Pricing
+            "Price": safe_get_float(car.get("Price", 0)),
+            
+            # UPDATED: Image handling - let frontend handle None values
+            "Image": image_url,
+            
+            # Official website link
+            "OfficialLink": safe_get_str(car.get("Link", "")) or safe_get_str(car.get("Official_Link", "")) or ""
         }
-
-        app.logger.info(f"Retrieved specs for variant: {variant}")
-        return jsonify(car_specs)
+        
+        app.logger.info(f"✅ Specs prepared for {variant}: brand={brand}, model={model}, image={image_url}")
+        return jsonify(specs)
         
     except Exception as e:
-        app.logger.error(f"Error getting specs for variant {variant}: {e}")
-        return jsonify({"error": f"Failed to get specs: {str(e)}"}), 500
+        app.logger.error(f"Error getting specs for variant {variant}, year {year}: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500
 
-@app.route('/toggle-fave', methods=['POST'])
-def toggle_fave():
-    if not db:
-        app.logger.error("Database not available for toggle-fave")
-        return jsonify({"error": "Database not available"}), 500
+    if df.empty:
+        app.logger.error("Car data not available for specs")
+        return jsonify({"error": "Car data not available"}), 500
     
-    if 'user' in session:
-        user_id = session['user']
+    variant = request.args.get("variant", "").strip()
+    year = request.args.get("year", "").strip()
+    
+    if not variant:
+        app.logger.warning("No variant specified for specs lookup")
+        return jsonify({"error": "Variant parameter required"}), 400
+
+    try:
+        app.logger.info(f"Looking up specs for variant: {variant}, year: {year}")
+        
+        # Build query conditions
+        query_conditions = [df["Variant"].str.lower() == variant.lower()]
+        
+        # Add year condition if provided
+        if year:
+            try:
+                year_int = int(year)
+                query_conditions.append(df["Year"] == year_int)
+                app.logger.info(f"Including year filter: {year_int}")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
+                return jsonify({"error": "Invalid year format"}), 400
+        
+        # Combine all conditions
+        combined_condition = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_condition = combined_condition & condition
+        
+        car_data = df[combined_condition]
+        
+        if car_data.empty:
+            app.logger.warning(f"No car found for variant: {variant}, year: {year}")
+            return jsonify({"error": f"Variant '{variant}' with year '{year}' not found"}), 404
+        
+        # Get the first matching car
+        car = car_data.iloc[0]
+        app.logger.info(f"Found car data for variant: {variant}, year: {year}")
+        
+        # Helper functions for safe data extraction
+        def safe_get_int(value, default=0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return int(float(value))
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_float(value, default=0.0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_str(value, default=""):
+            try:
+                if pd.isna(value) or value is None:
+                    return default
+                return str(value).strip()
+            except (ValueError, TypeError):
+                return default
+        
+        # Extract basic info for image finding
+        brand = safe_get_str(car.get("Brand", ""))
+        model = safe_get_str(car.get("Model", ""))
+        
+        # UPDATED: Enhanced image finding with brand verification
+        image_url = find_car_image(model, brand, variant)
+        
+        # Build specs dictionary
+        specs = {
+            # Basic Information
+            "Brand": brand,
+            "Model": model,
+            "BodyType": safe_get_str(car.get("Body_Type", "")),
+            "Variant": safe_get_str(car.get("Variant", "")),
+            "Year": safe_get_int(car.get("Year", 0)),
+            
+            # Performance Specifications
+            "Horsepower": safe_get_int(car.get("Horsepower", 0)),
+            "Engine": safe_get_str(car.get("Engine", "")),
+            "Transmission": safe_get_str(car.get("Transmission", "")),
+            "DriveTrain": safe_get_str(car.get("Drive_Train", "")),
+            "FuelType": safe_get_str(car.get("Fuel_Type", "")),
+            
+            # Utility Specifications
+            "GroundClearance": safe_get_float(car.get("Ground_Clearance", 0)),
+            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),
+            "SeatingCapacity": safe_get_int(car.get("Seating_Capacity", 0)),
+            
+            # Pricing
+            "Price": safe_get_float(car.get("Price", 0)),
+            
+            # UPDATED: Better image handling with verification
+            "Image": image_url,
+            
+            # Official website link
+            "OfficialLink": safe_get_str(car.get("Link", "")) or safe_get_str(car.get("Official_Link", "")) or ""
+        }
+        
+        app.logger.info(f"✅ Specs prepared for {variant}: brand={brand}, model={model}, image={image_url}")
+        return jsonify(specs)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting specs for variant {variant}, year {year}: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500
+    if df.empty:
+        app.logger.error("Car data not available for specs")
+        return jsonify({"error": "Car data not available"}), 500
+    
+    variant = request.args.get("variant", "").strip()
+    year = request.args.get("year", "").strip()
+    
+    if not variant:
+        app.logger.warning("No variant specified for specs lookup")
+        return jsonify({"error": "Variant parameter required"}), 400
+
+    try:
+        app.logger.info(f"Looking up specs for variant: {variant}, year: {year}")
+        
+        # Build query conditions
+        query_conditions = [df["Variant"].str.lower() == variant.lower()]
+        
+        # Add year condition if provided
+        if year:
+            try:
+                year_int = int(year)
+                query_conditions.append(df["Year"] == year_int)
+                app.logger.info(f"Including year filter: {year_int}")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
+                return jsonify({"error": "Invalid year format"}), 400
+        
+        # Combine all conditions
+        combined_condition = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_condition = combined_condition & condition
+        
+        car_data = df[combined_condition]
+        
+        if car_data.empty:
+            app.logger.warning(f"No car found for variant: {variant}, year: {year}")
+            return jsonify({"error": f"Variant '{variant}' with year '{year}' not found"}), 404
+        
+        # Get the first matching car
+        car = car_data.iloc[0]
+        app.logger.info(f"Found car data for variant: {variant}, year: {year}")
+        
+        # Helper functions for safe data extraction
+        def safe_get_int(value, default=0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return int(float(value))
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_float(value, default=0.0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_str(value, default=""):
+            try:
+                if pd.isna(value) or value is None:
+                    return default
+                return str(value).strip()
+            except (ValueError, TypeError):
+                return default
+        
+        # Extract basic info for image finding
+        brand = safe_get_str(car.get("Brand", ""))
+        model = safe_get_str(car.get("Model", ""))
+        
+        # ENHANCED: Better image finding with multiple parameters
+        image_url = find_car_image(model, brand, variant)
+        
+        # Build specs dictionary
+        specs = {
+            # Basic Information
+            "Brand": brand,
+            "Model": model,
+            "BodyType": safe_get_str(car.get("Body_Type", "")),
+            "Variant": safe_get_str(car.get("Variant", "")),
+            "Year": safe_get_int(car.get("Year", 0)),
+            
+            # Performance Specifications
+            "Horsepower": safe_get_int(car.get("Horsepower", 0)),
+            "Engine": safe_get_str(car.get("Engine", "")),
+            "Transmission": safe_get_str(car.get("Transmission", "")),
+            "DriveTrain": safe_get_str(car.get("Drive_Train", "")),
+            "FuelType": safe_get_str(car.get("Fuel_Type", "")),
+            
+            # Utility Specifications
+            "GroundClearance": safe_get_float(car.get("Ground_Clearance", 0)),
+            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),
+            "SeatingCapacity": safe_get_int(car.get("Seating_Capacity", 0)),
+            
+            # Pricing
+            "Price": safe_get_float(car.get("Price", 0)),
+            
+            # ENHANCED: Better image handling
+            "Image": image_url,
+            
+            # Official website link
+            "OfficialLink": safe_get_str(car.get("Link", "")) or safe_get_str(car.get("Official_Link", "")) or ""
+        }
+        
+        app.logger.info(f"✅ Specs prepared for {variant}: image={image_url}")
+        return jsonify(specs)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting specs for variant {variant}, year {year}: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500
+
+    if df.empty:
+        app.logger.error("Car data not available for specs")
+        return jsonify({"error": "Car data not available"}), 500
+    
+    variant = request.args.get("variant", "").strip()
+    year = request.args.get("year", "").strip()
+    
+    if not variant:
+        app.logger.warning("No variant specified for specs lookup")
+        return jsonify({"error": "Variant parameter required"}), 400
+
+    try:
+        app.logger.info(f"Looking up specs for variant: {variant}, year: {year}")
+        
+        # Build query conditions
+        query_conditions = [df["Variant"].str.lower() == variant.lower()]
+        
+        # Add year condition if provided
+        if year:
+            try:
+                year_int = int(year)
+                query_conditions.append(df["Year"] == year_int)
+                app.logger.info(f"Including year filter: {year_int}")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
+                return jsonify({"error": "Invalid year format"}), 400
+        
+        # Combine all conditions
+        combined_condition = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_condition = combined_condition & condition
+        
+        car_data = df[combined_condition]
+        
+        if car_data.empty:
+            app.logger.warning(f"No car found for variant: {variant}, year: {year}")
+            available_variants = df["Variant"].unique().tolist()[:10]
+            app.logger.info(f"Available variants (sample): {available_variants}")
+            return jsonify({"error": f"Variant '{variant}' with year '{year}' not found"}), 404
+        
+        # Get the first matching car (in case of duplicates)
+        car = car_data.iloc[0]
+        app.logger.info(f"Found car data for variant: {variant}, year: {year}")
+        
+        # Build specs dictionary (same helper functions as before)
+        def safe_get_int(value, default=0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return int(float(value))
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_float(value, default=0.0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_str(value, default=""):
+            try:
+                if pd.isna(value) or value is None:
+                    return default
+                return str(value).strip()
+            except (ValueError, TypeError):
+                return default
+        
+        # UPDATED: Build specs dictionary with official website link included
+        specs = {
+            # Basic Information
+            "Brand": safe_get_str(car.get("Brand", "")),
+            "Model": safe_get_str(car.get("Model", "")),
+            "BodyType": safe_get_str(car.get("Body_Type", "")),
+            "Variant": safe_get_str(car.get("Variant", "")),
+            "Year": safe_get_int(car.get("Year", 0)),
+            
+            # Performance Specifications
+            "Horsepower": safe_get_int(car.get("Horsepower", 0)),
+            "Engine": safe_get_str(car.get("Engine", "")),
+            "Transmission": safe_get_str(car.get("Transmission", "")),
+            "DriveTrain": safe_get_str(car.get("Drive_Train", "")),
+            "FuelType": safe_get_str(car.get("Fuel_Type", "")),
+            
+            # Utility Specifications
+            "GroundClearance": safe_get_float(car.get("Ground_Clearance", 0)),
+            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),
+            "SeatingCapacity": safe_get_int(car.get("Seating_Capacity", 0)),
+            
+            # Pricing
+            "Price": safe_get_float(car.get("Price", 0)),
+            
+            # Image
+            "Image": find_car_image(safe_get_str(car.get("Model", ""))),
+            
+            # NEW: Official website link (checking multiple possible column names)
+            "OfficialLink": safe_get_str(car.get("Link", "")) or safe_get_str(car.get("Official_Link", "")) or safe_get_str(car.get("official_link", "")) or ""
+        }
+        
+        # Log the specs for debugging
+        app.logger.info(f"Specs for {variant} ({year}): {specs}")
+        
+        # Validate that we have essential data
+        if not specs["Brand"] and not specs["Model"]:
+            app.logger.warning(f"Car found but missing essential data for variant: {variant}")
+            return jsonify({"error": "Car data incomplete"}), 404
+        
+        return jsonify(specs)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting specs for variant {variant}, year {year}: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500
+    if df.empty:
+        app.logger.error("Car data not available for specs")
+        return jsonify({"error": "Car data not available"}), 500
+    
+    variant = request.args.get("variant", "").strip()
+    year = request.args.get("year", "").strip()
+    
+    if not variant:
+        app.logger.warning("No variant specified for specs lookup")
+        return jsonify({"error": "Variant parameter required"}), 400
+
+    try:
+        app.logger.info(f"Looking up specs for variant: {variant}, year: {year}")
+        
+        # Build query conditions
+        query_conditions = [df["Variant"].str.lower() == variant.lower()]
+        
+        # Add year condition if provided
+        if year:
+            try:
+                year_int = int(year)
+                query_conditions.append(df["Year"] == year_int)
+                app.logger.info(f"Including year filter: {year_int}")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
+                return jsonify({"error": "Invalid year format"}), 400
+        
+        # Combine all conditions
+        combined_condition = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_condition = combined_condition & condition
+        
+        car_data = df[combined_condition]
+        
+        if car_data.empty:
+            app.logger.warning(f"No car found for variant: {variant}, year: {year}")
+            available_variants = df["Variant"].unique().tolist()[:10]
+            app.logger.info(f"Available variants (sample): {available_variants}")
+            return jsonify({"error": f"Variant '{variant}' with year '{year}' not found"}), 404
+        
+        # Get the first matching car (in case of duplicates)
+        car = car_data.iloc[0]
+        app.logger.info(f"Found car data for variant: {variant}, year: {year}")
+        
+        # Build specs dictionary (same helper functions as before)
+        def safe_get_int(value, default=0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return int(float(value))
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_float(value, default=0.0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_str(value, default=""):
+            try:
+                if pd.isna(value) or value is None:
+                    return default
+                return str(value).strip()
+            except (ValueError, TypeError):
+                return default
+        
+        # UPDATED: Build specs dictionary with official website link included
+        specs = {
+            # Basic Information
+            "Brand": safe_get_str(car.get("Brand", "")),
+            "Model": safe_get_str(car.get("Model", "")),
+            "BodyType": safe_get_str(car.get("Body_Type", "")),
+            "Variant": safe_get_str(car.get("Variant", "")),
+            "Year": safe_get_int(car.get("Year", 0)),
+            
+            # Performance Specifications
+            "Horsepower": safe_get_int(car.get("Horsepower", 0)),
+            "Engine": safe_get_str(car.get("Engine", "")),
+            "Transmission": safe_get_str(car.get("Transmission", "")),
+            "DriveTrain": safe_get_str(car.get("Drive_Train", "")),
+            "FuelType": safe_get_str(car.get("Fuel_Type", "")),
+            
+            # Utility Specifications
+            "GroundClearance": safe_get_float(car.get("Ground_Clearance", 0)),
+            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),
+            "SeatingCapacity": safe_get_int(car.get("Seating_Capacity", 0)),
+            
+            # Pricing
+            "Price": safe_get_float(car.get("Price", 0)),
+            
+            # Image
+            "Image": find_car_image(safe_get_str(car.get("Model", ""))),
+            
+            # NEW: Official website link
+            "OfficialLink": safe_get_str(car.get("Official_Link", "")) or safe_get_str(car.get("official_link", "")) or ""
+        }
+        
+        # Log the specs for debugging
+        app.logger.info(f"Specs for {variant} ({year}): {specs}")
+        
+        # Validate that we have essential data
+        if not specs["Brand"] and not specs["Model"]:
+            app.logger.warning(f"Car found but missing essential data for variant: {variant}")
+            return jsonify({"error": "Car data incomplete"}), 404
+        
+        return jsonify(specs)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting specs for variant {variant}, year {year}: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500
+    if df.empty:
+        app.logger.error("Car data not available for specs")
+        return jsonify({"error": "Car data not available"}), 500
+    
+    variant = request.args.get("variant", "").strip()
+    year = request.args.get("year", "").strip()  # NEW: Year parameter
+    
+    if not variant:
+        app.logger.warning("No variant specified for specs lookup")
+        return jsonify({"error": "Variant parameter required"}), 400
+
+    try:
+        app.logger.info(f"Looking up specs for variant: {variant}, year: {year}")
+        
+        # Build query conditions
+        query_conditions = [df["Variant"].str.lower() == variant.lower()]
+        
+        # Add year condition if provided
+        if year:
+            try:
+                year_int = int(year)
+                query_conditions.append(df["Year"] == year_int)
+                app.logger.info(f"Including year filter: {year_int}")
+            except (ValueError, TypeError):
+                app.logger.warning(f"Invalid year format: {year}")
+                return jsonify({"error": "Invalid year format"}), 400
+        
+        # Combine all conditions
+        combined_condition = query_conditions[0]
+        for condition in query_conditions[1:]:
+            combined_condition = combined_condition & condition
+        
+        car_data = df[combined_condition]
+        
+        if car_data.empty:
+            app.logger.warning(f"No car found for variant: {variant}, year: {year}")
+            available_variants = df["Variant"].unique().tolist()[:10]
+            app.logger.info(f"Available variants (sample): {available_variants}")
+            return jsonify({"error": f"Variant '{variant}' with year '{year}' not found"}), 404
+        
+        # Get the first matching car (in case of duplicates)
+        car = car_data.iloc[0]
+        app.logger.info(f"Found car data for variant: {variant}, year: {year}")
+        
+        # Build specs dictionary (same helper functions as before)
+        def safe_get_int(value, default=0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return int(float(value))
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_float(value, default=0.0):
+            try:
+                if pd.isna(value) or value == "" or value is None:
+                    return default
+                return float(value)
+            except (ValueError, TypeError):
+                return default
+        
+        def safe_get_str(value, default=""):
+            try:
+                if pd.isna(value) or value is None:
+                    return default
+                return str(value).strip()
+            except (ValueError, TypeError):
+                return default
+        
+        # Build specs dictionary with year included
+        specs = {
+            # Basic Information
+            "Brand": safe_get_str(car.get("Brand", "")),
+            "Model": safe_get_str(car.get("Model", "")),
+            "BodyType": safe_get_str(car.get("Body_Type", "")),
+            "Variant": safe_get_str(car.get("Variant", "")),
+            "Year": safe_get_int(car.get("Year", 0)),
+            
+            # Performance Specifications
+            "Horsepower": safe_get_int(car.get("Horsepower", 0)),
+            "Engine": safe_get_str(car.get("Engine", "")),
+            "Transmission": safe_get_str(car.get("Transmission", "")),
+            "DriveTrain": safe_get_str(car.get("Drive_Train", "")),
+            "FuelType": safe_get_str(car.get("Fuel_Type", "")),
+            
+            # Utility Specifications
+            "GroundClearance": safe_get_float(car.get("Ground_Clearance", 0)),
+            "Cargospace": safe_get_float(car.get("Cargo_space", 0)),
+            "SeatingCapacity": safe_get_int(car.get("Seating_Capacity", 0)),
+            
+            # Pricing
+            "Price": safe_get_float(car.get("Price", 0)),
+            
+            # Image
+            "Image": find_car_image(safe_get_str(car.get("Model", "")))
+        }
+        
+        # Log the specs for debugging
+        app.logger.info(f"Specs for {variant} ({year}): {specs}")
+        
+        # Validate that we have essential data
+        if not specs["Brand"] and not specs["Model"]:
+            app.logger.warning(f"Car found but missing essential data for variant: {variant}")
+            return jsonify({"error": "Car data incomplete"}), 404
+        
+        return jsonify(specs)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting specs for variant {variant}, year {year}: {e}")
+        import traceback
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        return jsonify({"error": f"Failed to get specifications: {str(e)}"}), 500
+
+# ENHANCED: Debug endpoint to check data structure
+@app.route('/debug/car_data')
+def debug_car_data():
+    """Debug endpoint to check CSV data structure"""
+    if df.empty:
+        return jsonify({"error": "No data loaded"})
+    
+    try:
+        debug_info = {
+            "total_records": len(df),
+            "columns": list(df.columns),
+            "data_types": df.dtypes.to_dict(),
+            "sample_record": df.iloc[0].to_dict() if len(df) > 0 else {},
+            "unique_brands": df["Brand"].unique().tolist(),
+            "unique_models": df["Model"].unique().tolist()[:10],  # First 10
+            "unique_variants": df["Variant"].unique().tolist()[:10],  # First 10
+            "price_range": {
+                "min": float(df["Price"].min()) if "Price" in df.columns else 0,
+                "max": float(df["Price"].max()) if "Price" in df.columns else 0
+            }
+        }
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+# ENHANCED: Test endpoint for compare functionality
+@app.route('/test/compare')
+def test_compare():
+    """Test endpoint to verify compare functionality"""
+    try:
+        # Get a sample variant for testing
+        if df.empty:
+            return jsonify({"error": "No data available"})
+        
+        sample_variant = df["Variant"].iloc[0] if len(df) > 0 else None
+        
+        if not sample_variant:
+            return jsonify({"error": "No variants available"})
+        
+        # Test the get_specs functionality
+        test_result = {
+            "sample_variant": sample_variant,
+            "brands_count": len(df["Brand"].unique()),
+            "models_count": len(df["Model"].unique()),
+            "variants_count": len(df["Variant"].unique()),
+            "test_specs_url": f"/get_specs?variant={sample_variant}"
+        }
+        
+        return jsonify(test_result)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)})
+    
+################################
+# Favorite car images function #
+###############################
+
+def find_car_image(model, brand=None, variant=None):
+    """Find car image with enhanced fallback handling and reduced 404s"""
+    try:
+        # Clean inputs for filename generation
+        model_clean = model.replace(' ', '_').lower() if model else 'default'
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        variant_clean = variant.replace(' ', '_').lower() if variant else ''
+        
+        # Remove special characters
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        variant_clean = re.sub(r'[^a-z0-9_]', '', variant_clean)
+        
+        app.logger.info(f"🔍 Finding image for: brand={brand}, model={model}, variant={variant}")
+        
+        resources_dir = 'static/resources'
+        if not os.path.exists(resources_dir):
+            app.logger.error(f"Resources directory not found: {resources_dir}")
+            return get_safe_fallback_image()
+        
+        # UPDATED: Check only the most likely patterns to reduce 404s
+        primary_patterns = []
+        
+        # Priority 1: Model-only (most common pattern)
+        if model_clean:
+            primary_patterns.extend([
+                f'static/resources/{model_clean}.webp',
+                f'static/resources/{model_clean}.png',
+                f'static/resources/{model_clean}.jpg'
+            ])
+        
+        # Priority 2: Brand-Model combination
+        if brand_clean and model_clean:
+            primary_patterns.extend([
+                f'static/resources/{brand_clean}_{model_clean}.webp',
+                f'static/resources/{brand_clean}_{model_clean}.png'
+            ])
+        
+        # Check only primary patterns
+        for pattern in primary_patterns:
+            if os.path.exists(pattern):
+                url_path = '/' + pattern.replace('\\', '/')
+                app.logger.info(f"✅ Found image: {url_path}")
+                return url_path
+        
+        # UPDATED: Instead of extensive fallback checking, return None immediately
+        # This prevents the cascade of 404 errors
+        app.logger.warning(f"❌ No image found for {brand} {model} - will use frontend fallback")
+        return None
+        
+    except Exception as e:
+        app.logger.error(f"❌ Error finding image for {brand} {model}: {e}")
+        return None
+
+    """Find car image with enhanced variant and color support"""
+    try:
+        # Clean inputs for filename generation
+        model_clean = model.replace(' ', '_').lower() if model else 'default'
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        variant_clean = variant.replace(' ', '_').lower() if variant else ''
+        
+        # Remove special characters
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        variant_clean = re.sub(r'[^a-z0-9_]', '', variant_clean)
+        
+        app.logger.info(f"🔍 Finding image for: brand={brand}, model={model}, variant={variant}")
+        
+        resources_dir = 'static/resources'
+        if not os.path.exists(resources_dir):
+            app.logger.error(f"Resources directory not found: {resources_dir}")
+            return get_safe_fallback_image()
+        
+        # Get all image files in the directory
+        try:
+            all_files = os.listdir(resources_dir)
+            image_files = [f for f in all_files if f.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif'))]
+        except Exception as e:
+            app.logger.error(f"Error listing files: {e}")
+            return get_safe_fallback_image()
+        
+        app.logger.info(f"📁 Found {len(image_files)} image files in resources")
+        
+        # FIXED: Enhanced pattern matching for complex variants
+        best_match = None
+        best_score = 0
+        
+        for filename in image_files:
+            filename_lower = filename.lower()
+            base_name = filename_lower.replace('.png', '').replace('.jpg', '').replace('.jpeg', '').replace('.webp', '').replace('.gif', '')
+            
+            score = 0
+            
+            # Model matching (highest priority)
+            if model_clean in base_name:
+                score += 100
+                
+                # Exact model match at start
+                if base_name.startswith(model_clean):
+                    score += 50
+                
+                # Brand matching (if available)
+                if brand_clean and brand_clean in base_name:
+                    score += 30
+                
+                # Variant matching (if available)
+                if variant_clean:
+                    # Try different variant matching approaches for complex names
+                    variant_parts = variant_clean.split('_')
+                    
+                    # Check if full variant matches
+                    if variant_clean in base_name:
+                        score += 40
+                    else:
+                        # Check individual parts of variant
+                        matched_parts = sum(1 for part in variant_parts if part in base_name and len(part) > 2)
+                        score += matched_parts * 10
+                
+                # Prefer files with fewer extra parts (more specific match)
+                file_parts = base_name.split('_')
+                if len(file_parts) <= 4:  # Reasonable number of parts
+                    score += 10
+                
+                # Check for exact pattern matches
+                expected_patterns = [
+                    f"{model_clean}_{variant_clean}",
+                    f"{brand_clean}_{model_clean}",
+                    f"{model_clean}",
+                    f"{variant_clean}"
+                ]
+                
+                for pattern in expected_patterns:
+                    if pattern and pattern in base_name:
+                        score += 20
+                        break
+                
+                app.logger.info(f"📊 File: {filename} - Score: {score}")
+                
+                if score > best_score:
+                    best_score = score
+                    best_match = filename
+        
+        if best_match:
+            url_path = f'/static/resources/{best_match}'
+            app.logger.info(f"✅ Best match found: {url_path} (score: {best_score})")
+            return url_path
+        
+        # FALLBACK: If no good match, try basic model search
+        for filename in image_files:
+            if model_clean in filename.lower():
+                url_path = f'/static/resources/{filename}'
+                app.logger.info(f"🎯 Fallback match: {url_path}")
+                return url_path
+        
+        app.logger.warning(f"❌ No image found for {brand} {model} {variant}")
+        return get_safe_fallback_image()
+        
+    except Exception as e:
+        app.logger.error(f"❌ Error finding image: {e}")
+        return get_safe_fallback_image()
+    """Find car image based on model name with better case-insensitive matching"""
+    try:
+        # Clean inputs for filename generation
+        model_clean = model.replace(' ', '_').lower() if model else 'default'
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        variant_clean = variant.replace(' ', '_').lower() if variant else ''
+        
+        # Remove special characters more thoroughly
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        variant_clean = re.sub(r'[^a-z0-9_]', '', variant_clean)
+        
+        app.logger.info(f"🔍 Finding image for: brand={brand}, model={model}, variant={variant}")
+        
+        # FIXED: More flexible image searching with case-insensitive matching
+        image_paths = []
+        
+        # Priority 1: Exact brand-model-variant match
+        if variant_clean and brand_clean:
+            image_paths.extend([
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}',
+                f'static/resources/{model_clean}_{variant_clean}',
+                f'static/resources/{variant_clean}_{model_clean}'
+            ])
+        
+        # Priority 2: Brand-model match
+        if brand_clean:
+            image_paths.extend([
+                f'static/resources/{brand_clean}_{model_clean}',
+                f'static/resources/{model_clean}_{brand_clean}'
+            ])
+        
+        # Priority 3: Model-only files
+        image_paths.extend([
+            f'static/resources/{model_clean}',
+            f'static/resources/{model_clean.replace('_', '')}'  # Try without underscores
+        ])
+        
+        # Check each path with multiple extensions (case-insensitive)
+        extensions = ['.webp', '.png', '.jpg', '.jpeg', '.gif']
+        
+        for base_path in image_paths:
+            for ext in extensions:
+                # Try exact case first
+                full_path = base_path + ext
+                if os.path.exists(full_path):
+                    url_path = '/' + full_path.replace('\\', '/')
+                    app.logger.info(f"✅ Found exact match: {url_path}")
+                    return url_path
+        
+        # FIXED: If exact matches fail, search directory for case-insensitive matches
+        resources_dir = 'static/resources'
+        if os.path.exists(resources_dir):
+            try:
+                all_files = os.listdir(resources_dir)
+                
+                # Create a mapping of lowercase filenames to actual filenames
+                file_mapping = {}
+                for filename in all_files:
+                    if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                        file_mapping[filename.lower()] = filename
+                
+                # Search for matches using the mapping
+                search_patterns = []
+                
+                # Add various search patterns
+                if brand_clean and model_clean:
+                    search_patterns.extend([
+                        f"{brand_clean}_{model_clean}",
+                        f"{model_clean}_{brand_clean}",
+                        f"{model_clean}"
+                    ])
+                elif model_clean:
+                    search_patterns.append(model_clean)
+                
+                # Search through patterns
+                for pattern in search_patterns:
+                    for ext in ['.webp', '.png', '.jpg', '.jpeg', '.gif']:
+                        search_key = pattern + ext
+                        if search_key in file_mapping:
+                            actual_filename = file_mapping[search_key]
+                            url_path = f'/static/resources/{actual_filename}'
+                            app.logger.info(f"✅ Found case-insensitive match: {url_path}")
+                            return url_path
+                
+                # FIXED: Additional flexible search for partial matches
+                for actual_filename in all_files:
+                    filename_lower = actual_filename.lower()
+                    
+                    # Skip non-image files
+                    if not filename_lower.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                        continue
+                    
+                    # Check if model name is in filename (flexible matching)
+                    if model_clean in filename_lower:
+                        # Additional validation: check if it's a reasonable match
+                        base_name = filename_lower.replace('.png', '').replace('.jpg', '').replace('.jpeg', '').replace('.webp', '').replace('.gif', '')
+                        
+                        # Make sure it's not just a substring match
+                        if (model_clean == base_name or 
+                            base_name.startswith(model_clean + '_') or 
+                            base_name.endswith('_' + model_clean) or
+                            f'_{model_clean}_' in base_name):
+                            
+                            url_path = f'/static/resources/{actual_filename}'
+                            app.logger.info(f"🎯 Found flexible match: {url_path}")
+                            return url_path
+                        
+            except Exception as list_error:
+                app.logger.error(f"❌ Error listing resources: {list_error}")
+        
+        # FALLBACK: Return safe fallback
+        app.logger.warning(f"❌ No image found for {brand} {model}")
+        return get_safe_fallback_image()
+        
+    except Exception as e:
+        app.logger.error(f"❌ Error finding image for {brand} {model}: {e}")
+        return get_safe_fallback_image()
+    """Find car image based on model name with strict brand-model matching to prevent cross-contamination"""
+    try:
+        # Clean inputs for filename generation
+        model_clean = model.replace(' ', '_').lower() if model else 'default'
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        variant_clean = variant.replace(' ', '_').lower() if variant else ''
+        
+        # Remove special characters more thoroughly
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        variant_clean = re.sub(r'[^a-z0-9_]', '', variant_clean)
+        
+        app.logger.info(f"🔍 Finding image for: brand={brand}, model={model}, variant={variant}")
+        
+        # FIXED: Strict brand-model verification to prevent cross-contamination
+        image_paths = []
+        
+        # IMPORTANT: Only proceed if we have a brand to ensure accurate matching
+        if not brand_clean:
+            app.logger.warning(f"⚠️ No brand provided for {model}, using fallback")
+            return get_safe_fallback_image()
+        
+        # Priority 1: Exact brand-model-variant match
+        if variant_clean:
+            image_paths.extend([
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.webp',
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.png',
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.jpg'
+            ])
+        
+        # Priority 2: Brand-model match (MUST include brand to prevent mismatching)
+        image_paths.extend([
+            f'static/resources/{brand_clean}_{model_clean}.webp',
+            f'static/resources/{brand_clean}_{model_clean}.png', 
+            f'static/resources/{brand_clean}_{model_clean}.jpg'
+        ])
+        
+        # Priority 3: Try reverse order (model_brand) - still brand-specific
+        image_paths.extend([
+            f'static/resources/{model_clean}_{brand_clean}.webp',
+            f'static/resources/{model_clean}_{brand_clean}.png',
+            f'static/resources/{model_clean}_{brand_clean}.jpg'
+        ])
+        
+        # UPDATED: Strict verification for model-only files
+        # Only use model-only files if we can verify they belong to the correct brand
+        verified_model_files = get_verified_model_files(model_clean, brand_clean)
+        image_paths.extend(verified_model_files)
+        
+        # Check each path in priority order
+        for image_path in image_paths:
+            if os.path.exists(image_path):
+                url_path = '/' + image_path.replace('\\', '/')
+                app.logger.info(f"✅ Found brand-verified image: {url_path} for {brand} {model}")
+                return url_path
+        
+        # FALLBACK: Search for files that definitely contain the brand name
+        brand_specific_files = search_brand_specific_files(brand_clean, model_clean)
+        if brand_specific_files:
+            app.logger.info(f"🎯 Found brand-specific file: {brand_specific_files}")
+            return brand_specific_files
+        
+        # LAST RESORT: Use safe fallback instead of potentially wrong images
+        app.logger.warning(f"❌ No brand-verified image found for {brand} {model}")
+        return get_safe_fallback_image()
+        
+    except Exception as e:
+        app.logger.error(f"❌ Error finding image for {brand} {model}: {e}")
+        return get_safe_fallback_image()
+    """Enhanced car image finder with strict brand-model matching"""
+    try:
+        # Clean inputs for filename generation
+        model_clean = model.replace(' ', '_').lower() if model else 'default'
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        variant_clean = variant.replace(' ', '_').lower() if variant else ''
+        
+        # Remove special characters
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        variant_clean = re.sub(r'[^a-z0-9_]', '', variant_clean)
+        
+        app.logger.info(f"🔍 Finding image for: brand={brand}, model={model}, variant={variant}")
+        
+        # FIXED: Brand-specific matching to prevent cross-brand image usage
+        image_paths = []
+        
+        # Priority 1: Exact brand-model-variant match
+        if variant_clean and brand_clean:
+            image_paths.extend([
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.webp',
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.png',
+                f'static/resources/{brand_clean}_{model_clean}_{variant_clean}.jpg'
+            ])
+        
+        # Priority 2: Brand-model match (MUST include brand to prevent mismatching)
+        if brand_clean:
+            image_paths.extend([
+                f'static/resources/{brand_clean}_{model_clean}.webp',
+                f'static/resources/{brand_clean}_{model_clean}.png', 
+                f'static/resources/{brand_clean}_{model_clean}.jpg'
+            ])
+            
+            # Also try reverse order (model_brand)
+            image_paths.extend([
+                f'static/resources/{model_clean}_{brand_clean}.webp',
+                f'static/resources/{model_clean}_{brand_clean}.png',
+                f'static/resources/{model_clean}_{brand_clean}.jpg'
+            ])
+        
+        # Priority 3: ONLY if brand is available, try model-only WITH brand verification
+        if brand_clean:
+            # Check model-only files but verify they don't belong to other brands
+            potential_model_files = [
+                f'static/resources/{model_clean}.webp',
+                f'static/resources/{model_clean}.png', 
+                f'static/resources/{model_clean}.jpg'
+            ]
+            
+            # Only add model-only files if we can verify they're for the correct brand
+            # This prevents Honda Civic images from showing for other brands
+            for model_file in potential_model_files:
+                if os.path.exists(model_file):
+                    # Additional verification: check if this model is commonly associated with the brand
+                    brand_model_combinations = {
+                        'honda': ['civic', 'accord', 'crv', 'pilot', 'odyssey'],
+                        'toyota': ['vios', 'camry', 'corolla', 'rav4', 'prius'],
+                        'porsche': ['cayenne', 'panamera', 'macan', '911', 'taycan'],
+                        'volkswagen': ['id6', 'passat', 'golf', 'jetta', 'tiguan'],
+                        'mercedes': ['amg', 'cls', 'glc', 'eqs'],
+                        'bmw': ['x1', 'x3', 'x5', 'i3', 'i8']
+                    }
+                    
+                    # Only use model-only image if the model is known to belong to this brand
+                    if brand_clean in brand_model_combinations:
+                        known_models = brand_model_combinations[brand_clean]
+                        if model_clean in known_models:
+                            image_paths.append(model_file)
+        
+        # Check each path in priority order
+        for image_path in image_paths:
+            if os.path.exists(image_path):
+                url_path = '/' + image_path.replace('\\', '/')
+                app.logger.info(f"✅ Found brand-verified image: {url_path} for {brand} {model}")
+                return url_path
+        
+        # FALLBACK: Search for exact filename matches in directory
+        resources_dir = 'static/resources'
+        if os.path.exists(resources_dir) and brand_clean:
+            try:
+                all_files = os.listdir(resources_dir)
+                
+                # Look for files that start with the brand name
+                brand_specific_files = [f for f in all_files if f.lower().startswith(brand_clean)]
+                
+                for img_file in brand_specific_files:
+                    if model_clean in img_file.lower():
+                        url_path = f'/static/resources/{img_file}'
+                        app.logger.info(f"🎯 Found brand-specific match: {url_path}")
+                        return url_path
+                        
+            except Exception as list_error:
+                app.logger.error(f"❌ Error listing resources: {list_error}")
+        
+        # LAST RESORT: Return None instead of wrong brand image
+        app.logger.warning(f"❌ No brand-verified image found for {brand} {model}")
+        return None
+        
+    except Exception as e:
+        app.logger.error(f"❌ Error finding image for {brand} {model}: {e}")
+        return None
+    
+def get_verified_model_files(model_clean, brand_clean):
+    """Get model-only files that are verified to belong to the correct brand"""
+    verified_files = []
+    
+    # Define strict brand-model associations to prevent cross-contamination
+    brand_model_associations = {
+        'honda': ['civic', 'accord', 'crv', 'pilot', 'odyssey', 'hrv', 'city'],
+        'toyota': ['vios', 'camry', 'corolla', 'rav4', 'prius', 'avanza', 'innova', 'hilux', 'fortuner'],
+        'porsche': ['cayenne', 'panamera', 'macan', '911', 'taycan', 'boxster', 'cayman'],
+        'volkswagen': ['id6', 'passat', 'golf', 'jetta', 'tiguan', 'arteon', 'polo'],
+        'mercedes': ['amg', 'cls', 'glc', 'eqs', 'benz', 'class', 'gle', 'gla'],
+        'bmw': ['x1', 'x3', 'x5', 'i3', 'i8', 'series', '320i', '520i'],
+        'ford': ['ranger', 'explorer', 'mustang', 'fiesta', 'focus', 'ecosport'],
+        'hyundai': ['elantra', 'tucson', 'accent', 'santa', 'creta', 'kona'],
+        'kia': ['seltos', 'sportage', 'rio', 'sorento', 'picanto', 'stinger'],
+        'nissan': ['navara', 'altima', 'sentra', 'juke', 'xtrail', 'patrol'],
+        'mazda': ['cx5', 'cx3', 'mx5', 'mazda3', 'mazda6', 'bt50'],
+        'subaru': ['forester', 'outback', 'impreza', 'legacy', 'xv', 'wrx'],
+        'mitsubishi': ['montero', 'lancer', 'outlander', 'mirage', 'pajero', 'xpander'],
+        'isuzu': ['dmax', 'mux', 'crosswind', 'traviz'],
+        'suzuki': ['swift', 'vitara', 'ertiga', 'celerio', 'alto', 'jimny'],
+        'mg': ['zs', 'hs', 'mg5', 'mg6', 'marvel']
+    }
+    
+    # Only add model-only files if the model is known to belong to this brand
+    if brand_clean in brand_model_associations:
+        known_models = brand_model_associations[brand_clean]
+        
+        # Check if the model is in the known models for this brand
+        model_matches = [known_model for known_model in known_models if known_model in model_clean or model_clean in known_model]
+        
+        if model_matches:
+            # Add model-only files with different extensions
+            for ext in ['.webp', '.png', '.jpg', '.jpeg']:
+                verified_files.append(f'static/resources/{model_clean}{ext}')
+    
+    return verified_files
+
+def search_brand_specific_files(brand_clean, model_clean):
+    """Search for files that definitely contain the brand name"""
+    resources_dir = 'static/resources'
+    
+    if not os.path.exists(resources_dir):
+        return None
+    
+    try:
+        all_files = os.listdir(resources_dir)
+        
+        # Look for files that start with the brand name
+        for img_file in all_files:
+            img_file_lower = img_file.lower()
+            
+            # Skip non-image files
+            if not img_file_lower.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                continue
+            
+            # Must start with brand name to avoid cross-contamination
+            if img_file_lower.startswith(brand_clean + '_'):
+                # Check if it also contains the model
+                if model_clean in img_file_lower:
+                    url_path = f'/static/resources/{img_file}'
+                    app.logger.info(f"🎯 Found brand-specific match: {url_path}")
+                    return url_path
+                    
+    except Exception as list_error:
+        app.logger.error(f"❌ Error listing resources: {list_error}")
+    
+    return None
+
+def get_safe_fallback_image():
+    """Return a safe fallback image"""
+    fallback_images = [
+        '/static/resources/default_car.png',
+        '/static/resources/no_image.png',
+        '/static/resources/placeholder.png'
+    ]
+    
+    for fallback in fallback_images:
+        if os.path.exists(f"static{fallback.replace('/static', '')}"):
+            return fallback
+    
+    # SVG fallback
+    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg=='
+    """Return a safe fallback image"""
+    
+    # Try these generic fallback images in order
+    fallback_images = [
+        '/static/resources/default_car.png',
+        '/static/resources/no_image.png',
+        '/static/resources/placeholder.png'
+    ]
+    
+    for fallback in fallback_images:
+        if os.path.exists(f"static{fallback.replace('/static', '')}"):
+            return fallback
+    
+    # If no physical fallback exists, return SVG data URL
+    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg=='
+    """Return a safe fallback image that doesn't misrepresent any brand"""
+    
+    # Try these generic fallback images in order
+    fallback_images = [
+        '/static/resources/default_car.png',
+        '/static/resources/no_image.png',
+        '/static/resources/placeholder.png'
+    ]
+    
+    for fallback in fallback_images:
+        if os.path.exists(f"static{fallback.replace('/static', '')}"):
+            return fallback
+    
+    # If no physical fallback exists, return SVG data URL
+    return 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMzAwIiBoZWlnaHQ9IjIwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSIjZjVmNWY1IiBzdHJva2U9IiNkZGQiIHN0cm9rZS13aWR0aD0iMiIvPjx0ZXh0IHg9IjUwJSIgeT0iNDAlIiBmb250LWZhbWlseT0iQXJpYWwiIGZvbnQtc2l6ZT0iMTgiIGZpbGw9IiM5OTkiIHRleHQtYW5jaG9yPSJtaWRkbGUiPkNhciBJbWFnZTwvdGV4dD48dGV4dCB4PSI1MCUiIHk9IjYwJSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjE0IiBmaWxsPSIjYmJiIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5Ob3QgQXZhaWxhYmxlPC90ZXh0Pjwvc3ZnPg=='
+
+def validate_image_resources():
+    """Validate available image resources on server startup"""
+    resources_dir = 'static/resources'
+    
+    if not os.path.exists(resources_dir):
+        app.logger.error(f"❌ Resources directory not found: {resources_dir}")
+        return {}
+    
+    try:
+        image_files = []
+        total_size = 0
+        
+        # Scan for image files
+        for filename in os.listdir(resources_dir):
+            if filename.lower().endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                filepath = os.path.join(resources_dir, filename)
+                file_size = os.path.getsize(filepath)
+                
+                image_files.append({
+                    'filename': filename,
+                    'size': file_size,
+                    'path': filepath,
+                    'url': f'/static/resources/{filename}'
+                })
+                total_size += file_size
+        
+        # Group by brand/model patterns
+        brand_models = {}
+        for img in image_files:
+            filename = img['filename'].lower()
+            base_name = filename.split('.')[0]
+            
+            # Try to extract brand/model
+            if '_' in base_name:
+                parts = base_name.split('_')
+                if len(parts) >= 2:
+                    brand = parts[0]
+                    model = parts[1]
+                    key = f"{brand}_{model}"
+                    
+                    if key not in brand_models:
+                        brand_models[key] = []
+                    brand_models[key].append(img)
+            else:
+                # Model-only files
+                if base_name not in brand_models:
+                    brand_models[base_name] = []
+                brand_models[base_name].append(img)
+        
+        validation_result = {
+            'total_images': len(image_files),
+            'total_size_mb': round(total_size / (1024 * 1024), 2),
+            'brand_model_groups': len(brand_models),
+            'available_patterns': list(brand_models.keys())[:20],  # Show first 20
+            'common_extensions': {}
+        }
+        
+        # Count extensions
+        for img in image_files:
+            ext = img['filename'].split('.')[-1].lower()
+            validation_result['common_extensions'][ext] = validation_result['common_extensions'].get(ext, 0) + 1
+        
+        app.logger.info(f"📊 Image validation: {validation_result['total_images']} images, {validation_result['total_size_mb']}MB")
+        app.logger.info(f"🏷️ Available patterns: {validation_result['available_patterns'][:10]}")
+        
+        return validation_result
+        
+    except Exception as e:
+        app.logger.error(f"❌ Error validating image resources: {e}")
+        return {}
+
+# NEW: Endpoint to get available images for debugging
+@app.route('/api/available-images')
+def get_available_images():
+    """API endpoint to check what images are actually available"""
+    try:
+        validation_result = validate_image_resources()
+        
+        # Add specific checks for problematic brands
+        problematic_brands = ['porsche', 'volkswagen', 'mercedes']
+        brand_specific_info = {}
+        
+        resources_dir = 'static/resources'
+        if os.path.exists(resources_dir):
+            for brand in problematic_brands:
+                brand_files = []
+                for filename in os.listdir(resources_dir):
+                    if filename.lower().startswith(brand):
+                        brand_files.append({
+                            'filename': filename,
+                            'url': f'/static/resources/{filename}',
+                            'size': os.path.getsize(os.path.join(resources_dir, filename))
+                        })
+                brand_specific_info[brand] = brand_files
+        
+        return jsonify({
+            'validation': validation_result,
+            'problematic_brands': brand_specific_info,
+            'recommendations': {
+                'missing_fallbacks': [
+                    'static/resources/default_car.png',
+                    'static/resources/no_image.png', 
+                    'static/resources/placeholder.png'
+                ],
+                'suggested_patterns': [
+                    'static/resources/{model}.webp',
+                    'static/resources/{brand}_{model}.webp',
+                    'static/resources/{model}_{color}.webp'
+                ]
+            }
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in available images endpoint: {e}")
+        return jsonify({"error": str(e)}), 500
+    
+def initialize_image_system():
+    """Initialize image system with validation"""
+    app.logger.info("🚀 Initializing image system...")
+    
+    # Validate available images
+    validation_result = validate_image_resources()
+    
+    if validation_result.get('total_images', 0) > 0:
+        app.logger.info(f"✅ Image system initialized with {validation_result['total_images']} images")
+    else:
+        app.logger.warning("⚠️ No images found in resources directory")
+    
+    return validation_result
+
+###############################
+# Testimonials Function Logic #
+###############################   
+    
+@app.route('/api/testimonials', methods=['GET'])
+def get_testimonials():
+    """Get all testimonials"""
+    try:
+        if realtime_db_ref is None:  # Changed variable name
+            return jsonify({'error': 'Database not initialized'}), 500
+        
+        testimonials_ref = realtime_db_ref.child('testimonials')
+        testimonials = testimonials_ref.get()
+        
+        if testimonials is None:
+            return jsonify([])
+        
+        # Convert to list format for frontend
+        testimonials_list = []
+        for key, value in testimonials.items():
+            testimonial = value
+            testimonial['id'] = key
+            testimonials_list.append(testimonial)
+        
+        # Sort by timestamp (newest first)
+        testimonials_list.sort(key=lambda x: x.get('timestamp', 0), reverse=True)
+        
+        return jsonify(testimonials_list)
+    
+    except Exception as e:
+        app.logger.error(f"Error getting testimonials: {e}")
+        return jsonify({'error': 'Failed to get testimonials'}), 500
+
+@app.route('/api/testimonials', methods=['POST'])
+def add_testimonial():
+    """Add a new testimonial"""
+    try:
+        if realtime_db is None:
+            return jsonify({'error': 'Database not initialized'}), 500
+        
         data = request.get_json()
         
-        if not data:
-            app.logger.error("No JSON data received for toggle-fave")
-            return jsonify({"error": "No data provided"}), 400
+        # Validate required fields
+        if not data or not data.get('name') or not data.get('testimonial'):
+            return jsonify({'error': 'Name and testimonial are required'}), 400
+        
+        # Create testimonial object
+        testimonial = {
+            'name': data['name'].strip(),
+            'testimonial': data['testimonial'].strip(),
+            'timestamp': int(time.time() * 1000),  # Current timestamp in milliseconds
+            'email': data.get('email', '').strip() if data.get('email') else None,
+            'rating': data.get('rating', 5),  # Default 5 stars
+            'approved': False  # You might want to moderate testimonials
+        }
+        
+        # Add to Real-time Database
+        testimonials_ref = realtime_db.reference('testimonials')
+        new_testimonial_ref = testimonials_ref.push(testimonial)
+        
+        # Return the created testimonial with its ID
+        testimonial['id'] = new_testimonial_ref.key
+        
+        app.logger.info(f"✅ Testimonial added: {new_testimonial_ref.key}")
+        return jsonify(testimonial), 201
+    
+    except Exception as e:
+        app.logger.error(f"Error adding testimonial: {e}")
+        return jsonify({'error': 'Failed to add testimonial'}), 500
+
+@app.route('/api/testimonials/<testimonial_id>', methods=['DELETE'])
+def delete_testimonial(testimonial_id):
+    """Delete a testimonial (admin only)"""
+    try:
+        if realtime_db is None:
+            return jsonify({'error': 'Database not initialized'}), 500
+        
+        # You might want to add authentication check here
+        testimonial_ref = realtime_db.reference(f'testimonials/{testimonial_id}')
+        testimonial_ref.delete()
+        
+        app.logger.info(f"✅ Testimonial deleted: {testimonial_id}")
+        return jsonify({'message': 'Testimonial deleted successfully'})
+    
+    except Exception as e:
+        app.logger.error(f"Error deleting testimonial: {e}")
+        return jsonify({'error': 'Failed to delete testimonial'}), 500   
+    
+@app.route('/get_affordable_cars', methods=['GET'])
+def get_affordable_cars():
+    """Dedicated endpoint for calculator - returns only essential car data"""
+    if df.empty:
+        app.logger.error("Car data not available for calculator")
+        return jsonify({"error": "Car data not available"}), 500
+    
+    app.logger.info("🧮 Processing calculator car request")
+    
+    try:
+        max_price = request.args.get("max_price", type=int, default=25000000)
+        
+        # Filter cars by price only
+        filtered_df = df[
+            (df["Price"].notna()) &
+            (df["Price"] <= max_price)
+        ].copy()
+        
+        # Select only the columns needed for calculator display
+        calculator_columns = ['Brand', 'Model', 'Variant', 'Fuel_Type', 'Price']
+        filtered_df = filtered_df[calculator_columns]
+        
+        # Convert to JSON
+        affordable_cars = filtered_df.fillna("").to_dict(orient="records")
+        
+        app.logger.info(f"✅ Calculator returning {len(affordable_cars)} affordable cars")
+        return jsonify(affordable_cars)
+        
+    except Exception as e:
+        app.logger.error(f"Error in calculator endpoint: {e}")
+        return jsonify({"error": f"Failed to get affordable cars: {str(e)}"}), 500
+    
+####################
+# Compare function #
+####################
+
+@app.route('/get_brands', methods=['GET'])
+def get_brands():
+    """Get all available brands from the CSV data"""
+    if df.empty:
+        app.logger.warning("No car data available for brands")
+        return jsonify([])
+    
+    try:
+        brands = df["Brand"].dropna().unique().tolist()
+        brands.sort()  # Sort alphabetically
+        app.logger.info(f"Retrieved {len(brands)} brands")
+        return jsonify(brands)
+    except Exception as e:
+        app.logger.error(f"Error getting brands: {e}")
+        return jsonify([])
+
+####################
+# Forum API Routes #
+####################
+
+@app.route('/api/forum/posts', methods=['GET'])
+def get_forum_posts():
+    """Get all forum posts (unchanged - supports filtering on frontend)"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        posts_ref = realtime_db_ref.child('forum').child('posts')
+        posts_data = posts_ref.get() or {}
+        
+        # Convert to list with IDs
+        posts_list = []
+        for post_id, post_data in posts_data.items():
+            post_data['id'] = post_id
+            posts_list.append(post_data)
+        
+        # Sort by creation date (newest first)
+        posts_list.sort(key=lambda x: x.get('createdAt', ''), reverse=True)
+        
+        return jsonify(posts_list)
+    except Exception as e:
+        app.logger.error(f"Error fetching forum posts: {e}")
+        return jsonify({"error": "Failed to fetch posts"}), 500
+
+@app.route('/api/forum/posts', methods=['POST'])
+def create_forum_post():
+    """Create a new forum post with anonymous option"""
+    if 'user' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        data = request.json
+        user_id = session['user']
+        user_email = session.get('email', 'Anonymous')
+        
+        # Validate input
+        if not data.get('title') or not data.get('body'):
+            return jsonify({'error': 'Title and body are required'}), 400
+        
+        # FEATURE 3: Handle anonymous posting
+        is_anonymous = data.get('isAnonymous', False)
+        author_name = 'Anonymous' if is_anonymous else user_email
+        
+        post_data = {
+            'title': data.get('title'),
+            'body': data.get('body'),
+            'tags': data.get('tags', ''),
+            'authorId': user_id,
+            'authorName': author_name,
+            'isAnonymous': is_anonymous,  # Store anonymous flag
+            'createdAt': datetime.utcnow().isoformat() + 'Z',
+            'upvotes': 0,
+            'downvotes': 0,
+            'views': 0,
+            'commentCount': 0
+        }
+        
+        # Push to Firebase Realtime Database
+        posts_ref = realtime_db_ref.child('forum').child('posts')
+        new_post = posts_ref.push(post_data)
+        
+        # Return the created post with its ID
+        post_data['id'] = new_post.key
+        return jsonify(post_data), 201
+        
+    except Exception as e:
+        app.logger.error(f"Error creating forum post: {e}")
+        return jsonify({'error': 'Failed to create post'}), 500
+
+@app.route('/api/forum/comments/<comment_id>/vote', methods=['POST'])
+def vote_on_comment(comment_id):
+    """Vote on a comment"""
+    if 'user' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        data = request.json
+        direction = data.get('direction')  # 'up' or 'down'
+        user_id = session['user']
+        
+        if direction not in ['up', 'down']:
+            return jsonify({'error': 'Invalid vote direction'}), 400
+        
+        # Find the comment in all posts (we need to search since we don't know the post_id)
+        posts_ref = realtime_db_ref.child('forum').child('posts')
+        posts_data = posts_ref.get() or {}
+        
+        comment_ref = None
+        post_id = None
+        
+        # Search for the comment across all posts
+        for pid, post_data in posts_data.items():
+            comments_ref = realtime_db_ref.child('forum').child('comments').child(pid)
+            comments_data = comments_ref.get() or {}
             
-        variant = data.get('variant')
-        liked = data.get('liked')
-
-        if not variant:
-            app.logger.error("No variant specified for toggle-fave")
-            return jsonify({"error": "Variant required"}), 400
-
-        try:
-            favorites_ref = db.collection('users').document(user_id).collection('favorites')
-            existing_fave = favorites_ref.where('variant', '==', variant).get()
-
-            if existing_fave:
-                if not liked:
-                    for fave in existing_fave:
-                        favorites_ref.document(fave.id).delete()
-                    app.logger.info(f"Removed favorite: {variant}")
-                    return jsonify({"status": "removed", "variant": variant, "liked": False}), 200
+            if comment_id in comments_data:
+                comment_ref = comments_ref.child(comment_id)
+                post_id = pid
+                break
+        
+        if not comment_ref:
+            return jsonify({'error': 'Comment not found'}), 404
+        
+        # Check current vote
+        vote_ref = realtime_db_ref.child('forum').child('comment_votes').child(comment_id).child(user_id)
+        current_vote = vote_ref.get()
+        
+        # Get current comment data
+        comment_data = comment_ref.get()
+        upvotes = comment_data.get('upvotes', 0)
+        downvotes = comment_data.get('downvotes', 0)
+        
+        # Remove previous vote if exists
+        if current_vote == 'up':
+            upvotes -= 1
+        elif current_vote == 'down':
+            downvotes -= 1
+        
+        # Add new vote if different from current
+        if current_vote != direction:
+            if direction == 'up':
+                upvotes += 1
             else:
-                if liked:
-                    favorites_ref.add({'variant': variant})
-                    app.logger.info(f"Added favorite: {variant}")
-                    return jsonify({"status": "added", "variant": variant, "liked": True}), 200
+                downvotes += 1
+            vote_ref.set(direction)
+        else:
+            # Remove vote if same as current
+            vote_ref.delete()
+        
+        # Update comment vote counts
+        comment_ref.update({
+            'upvotes': upvotes,
+            'downvotes': downvotes
+        })
+        
+        return jsonify({
+            'upvotes': upvotes,
+            'downvotes': downvotes,
+            'userVote': direction if current_vote != direction else None
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error voting on comment: {e}")
+        return jsonify({'error': 'Failed to vote on comment'}), 500
 
-            return jsonify({"status": "no change", "variant": variant, "liked": liked}), 200
+@app.route('/api/forum/posts/<post_id>/vote', methods=['POST'])
+def vote_on_post(post_id):
+    """Vote on a forum post (unchanged)"""
+    if 'user' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        data = request.json
+        direction = data.get('direction')  # 'up' or 'down'
+        user_id = session['user']
+        
+        if direction not in ['up', 'down']:
+            return jsonify({'error': 'Invalid vote direction'}), 400
+        
+        # Check current vote
+        vote_ref = realtime_db_ref.child('forum').child('votes').child(post_id).child(user_id)
+        current_vote = vote_ref.get()
+        
+        # Get current post data
+        post_ref = realtime_db_ref.child('forum').child('posts').child(post_id)
+        post_data = post_ref.get()
+        
+        if not post_data:
+            return jsonify({'error': 'Post not found'}), 404
+        
+        upvotes = post_data.get('upvotes', 0)
+        downvotes = post_data.get('downvotes', 0)
+        
+        # Remove previous vote if exists
+        if current_vote == 'up':
+            upvotes -= 1
+        elif current_vote == 'down':
+            downvotes -= 1
+        
+        # Add new vote if different from current
+        if current_vote != direction:
+            if direction == 'up':
+                upvotes += 1
+            else:
+                downvotes += 1
+            vote_ref.set(direction)
+        else:
+            # Remove vote if same as current
+            vote_ref.delete()
+        
+        # Update post vote counts
+        post_ref.update({
+            'upvotes': upvotes,
+            'downvotes': downvotes
+        })
+        
+        return jsonify({
+            'upvotes': upvotes,
+            'downvotes': downvotes,
+            'userVote': direction if current_vote != direction else None
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error voting on post: {e}")
+        return jsonify({'error': 'Failed to vote'}), 500
+
+@app.route('/api/forum/posts/<post_id>/comments', methods=['GET'])
+def get_post_comments(post_id):
+    """Get comments for a specific post (unchanged - supports replies)"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        comments_ref = realtime_db_ref.child('forum').child('comments').child(post_id)
+        comments_data = comments_ref.get() or {}
+        
+        # Convert to list with IDs
+        comments_list = []
+        for comment_id, comment_data in comments_data.items():
+            comment_data['id'] = comment_id
+            comments_list.append(comment_data)
+        
+        # Sort by creation date (oldest first for comments)
+        comments_list.sort(key=lambda x: x.get('createdAt', ''))
+        
+        return jsonify(comments_list)
+    except Exception as e:
+        app.logger.error(f"Error fetching comments: {e}")
+        return jsonify({"error": "Failed to fetch comments"}), 500
+
+@app.route('/api/forum/posts/<post_id>/comments', methods=['POST'])
+def create_comment(post_id):
+    """Create a comment on a post with anonymous option and reply support"""
+    if 'user' not in session:
+        return jsonify({'error': 'Not authenticated'}), 401
+    
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        data = request.json
+        user_id = session['user']
+        user_email = session.get('email', 'Anonymous')
+        
+        # Validate input
+        if not data.get('text'):
+            return jsonify({'error': 'Comment text is required'}), 400
+        
+        # FEATURE 3: Handle anonymous commenting
+        is_anonymous = data.get('isAnonymous', False)
+        author_name = 'Anonymous' if is_anonymous else user_email
+        
+        comment_data = {
+            'text': data.get('text'),
+            'authorId': user_id,
+            'authorName': author_name,
+            'isAnonymous': is_anonymous,
+            'postId': post_id,
+            'createdAt': datetime.utcnow().isoformat() + 'Z',
+            'upvotes': 0,
+            'downvotes': 0
+        }
+        
+        # FEATURE 6: Handle replies to comments
+        parent_id = data.get('parentId')
+        if parent_id:
+            comment_data['parentId'] = parent_id
+        
+        # Add comment to database
+        comments_ref = realtime_db_ref.child('forum').child('comments').child(post_id)
+        new_comment = comments_ref.push(comment_data)
+        
+        # Update comment count on post
+        post_ref = realtime_db_ref.child('forum').child('posts').child(post_id)
+        post_data = post_ref.get()
+        if post_data:
+            current_count = post_data.get('commentCount', 0)
+            post_ref.update({'commentCount': current_count + 1})
+        
+        # Return the created comment with its ID
+        comment_data['id'] = new_comment.key
+        return jsonify(comment_data), 201
+        
+    except Exception as e:
+        app.logger.error(f"Error creating comment: {e}")
+        return jsonify({'error': 'Failed to create comment'}), 500
+
+@app.route('/api/forum/posts/<post_id>/views', methods=['POST'])
+def increment_post_views(post_id):
+    """Increment view count for a post (unchanged)"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        post_ref = realtime_db_ref.child('forum').child('posts').child(post_id)
+        post_data = post_ref.get()
+        
+        if not post_data:
+            return jsonify({'error': 'Post not found'}), 404
+        
+        current_views = post_data.get('views', 0)
+        post_ref.update({'views': current_views + 1})
+        
+        return jsonify({'views': current_views + 1})
+        
+    except Exception as e:
+        app.logger.error(f"Error incrementing views: {e}")
+        return jsonify({'error': 'Failed to increment views'}), 500
+           
+@app.route('/debug/csv-status')
+def debug_csv_status():
+    """Quick debug to see CSV loading status"""
+    import os
+    
+    # Check DataFrame status
+    df_status = {
+        "df_empty": df.empty,
+        "df_shape": df.shape if not df.empty else "Empty",
+        "df_columns": list(df.columns) if not df.empty else []
+    }
+    
+    # Check file existence
+    file_checks = {}
+    possible_paths = [
+        'car_data.csv',
+        './car_data.csv', 
+        'static/car_data.csv',
+        'data/car_data.csv'
+    ]
+    
+    for path in possible_paths:
+        file_checks[path] = {
+            "exists": os.path.exists(path),
+            "size": os.path.getsize(path) if os.path.exists(path) else 0
+        }
+    
+    # Check current directory
+    directory_info = {
+        "current_dir": os.getcwd(),
+        "files_in_current_dir": os.listdir('.') if os.path.exists('.') else []
+    }
+    
+    return jsonify({
+        "dataframe_status": df_status,
+        "file_checks": file_checks,
+        "directory_info": directory_info,
+        "app_root_path": app.root_path if hasattr(app, 'root_path') else "Unknown"
+    })
+    
+@app.route('/get_colors')
+def get_colors():
+    """UPDATED: Get color variants for a specific model with enhanced detection"""
+    if df.empty:
+        app.logger.warning("No car data available for colors")
+        return jsonify([])
+    
+    model = request.args.get('model', '').strip()
+    brand = request.args.get('brand', '').strip()
+    
+    if not model:
+        app.logger.warning("No model specified for color lookup")
+        return jsonify([])
+
+    try:
+        app.logger.info(f"🎨 Getting colors for model: {model}, brand: {brand}")
+        
+        # Clean model and brand names
+        model_clean = model.replace(' ', '_').lower()
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        
+        # Remove special characters
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        
+        colors = []
+        resources_dir = 'static/resources'
+        
+        if os.path.exists(resources_dir):
+            all_files = os.listdir(resources_dir)
             
-        except Exception as e:
-            app.logger.error(f"Error toggling favorite: {e}")
-            return jsonify({"error": f"Failed to toggle favorite: {str(e)}"}), 500
-    else:
-        app.logger.warning("Unauthorized access to toggle-fave")
-        return jsonify({"error": "User not logged in"}), 401
+            # FIXED: Enhanced color detection logic
+            for filename in all_files:
+                filename_lower = filename.lower()
+                
+                # Skip non-image files
+                if not filename_lower.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                    continue
+                
+                # Check if this file belongs to our model
+                if model_clean in filename_lower:
+                    # Remove extension
+                    base_name = filename_lower
+                    for ext in ['.png', '.jpg', '.jpeg', '.webp', '.gif']:
+                        base_name = base_name.replace(ext, '')
+                    
+                    # Split filename into parts
+                    parts = base_name.split('_')
+                    
+                    # Look for color patterns
+                    potential_colors = []
+                    
+                    # Common color patterns
+                    known_colors = [
+                        'black', 'white', 'red', 'blue', 'silver', 'gray', 'grey', 
+                        'green', 'yellow', 'orange', 'purple', 'brown', 'gold',
+                        'beige', 'cream', 'pearl', 'metallic', 'matte', 'glossy'
+                    ]
+                    
+                    # Check each part for colors
+                    for part in parts:
+                        # Skip brand, model, and variant parts
+                        if part in [brand_clean, model_clean]:
+                            continue
+                            
+                        # Check if it's a known color
+                        if part in known_colors:
+                            potential_colors.append(part)
+                        # Check if it contains a color (like "pearlwhite")
+                        else:
+                            for color in known_colors:
+                                if color in part and len(part) > len(color):
+                                    potential_colors.append(part)
+                                    break
+                            else:
+                                # If it's not a known technical term, consider it a potential color
+                                if (len(part) > 2 and 
+                                    part not in ['suv', 'sedan', 'hatchback', 'turbo', 'hybrid', 'electric', 'manual', 'auto']):
+                                    potential_colors.append(part)
+                    
+                    # Add colors found in this file
+                    for color in potential_colors:
+                        color_name = color.replace('_', ' ').title()
+                        
+                        # Check if we already have this color
+                        if not any(c['color'] == color_name for c in colors):
+                            colors.append({
+                                'color': color_name,
+                                'image_path': f'/static/resources/{filename}'
+                            })
+                            app.logger.info(f"🎨 Found color variant: {color_name} -> {filename}")
+                    
+                    # SPECIAL CASE: If no specific color detected but filename suggests it's a color variant
+                    if not potential_colors and len(parts) >= 2:
+                        # Last part might be a color (especially for files like "vios_black")
+                        last_part = parts[-1]
+                        if last_part not in [brand_clean, model_clean] and len(last_part) > 2:
+                            color_name = last_part.replace('_', ' ').title()
+                            if not any(c['color'] == color_name for c in colors):
+                                colors.append({
+                                    'color': color_name,
+                                    'image_path': f'/static/resources/{filename}'
+                                })
+                                app.logger.info(f"🎨 Found potential color: {color_name} -> {filename}")
+        
+        # Remove duplicates and sort
+        unique_colors = []
+        seen_colors = set()
+        for color in colors:
+            if color['color'] not in seen_colors:
+                unique_colors.append(color)
+                seen_colors.add(color['color'])
+        
+        unique_colors.sort(key=lambda x: x['color'])
+        
+        app.logger.info(f"✅ Found {len(unique_colors)} color variants for {brand} {model}")
+        return jsonify(unique_colors)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting colors for {brand} {model}: {e}")
+        return jsonify([])
+    """Get color variants for a specific model with actual image checking"""
+    if df.empty:
+        app.logger.warning("No car data available for colors")
+        return jsonify([])
+    
+    model = request.args.get('model', '').strip()
+    brand = request.args.get('brand', '').strip()  # NEW: Add brand parameter
+    
+    if not model:
+        app.logger.warning("No model specified for color lookup")
+        return jsonify([])
 
-# Error handlers
+    try:
+        app.logger.info(f"🎨 Getting colors for model: {model}, brand: {brand}")
+        
+        # Clean model and brand names
+        model_clean = model.replace(' ', '_').lower()
+        brand_clean = brand.replace(' ', '_').lower() if brand else ''
+        
+        # Remove special characters
+        model_clean = re.sub(r'[^a-z0-9_]', '', model_clean)
+        brand_clean = re.sub(r'[^a-z0-9_]', '', brand_clean)
+        
+        colors = []
+        resources_dir = 'static/resources'
+        
+        if os.path.exists(resources_dir):
+            all_files = os.listdir(resources_dir)
+            
+            # Look for image files that match the model
+            for filename in all_files:
+                filename_lower = filename.lower()
+                
+                # Skip non-image files
+                if not filename_lower.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif')):
+                    continue
+                
+                # FIXED: Check for brand-model combination first
+                if brand_clean:
+                    # Look for brand_model_color pattern
+                    brand_model_pattern = f"{brand_clean}_{model_clean}"
+                    if brand_model_pattern in filename_lower:
+                        # Extract color from filename
+                        # Pattern: brand_model_color.ext
+                        base_name = filename_lower.replace(f"{brand_model_pattern}_", "").split('.')[0]
+                        if base_name and base_name not in [brand_clean, model_clean]:
+                            color_name = base_name.replace('_', ' ').title()
+                            colors.append({
+                                'color': color_name,
+                                'image_path': f'/static/resources/{filename}'
+                            })
+                            app.logger.info(f"🎨 Found color variant: {color_name} -> {filename}")
+                    
+                    # Also check model_brand_color pattern
+                    model_brand_pattern = f"{model_clean}_{brand_clean}"
+                    if model_brand_pattern in filename_lower:
+                        base_name = filename_lower.replace(f"{model_brand_pattern}_", "").split('.')[0]
+                        if base_name and base_name not in [brand_clean, model_clean]:
+                            color_name = base_name.replace('_', ' ').title()
+                            colors.append({
+                                'color': color_name,
+                                'image_path': f'/static/resources/{filename}'
+                            })
+                
+                # Fallback: Look for model_color pattern (only if brand matches known associations)
+                elif model_clean in filename_lower:
+                    # Verify this is the right brand's model
+                    brand_model_associations = {
+                        'civic': 'honda',
+                        'vios': 'toyota', 
+                        'cayenne': 'porsche',
+                        'id6': 'volkswagen'
+                    }
+                    
+                    expected_brand = brand_model_associations.get(model_clean)
+                    if not brand or brand_clean == expected_brand:
+                        # Extract color
+                        parts = filename_lower.split('_')
+                        if len(parts) >= 2:
+                            color_part = parts[-1].split('.')[0]
+                            if color_part != model_clean:
+                                color_name = color_part.replace('_', ' ').title()
+                                colors.append({
+                                    'color': color_name,
+                                    'image_path': f'/static/resources/{filename}'
+                                })
+        
+        # Remove duplicates
+        unique_colors = []
+        seen_colors = set()
+        for color in colors:
+            if color['color'] not in seen_colors:
+                unique_colors.append(color)
+                seen_colors.add(color['color'])
+        
+        app.logger.info(f"✅ Found {len(unique_colors)} color variants for {brand} {model}")
+        return jsonify(unique_colors)
+        
+    except Exception as e:
+        app.logger.error(f"Error getting colors for {brand} {model}: {e}")
+        return jsonify([])
+    
+    """Placeholder for car color variants - currently not implemented"""
+    model = request.args.get('model', '')
+    app.logger.info(f"Color variants requested for model: {model}")
+    
+    # For now, return empty array since this feature isn't implemented yet
+    return jsonify([])
+
+@app.route('/favicon.ico')
+def favicon():
+    """Handle favicon requests to prevent 404 errors"""
+    from flask import Response
+    return Response(status=204)  # No content response
+
+###################
+# Car Brand Logos #
+###################
+
+@app.route('/static/brand_logo/<path:filename>')
+def serve_brand_logo(filename):
+    """Serve brand logo files"""
+    try:
+        # Path to your brand_logo folder
+        brand_logo_path = os.path.join(app.root_path, 'brand_logo')
+        
+        # Check if the brand_logo directory exists
+        if not os.path.exists(brand_logo_path):
+            app.logger.warning(f"Brand logo directory not found: {brand_logo_path}")
+            return "Brand logo directory not found", 404
+        
+        # Check if the specific file exists
+        file_path = os.path.join(brand_logo_path, filename)
+        if not os.path.exists(file_path):
+            app.logger.warning(f"Brand logo file not found: {file_path}")
+            # Return a default logo or 404
+            return "Logo not found", 404
+        
+        app.logger.info(f"Serving brand logo: {filename}")
+        return send_from_directory(brand_logo_path, filename)
+        
+    except Exception as e:
+        app.logger.error(f"Error serving brand logo {filename}: {e}")
+        return "Error serving logo", 500
+
+############################
+# Enhanced debug endpoints #
+############################
+
+@app.route('/debug/csv-detailed')
+def debug_csv_detailed():
+    """Detailed CSV debug information"""
+    global df
+    
+    debug_info = {
+        "csv_loaded": not df.empty,
+        "csv_shape": df.shape if not df.empty else None,
+        "csv_columns": list(df.columns) if not df.empty else [],
+        "csv_dtypes": df.dtypes.to_dict() if not df.empty else {},
+        "sample_data": df.head().to_dict() if not df.empty else None,
+        "brand_counts": df['Brand'].value_counts().to_dict() if not df.empty and 'Brand' in df.columns else {},
+        "fuel_type_counts": df['Fuel_Type'].value_counts().to_dict() if not df.empty and 'Fuel_Type' in df.columns else {},
+        "null_counts": df.isnull().sum().to_dict() if not df.empty else {}
+    }
+    
+    return jsonify(debug_info)
+
+@app.route('/debug/reload-csv-enhanced')
+def debug_reload_csv_enhanced():
+    """Reload CSV with enhanced logging"""
+    global df
+    
+    try:
+        success = load_csv_data_enhanced()
+        
+        return jsonify({
+            "success": success,
+            "dataframe_shape": df.shape if not df.empty else None,
+            "dataframe_columns": list(df.columns) if not df.empty else [],
+            "brand_counts": df['Brand'].value_counts().to_dict() if not df.empty and 'Brand' in df.columns else {},
+            "sample_data": df.head().to_dict() if not df.empty else None
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        })
+
+@app.route('/debug/files')
+def debug_files():
+    """Check what files exist on the server"""
+    import os
+    
+    debug_info = {
+        "current_directory": os.getcwd(),
+        "directory_contents": [],
+        "csv_file_checks": {},
+        "environment": os.environ.get('RAILWAY_ENVIRONMENT', 'unknown')
+    }
+    
+    # List all files in current directory
+    try:
+        for item in os.listdir('.'):
+            item_path = os.path.join('.', item)
+            debug_info["directory_contents"].append({
+                "name": item,
+                "is_file": os.path.isfile(item_path),
+                "is_dir": os.path.isdir(item_path),
+                "size": os.path.getsize(item_path) if os.path.isfile(item_path) else 0
+            })
+    except Exception as e:
+        debug_info["directory_error"] = str(e)
+    
+    # Check specific CSV file locations
+    csv_locations = [
+        'car_data.csv',
+        './car_data.csv',
+        'static/car_data.csv',
+        'data/car_data.csv'
+    ]
+    
+    for location in csv_locations:
+        debug_info["csv_file_checks"][location] = {
+            "exists": os.path.exists(location),
+            "size": os.path.getsize(location) if os.path.exists(location) else 0,
+            "is_readable": os.access(location, os.R_OK) if os.path.exists(location) else False
+        }
+    
+    return jsonify(debug_info)  
+
+    """Debug endpoint to check profile picture files and database entries"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        # Check files in upload directory
+        files_info = []
+        if os.path.exists(UPLOAD_FOLDER):
+            for filename in os.listdir(UPLOAD_FOLDER):
+                filepath = os.path.join(UPLOAD_FOLDER, filename)
+                if os.path.isfile(filepath):
+                    files_info.append({
+                        "filename": filename,
+                        "size": os.path.getsize(filepath),
+                        "url": f"/static/profile_pictures/{filename}"
+                    })
+        
+        # Check database entries
+        users_ref = realtime_db_ref.child('users')
+        users_data = users_ref.get() or {}
+        
+        users_with_pictures = []
+        for uid, user_data in users_data.items():
+            if user_data.get('profilePictureUrl'):
+                users_with_pictures.append({
+                    "uid": uid,
+                    "email": user_data.get('email'),
+                    "username": user_data.get('username'),
+                    "profilePictureUrl": user_data.get('profilePictureUrl')
+                })
+        
+        return jsonify({
+            "upload_folder_exists": os.path.exists(UPLOAD_FOLDER),
+            "upload_folder_path": UPLOAD_FOLDER,
+            "files_count": len(files_info),
+            "files": files_info,
+            "users_with_pictures_count": len(users_with_pictures),
+            "users_with_pictures": users_with_pictures
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in profile pictures debug: {e}")
+        return jsonify({"error": str(e)}), 500
+
+    """Refresh user session"""
+    try:
+        if session.get('authenticated') and session.get('user'):
+            # Update session timestamp
+            session['last_refresh'] = int(time.time())
+            app.logger.info(f"✅ Session refreshed for user: {session.get('email')}")
+            return jsonify({"status": "success", "message": "Session refreshed"}), 200
+        else:
+            app.logger.warning("⚠️ Session refresh requested but user not authenticated")
+            return jsonify({"status": "error", "message": "Not authenticated"}), 401
+    except Exception as e:
+        app.logger.error(f"❌ Error refreshing session: {e}")
+        return jsonify({"status": "error", "message": "Session refresh failed"}), 500
+
+    """Debug endpoint to check profile picture files and database entries"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        # Check files in upload directory
+        files_info = []
+        upload_folder_exists = os.path.exists(UPLOAD_FOLDER)
+        
+        if upload_folder_exists:
+            try:
+                for filename in os.listdir(UPLOAD_FOLDER):
+                    filepath = os.path.join(UPLOAD_FOLDER, filename)
+                    if os.path.isfile(filepath):
+                        files_info.append({
+                            "filename": filename,
+                            "size": os.path.getsize(filepath),
+                            "url": f"/static/profile_pictures/{filename}",
+                            "full_path": filepath
+                        })
+            except Exception as e:
+                app.logger.error(f"Error listing profile picture files: {e}")
+        
+        # Check database entries
+        users_ref = realtime_db_ref.child('users')
+        users_data = users_ref.get() or {}
+        
+        users_with_pictures = []
+        for uid, user_data in users_data.items():
+            if user_data.get('profilePictureUrl'):
+                users_with_pictures.append({
+                    "uid": uid,
+                    "email": user_data.get('email'),
+                    "username": user_data.get('username'),
+                    "profilePictureUrl": user_data.get('profilePictureUrl')
+                })
+        
+        return jsonify({
+            "upload_folder_exists": upload_folder_exists,
+            "upload_folder_path": UPLOAD_FOLDER,
+            "upload_folder_writable": os.access(UPLOAD_FOLDER, os.W_OK) if upload_folder_exists else False,
+            "files_count": len(files_info),
+            "files": files_info,
+            "users_with_pictures_count": len(users_with_pictures),
+            "users_with_pictures": users_with_pictures,
+            "current_user_session": {
+                "user": session.get('user'),
+                "email": session.get('email'),
+                "profile_picture_url": session.get('profile_picture_url'),
+                "authenticated": session.get('authenticated')
+            }
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in profile pictures debug: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/debug/favorites-detailed')
+def debug_favorites_detailed():
+    """Enhanced debug endpoint for favorites issues"""
+    if not realtime_db_ref:
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        user_id = session.get('user')
+        if not user_id:
+            return jsonify({"error": "No user in session"}), 401
+        
+        # Get favorites from database
+        favorites_ref = realtime_db_ref.child('favorites').child(user_id)
+        favorites_data = favorites_ref.get() or {}
+        
+        # Process each favorite and try to get its specs
+        detailed_favorites = []
+        
+        for sanitized_key, variant_data in favorites_data.items():
+            if isinstance(variant_data, dict):
+                original_variant = variant_data.get('variant', unsanitize_firebase_key(sanitized_key))
+                
+                # Try to get specs for this variant
+                try:
+                    # Check if variant exists in CSV data
+                    variant_specs = None
+                    if not df.empty:
+                        matching_cars = df[df["Variant"].str.lower() == original_variant.lower()]
+                        if not matching_cars.empty:
+                            variant_specs = matching_cars.iloc[0].to_dict()
+                    
+                    detailed_favorites.append({
+                        'variant': original_variant,
+                        'sanitized_key': sanitized_key,
+                        'variant_data': variant_data,
+                        'specs_available': variant_specs is not None,
+                        'specs_preview': {
+                            'Brand': variant_specs.get('Brand') if variant_specs else None,
+                            'Model': variant_specs.get('Model') if variant_specs else None,
+                            'Price': variant_specs.get('Price') if variant_specs else None
+                        } if variant_specs else None
+                    })
+                    
+                except Exception as spec_error:
+                    detailed_favorites.append({
+                        'variant': original_variant,
+                        'sanitized_key': sanitized_key,
+                        'variant_data': variant_data,
+                        'specs_available': False,
+                        'spec_error': str(spec_error)
+                    })
+        
+        # Get CSV data info
+        csv_info = {
+            'loaded': not df.empty,
+            'total_rows': len(df) if not df.empty else 0,
+            'columns': list(df.columns) if not df.empty else [],
+            'unique_variants_count': len(df['Variant'].unique()) if not df.empty and 'Variant' in df.columns else 0,
+            'sample_variants': df['Variant'].head(10).tolist() if not df.empty and 'Variant' in df.columns else []
+        }
+        
+        return jsonify({
+            "session_info": {
+                "user": session.get('user'),
+                "email": session.get('email'),
+                "authenticated": session.get('authenticated')
+            },
+            "favorites_count": len(favorites_data),
+            "detailed_favorites": detailed_favorites,
+            "csv_data_info": csv_info
+        })
+        
+    except Exception as e:
+        app.logger.error(f"Error in detailed favorites debug: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/debug/images')
+def debug_images():
+    """Debug endpoint to check available images"""
+    try:
+        debug_info = {
+            "resources_directory": {
+                "path": "static/resources",
+                "exists": os.path.exists("static/resources"),
+                "writable": os.access("static/resources", os.W_OK) if os.path.exists("static/resources") else False
+            },
+            "image_files": [],
+            "total_files": 0
+        }
+        
+        # Check static/resources directory
+        resources_path = "static/resources"
+        if os.path.exists(resources_path):
+            try:
+                all_files = os.listdir(resources_path)
+                image_extensions = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg')
+                
+                for filename in all_files:
+                    if filename.lower().endswith(image_extensions):
+                        filepath = os.path.join(resources_path, filename)
+                        file_size = os.path.getsize(filepath) if os.path.exists(filepath) else 0
+                        
+                        debug_info["image_files"].append({
+                            "filename": filename,
+                            "url": f"/static/resources/{filename}",
+                            "size": file_size,
+                            "extension": filename.split('.')[-1].lower()
+                        })
+                
+                debug_info["total_files"] = len(debug_info["image_files"])
+                
+                # Group by extension
+                extensions = {}
+                for img in debug_info["image_files"]:
+                    ext = img["extension"]
+                    extensions[ext] = extensions.get(ext, 0) + 1
+                
+                debug_info["extensions_count"] = extensions
+                
+            except Exception as list_error:
+                debug_info["list_error"] = str(list_error)
+        
+        # Check alternative directories
+        alt_paths = ["static/car_images", "static/img", "resources"]
+        debug_info["alternative_directories"] = {}
+        
+        for alt_path in alt_paths:
+            debug_info["alternative_directories"][alt_path] = {
+                "exists": os.path.exists(alt_path),
+                "file_count": 0
+            }
+            if os.path.exists(alt_path):
+                try:
+                    files = os.listdir(alt_path)
+                    debug_info["alternative_directories"][alt_path]["file_count"] = len(files)
+                except:
+                    pass
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/debug/image-paths')
+def debug_image_paths():
+    """Debug endpoint to check available images and their brand associations"""
+    try:
+        debug_info = {
+            "resources_directory_exists": os.path.exists("static/resources"),
+            "available_images": [],
+            "brand_associations": {},
+            "potential_conflicts": []
+        }
+        
+        resources_path = "static/resources"
+        if os.path.exists(resources_path):
+            all_files = os.listdir(resources_path)
+            image_extensions = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg')
+            
+            for filename in all_files:
+                if filename.lower().endswith(image_extensions):
+                    debug_info["available_images"].append({
+                        "filename": filename,
+                        "url": f"/static/resources/{filename}",
+                        "size": os.path.getsize(os.path.join(resources_path, filename))
+                    })
+                    
+                    # Analyze filename for brand association
+                    filename_lower = filename.lower()
+                    detected_brands = []
+                    
+                    # Check for brand names in filename
+                    brands = ['honda', 'toyota', 'porsche', 'volkswagen', 'mercedes', 'bmw', 'ford', 'hyundai', 'kia', 'nissan', 'mazda', 'subaru', 'mitsubishi', 'isuzu', 'suzuki', 'mg']
+                    
+                    for brand in brands:
+                        if brand in filename_lower:
+                            detected_brands.append(brand)
+                    
+                    if detected_brands:
+                        debug_info["brand_associations"][filename] = detected_brands
+                        
+                        # Check for potential conflicts (multiple brands in one file)
+                        if len(detected_brands) > 1:
+                            debug_info["potential_conflicts"].append({
+                                "filename": filename,
+                                "detected_brands": detected_brands
+                            })
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
+@app.route('/refresh-session', methods=['POST'])
+def refresh_session():
+    """Refresh user session"""
+    try:
+        if session.get('authenticated') and session.get('user'):
+            # Update session timestamp
+            session['last_refresh'] = int(time.time())
+            app.logger.info(f"✅ Session refreshed for user: {session.get('email')}")
+            return jsonify({"status": "success", "message": "Session refreshed"}), 200
+        else:
+            app.logger.warning("⚠️ Session refresh requested but user not authenticated")
+            return jsonify({"status": "error", "message": "Not authenticated"}), 401
+    except Exception as e:
+        app.logger.error(f"❌ Error refreshing session: {e}")
+        return jsonify({"status": "error", "message": "Session refresh failed"}), 500
+
+    """Update user's username with enhanced error handling"""
+    app.logger.info("🔄 Update username request received")
+    
+    if not realtime_db_ref:
+        app.logger.error("❌ Database not available")
+        return jsonify({"error": "Database not available"}), 500
+    
+    try:
+        app.logger.info("📥 Getting request data...")
+        data = request.get_json()
+        app.logger.info(f"📦 Request data: {data}")
+        
+        if not data:
+            app.logger.error("❌ No JSON data received")
+            return jsonify({"error": "No data provided"}), 400
+        
+        uid = data.get('uid')
+        new_username = data.get('newUsername', '').strip()
+        
+        app.logger.info(f"🔍 UID: {uid}")
+        app.logger.info(f"🔍 New username: {new_username}")
+        
+        if not uid or not new_username:
+            app.logger.error("❌ Missing required fields")
+            return jsonify({"error": "Missing required fields"}), 400
+        
+        # Validate username
+        app.logger.info("🔄 Validating username...")
+        is_valid, message = validate_username(new_username)
+        app.logger.info(f"✅ Username validation result: {is_valid}, {message}")
+        
+        if not is_valid:
+            return jsonify({"error": message}), 400
+        
+        # Check if username is already taken (excluding current user)
+        app.logger.info("🔄 Checking username availability...")
+        users_ref = realtime_db_ref.child('users')
+        
+        try:
+            existing_users = users_ref.order_by_child('username').equal_to(new_username).get()
+            app.logger.info(f"🔍 Existing users check result: {existing_users}")
+        except Exception as db_error:
+            app.logger.error(f"❌ Database query error: {db_error}")
+            return jsonify({"error": "Database query failed"}), 500
+        
+        # Remove current user from results
+        if existing_users:
+            existing_users = {k: v for k, v in existing_users.items() if k != uid}
+            if existing_users:
+                app.logger.warning(f"⚠️ Username already taken: {new_username}")
+                return jsonify({"error": "Username already taken"}), 400
+        
+        # Update username
+        app.logger.info("🔄 Updating username in database...")
+        try:
+            user_ref = users_ref.child(uid)
+            user_ref.update({'username': new_username})
+            app.logger.info(f"✅ Username updated successfully for user {uid}: {new_username}")
+            
+            # Update session data
+            session['username'] = new_username
+            
+        except Exception as update_error:
+            app.logger.error(f"❌ Database update error: {update_error}")
+            return jsonify({"error": "Database update failed"}), 500
+        
+        return jsonify({"message": "Username updated successfully"}), 200
+        
+    except Exception as e:
+        app.logger.error(f"❌ Unexpected error updating username: {e}")
+        app.logger.error(f"❌ Error type: {type(e)}")
+        import traceback
+        app.logger.error(f"❌ Traceback: {traceback.format_exc()}")
+        return jsonify({"error": "Failed to update username"}), 500
+    
+@app.route('/debug/username-update', methods=['GET', 'POST'])
+def debug_username_update():
+    """Debug endpoint to troubleshoot username update issues"""
+    try:
+        debug_info = {
+            "database_available": realtime_db_ref is not None,
+            "current_time": datetime.utcnow().isoformat() + 'Z',
+            "session_data": {
+                "has_session": bool(session),
+                "user_in_session": 'user' in session if session else False,
+                "session_keys": list(session.keys()) if session else []
+            }
+        }
+        
+        # Test database connection
+        if realtime_db_ref:
+            try:
+                # Test basic database operations
+                test_ref = realtime_db_ref.child('test_connection')
+                test_data = {'timestamp': int(time.time()), 'test': 'connection_test'}
+                
+                # Test write
+                test_ref.set(test_data)
+                debug_info["database_write_test"] = "success"
+                
+                # Test read
+                read_result = test_ref.get()
+                debug_info["database_read_test"] = "success"
+                debug_info["read_result"] = read_result
+                
+                # Test query (the operation that's failing)
+                users_ref = realtime_db_ref.child('users')
+                
+                # Test basic query
+                try:
+                    all_users = users_ref.get()
+                    debug_info["users_query_test"] = "success"
+                    debug_info["total_users"] = len(all_users) if all_users else 0
+                except Exception as query_error:
+                    debug_info["users_query_test"] = f"failed: {str(query_error)}"
+                
+                # Test username query (the specific failing operation)
+                try:
+                    test_username = "test_username_query"
+                    username_query = users_ref.order_by_child('username').equal_to(test_username).get()
+                    debug_info["username_query_test"] = "success"
+                    debug_info["username_query_result"] = username_query
+                except Exception as username_query_error:
+                    debug_info["username_query_test"] = f"failed: {str(username_query_error)}"
+                
+                # Clean up test data
+                test_ref.delete()
+                
+            except Exception as db_error:
+                debug_info["database_error"] = str(db_error)
+                debug_info["database_available"] = False
+        
+        # If POST request, test the actual username update process
+        if request.method == 'POST':
+            data = request.get_json()
+            if data and data.get('test_uid') and data.get('test_username'):
+                test_uid = data['test_uid']
+                test_username = data['test_username']
+                
+                debug_info["test_update"] = {}
+                
+                try:
+                    # Test the exact same process as the real endpoint
+                    users_ref = realtime_db_ref.child('users')
+                    
+                    # Test username availability check
+                    existing_users = users_ref.order_by_child('username').equal_to(test_username).get()
+                    debug_info["test_update"]["availability_check"] = "success"
+                    debug_info["test_update"]["existing_users"] = existing_users
+                    
+                    # Test user update (simulate)
+                    user_ref = users_ref.child(test_uid)
+                    user_data = user_ref.get()
+                    debug_info["test_update"]["user_exists"] = user_data is not None
+                    debug_info["test_update"]["user_data"] = user_data
+                    
+                    # Test update operation (don't actually update)
+                    debug_info["test_update"]["would_update"] = True
+                    
+                except Exception as test_error:
+                    debug_info["test_update"]["error"] = str(test_error)
+        
+        return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "error_type": type(e).__name__
+        }), 500
+        
+##################
+# Error handlers #
+##################
+
 @app.errorhandler(404)
 def not_found(error):
     app.logger.warning(f"404 error: {request.url}")
@@ -651,7 +6311,51 @@ def internal_error(error):
     app.logger.error(f"500 error: {error}")
     return jsonify({"error": "Internal server error"}), 500
 
+    port = int(os.environ.get('PORT', 8000))
+    app.logger.info(f"Starting app on port {port}")
+    app.run(host='0.0.0.0', port=port, debug=False)
+    
+@app.route('/debug/session')
+def debug_session():
+    return jsonify({
+        'session_data': dict(session),
+        'has_user': 'user' in session,
+        'user_id': session.get('user'),
+        'email': session.get('email'),
+        'session_keys': list(session.keys())
+    })
+    
+@app.route('/test-db-connection')
+def test_db_connection():
+    """Test database connection"""
+    try:
+        if not realtime_db_ref:
+            return jsonify({"error": "realtime_db_ref is None"}), 500
+        
+        # Try a simple read operation
+        test_ref = realtime_db_ref.child('test')
+        test_data = test_ref.get()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Database connection working",
+            "realtime_db_ref_exists": realtime_db_ref is not None,
+            "test_data": test_data
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            "error": str(e),
+            "realtime_db_ref_exists": realtime_db_ref is not None
+        }), 500
+        
 if __name__ == "__main__":
     port = int(os.environ.get('PORT', 8000))
     app.logger.info(f"Starting app on port {port}")
+    
+    # Log all registered routes for debugging
+    app.logger.info("📋 Registered routes:")
+    for rule in app.url_map.iter_rules():
+        app.logger.info(f"  {rule.rule} -> {rule.endpoint}")
+    
     app.run(host='0.0.0.0', port=port, debug=False)

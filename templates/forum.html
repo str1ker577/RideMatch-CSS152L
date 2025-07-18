@@ -16,7 +16,7 @@
   <!-- Link to Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
-
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
 </head>
 <body>
 
@@ -37,21 +37,32 @@
       </div>
     </div>
   
-    <div id="signup-popup" class="popup">
-      <div class="popup-content">
-          <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
-          <h1>Sign Up</h1>
-          <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
-              <input type="email" name="email_signup" placeholder="Email" required>
-              <input type="password" name="password_signup" placeholder="Password" required>
-              <button type="submit">Sign Up</button>
-          </form>
-          <p class="success-message"></p>
-          <p class="error-message12"></p> <!-- Error message element -->
+<div id="signup-popup" class="popup">
+  <div class="popup-content">
+      <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+      <h1>Sign Up</h1>
+      <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+          <!-- NEW: Username field -->
+          <input type="text" name="username" id="username_signup" placeholder="Username" required minlength="3" maxlength="20">
+          <small class="username-hint">Username must be 3-20 characters, letters and numbers only</small>
+          
+          <input type="email" name="email_signup" placeholder="Email" required>
+          <input type="password" name="password_signup" placeholder="Password" required>
+          
+          <!-- NEW: Profile picture upload (optional) -->
+          <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="margin: 10px 0;">
+          <small class="file-hint">Profile picture (optional)</small>
+          
+          <button type="submit">Sign Up</button>
+      </form>
+      <p class="success-message"></p>
+      <p class="error-message12"></p>
+      <!-- NEW: Username availability message -->
+      <p class="username-status"></p>
 
-          <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
-      </div>
-    </div>
+      <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+  </div>
+</div>
 
   <!-- Navbar -->
   <header>
@@ -118,7 +129,91 @@
   </div>
 </div>
   </header>
+
+  <body>
+
+<!-- Forum Content -->
+<div class="forum-container">
+  <div class="forum-header-centered">
+    <div class="forum-tabs">
+      <button class="forum-tab active" data-tab="recent">Recent Questions</button>
+      <button class="forum-tab" data-tab="popular">Most Popular</button>
+      <button class="forum-tab" data-tab="answered">Most Answered</button>
+      <button class="forum-tab" data-tab="trending">Trending</button>
+    </div>
+
+    <button class="ask-btn" onclick="openAskModal()">
+      <i class='bx bx-plus'></i>
+      Ask a Question
+    </button>
+  </div>
+
+  <div class="forum-main">
+    <div class="forum-posts" id="forum-posts">
+      <!-- Posts will be loaded here -->
+    </div>
+
+    <div class="forum-sidebar">
+      <div class="sidebar-section">
+        <h3>Forum Guidelines</h3>
+        <ul>
+          <li>• Be respectful to other users</li>
+          <li>• Search before asking a question</li>
+          <li>• Provide clear and detailed information</li>
+          <li>• Stay on topic about cars and automotive</li>
+        </ul>
+      </div>
+      
+      <div class="sidebar-section">
+        <h3>Popular Tags</h3>
+        <div class="tag-cloud">
+          <span class="tag">maintenance</span>
+          <span class="tag">buying-advice</span>
+          <span class="tag">repairs</span>
+          <span class="tag">financing</span>
+          <span class="tag">insurance</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+  <!-- Ask Question Modal -->
+  <div id="askModal" class="modal">
+  <div class="modal-content">
+    <span class="close-btn" onclick="closeAskModal()">&times;</span>
+    <h2>Ask a Question</h2>
+    <form id="askForm">
+      <div class="form-group">
+        <label for="question-title">Title:</label>
+        <input type="text" id="question-title" placeholder="What's your car-related question?" required>
+      </div>
+      
+      <div class="form-group">
+        <label for="question-body">Details:</label>
+        <textarea id="question-body" rows="5" placeholder="Provide more details about your question..." required></textarea>
+      </div>
+      
+      <div class="form-group">
+        <label for="question-tags">Tags (optional):</label>
+        <input type="text" id="question-tags" placeholder="e.g., maintenance, buying-advice, repairs">
+        <small>Separate tags with commas</small>
+      </div>
+      
+      <!-- FEATURE 3: Anonymous posting option -->
+      <div class="form-group">
+        <label class="anonymous-toggle">
+          <input type="checkbox" id="anonymous-post">
+          <span>Post anonymously</span>
+        </label>
+      </div>
+      
+      <button type="submit" class="submit-btn">Post Question</button>
+    </form>
+  </div>
+</div>
   
+</body>
 
 
     <footer>

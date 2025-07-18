@@ -16,6 +16,7 @@
   <!-- Link to Firebase -->
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.0.0/firebase-database-compat.js"></script>
 
 </head>
 <body>
@@ -37,21 +38,32 @@
       </div>
     </div>
   
-    <div id="signup-popup" class="popup">
-      <div class="popup-content">
-          <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
-          <h1>Sign Up</h1>
-          <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
-              <input type="email" name="email_signup" placeholder="Email" required>
-              <input type="password" name="password_signup" placeholder="Password" required>
-              <button type="submit">Sign Up</button>
-          </form>
-          <p class="success-message"></p>
-          <p class="error-message12"></p> <!-- Error message element -->
+<div id="signup-popup" class="popup">
+  <div class="popup-content">
+      <span class="close-btn" onclick="togglePopup('signup-popup')">&times;</span>
+      <h1>Sign Up</h1>
+      <form action="/signup" method="POST" onsubmit="return handleSignup(event);">
+          <!-- NEW: Username field -->
+          <input type="text" name="username" id="username_signup" placeholder="Username" required minlength="3" maxlength="20">
+          <small class="username-hint">Username must be 3-20 characters, letters and numbers only</small>
+          
+          <input type="email" name="email_signup" placeholder="Email" required>
+          <input type="password" name="password_signup" placeholder="Password" required>
+          
+          <!-- NEW: Profile picture upload (optional) -->
+          <input type="file" name="profile_picture" id="profile_picture" accept="image/*" style="margin: 10px 0;">
+          <small class="file-hint">Profile picture (optional)</small>
+          
+          <button type="submit">Sign Up</button>
+      </form>
+      <p class="success-message"></p>
+      <p class="error-message12"></p>
+      <!-- NEW: Username availability message -->
+      <p class="username-status"></p>
 
-          <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
-      </div>
-    </div>
+      <p>Already have an account? <a href="javascript:void(0)" onclick="togglePopup('login-popup'); togglePopup('signup-popup')">Login</a></p>
+  </div>
+</div>
 
   <!-- Navbar -->
   <header>
@@ -247,24 +259,105 @@
           <small>Date June 8th, 2025</small>
         </article>
 
-        <!-- Patch X placeholder -->
+        <!-- Patch 7 placeholder -->
         <article class="patch-item">
-          <h3>Patch 1.0.5 </h3>
-          <p>- </p>
+          <h3>Patch 1.0.7 Implemented the Testimonial Page functionality </h3>
+          <p>- Initialized <strong>Firebase Realtime Database</strong> to store users testimonials as well as any other user information for future integration.</p>
+          <p>- Created the testimonial form for users to input their titles (optional) and their testimonal.</p>
+          <p>- Users can now <strong>add and submit their testimonials</strong>.</p>
+          <p>- User testimonals can be seen by other users.</p>
+          <p>- Submissions are <strong>saved to Firebase Realtime Database</strong> and rendered dynamically as testimonal casds.</p>
+          <p>- Each testimonial displays: </p>
             <ul class="patch-subpoints">
-              <li>• </li>
+              <li>• Username</li>
+              <li>• Message Content</li>
+              <li>• Timestamp of submision</li>
             </ul>
-          <small>Date</small>
+          <small>Date June 10th, 2025</small>
         </article>
 
-        <!-- Patch X placeholder -->
+        <!-- Patch 8 placeholder -->
         <article class="patch-item">
-          <h3>Patch 1.0.5 </h3>
-          <p>- </p>
+          <h3>Patch 1.0.8 Enhanced Car Affordability Calculator with Results Display</h3>
+          <p>- Completed the <strong>Car Affordability Calculator</strong> functionality with comprehensive loan calculations and budget analysis.</p>
+          <p>- Implemented <strong>dedicated car results table</strong> that displays affordable vehicles within user's calculated budget.</p>
+          <p>- Added <strong>affordability scoring system</strong> with visual indicators (Excellent, Good, Fair, Tight) based on budget utilization.</p>
+          <p>- Enhanced calculator with <strong>automatic number formatting</strong> using commas for better readability of large numbers.</p>
+          <p>- Separated calculator styling into <strong>dedicated CSS file</strong> to prevent conflicts with main filter functionality.</p>
+          <p>- Calculator results table features:</p>
             <ul class="patch-subpoints">
-              <li>• </li>
+              <li>• Fixed header that stays visible while scrolling</li>
+              <li>• Displays Brand, Model, Variant, Fuel Type, Price, and Affordability level</li>
+              <li>• Centered alignment for Price and Affordability columns</li>
+              <li>• Consistent column spacing and professional styling</li>
+              <li>• Hover effects and visual feedback</li>
             </ul>
-          <small>Date</small>
+          <p>- Improved calculator form <strong>layout and spacing</strong> for better user experience.</p>
+          <p>- Fixed peso sign positioning to <strong>external placement</strong> preventing input field overlap.</p>
+          <p>- Added <strong>independent filtering system</strong> specifically for calculator that doesn't interfere with main car filter page.</p>
+          <small>Date June 15th, 2025</small>
+        </article>
+
+        <!-- Patch 9 placeholder -->
+        <article class="patch-item">
+          <h3>Patch 1.0.9 Major Chat Forum Enhancement Update</h3>
+          <p>- Complete overhaul of the forum system with Reddit-style functionality and enhanced user experience</p>
+          <ul class="patch-subpoints">
+            <li>• Added expandable/collapsible posts with visual arrow indicators</li>
+            <li>• Implemented "Tags:" labels for better post categorization and visibility</li>
+            <li>• Introduced anonymous posting option for both questions and comments</li>
+            <li>• Added upvote/downvote system for comments with real-time vote counts</li>
+            <li>• Implemented nested comment replies (Reddit-style threading)</li>
+            <li>• Added "Trending" tab based on activity score (views + comments + votes)</li>
+            <li>• Enhanced post display with compact view that expands to show full content</li>
+            <li>• Improved comment system with reply functionality and anonymous reply options</li>
+            <li>• Added real-time view counting when posts are expanded</li>
+            <li>• Implemented comprehensive voting system for both posts and comments</li>
+            <li>• Added share functionality with clipboard support</li>
+            <li>• Enhanced responsive design for mobile and desktop compatibility</li>
+            <li>• Improved forum header layout with better tab spacing and centering</li>
+            <li>• Added loading states and error handling for better user feedback</li>
+            <li>• Integrated with existing Firebase authentication system</li>
+          </ul>
+        <small>June 24, 2025</small>
+        </article>
+
+        <!-- Patch 2.0.1 -->
+        <article class="patch-item">
+          <h3>Patch 2.0.1 - Comparison Page Enhancements</h3>
+          <p>- Improved visualization and interactivity in the Compare Cars page.</p>
+          <ul class="patch-subpoints">
+            <li>• Bar chart colors were updated for better visual contrast and clarity.</li>
+            <li>• Radar chart was added to allow multi-feature comparison (price, horsepower, seating, ground clearance, cargo).</li>
+            <li>• Year option integrated into compare logic for better model accuracy.</li>
+            <li>• Save feature added to store comparison selections temporarily.</li>
+          </ul>
+          <small>July 2nd, 2025</small>
+        </article>
+
+        <!-- Patch 2.0.2 -->
+        <article class="patch-item">
+          <h3>Patch 2.0.2 - Data & UI Update</h3>
+          <p>- Refreshed car listings and visual elements across the platform.</p>
+          <ul class="patch-subpoints">
+            <li>• Corrected Porsche pricing in Calculator Page.</li>
+            <li>• Updated brand/model/variant selection in Compare Page.</li>
+            <li>• Brand name are now visible in Compare Page bar charts.</li>
+          </ul>
+          <small>July 6th, 2025</small>
+        </article>
+
+        <!-- Patch 2.0.3 -->
+        <article class="patch-item">
+          <h3>Patch 2.0.3 - Enhanced Profile Page and Functionality</h3>
+          <p>- Enhancements to user profile features.</p>
+          <ul class="patch-subpoints">
+            <li>• Profile page created with layout for user info and avatar.</li>
+            <li>• Profile picture upload and display now functional.</li>
+            <li>• Fixed bug where guest users couldn’t use the main filter properly.</li>
+            <li>• Resolved issue with models not appearing on main filter dropdown.</li>
+          </ul>
+          <small>July 7th, 2025</small>
         </article>
 
       </section>
